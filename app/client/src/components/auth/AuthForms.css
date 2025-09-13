@@ -1,0 +1,263 @@
+/* Auth Forms Styling */
+.auth-form-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 80vh;
+  padding: 1rem;
+}
+
+.auth-form {
+  background: var(--color-white);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  width: 100%;
+  max-width: 400px;
+  position: relative;
+}
+
+.auth-form h2 {
+  color: var(--color-navy);
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.auth-subtitle {
+  color: var(--color-gray-600);
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 0.95rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  color: var(--color-navy);
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid var(--color-gray-200);
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(41, 199, 172, 0.1);
+}
+
+.form-group input.error {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+.form-group input:disabled {
+  background-color: var(--color-gray-50);
+  cursor: not-allowed;
+}
+
+.field-error {
+  display: block;
+  color: var(--color-error);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.error-message {
+  background-color: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  color: var(--color-error);
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.auth-submit-btn {
+  width: 100%;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 0.875rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 1.5rem;
+}
+
+.auth-submit-btn:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(41, 199, 172, 0.3);
+}
+
+.auth-submit-btn:disabled {
+  background: var(--color-gray-300);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.forgot-password-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.forgot-password-link:hover:not(:disabled) {
+  color: var(--color-primary-dark);
+}
+
+.forgot-password-link:disabled {
+  color: var(--color-gray-400);
+  cursor: not-allowed;
+}
+
+.auth-footer {
+  text-align: center;
+  color: var(--color-gray-600);
+  font-size: 0.9rem;
+}
+
+.auth-switch-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 0.9rem;
+  padding: 0;
+}
+
+.auth-switch-link:hover:not(:disabled) {
+  color: var(--color-primary-dark);
+}
+
+.auth-switch-link:disabled {
+  color: var(--color-gray-400);
+  cursor: not-allowed;
+}
+
+.terms-notice {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-gray-200);
+  color: var(--color-gray-500);
+  font-size: 0.8rem;
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* Success Message Styles */
+.success-message {
+  text-align: center;
+  padding: 3rem 2rem;
+}
+
+.success-icon {
+  background: var(--color-success);
+  color: white;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.success-message h2 {
+  color: var(--color-success);
+  margin-bottom: 1rem;
+}
+
+.success-message p {
+  color: var(--color-gray-600);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.success-message strong {
+  color: var(--color-navy);
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .auth-form-container {
+    padding: 0.5rem;
+    min-height: 70vh;
+  }
+  
+  .auth-form {
+    padding: 1.5rem;
+    box-shadow: none;
+    border: 1px solid var(--color-gray-200);
+  }
+  
+  .auth-form h2 {
+    font-size: 1.5rem;
+  }
+}
+
+/* Dark theme support (if implemented) */
+[data-theme="dark"] .auth-form {
+  background: var(--color-gray-800);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .auth-form h2 {
+  color: var(--color-white);
+}
+
+[data-theme="dark"] .auth-subtitle {
+  color: var(--color-gray-300);
+}
+
+[data-theme="dark"] .form-group label {
+  color: var(--color-white);
+}
+
+[data-theme="dark"] .form-group input {
+  background: var(--color-gray-700);
+  border-color: var(--color-gray-600);
+  color: var(--color-white);
+}
+
+[data-theme="dark"] .form-group input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(41, 199, 172, 0.2);
+}
+
+[data-theme="dark"] .terms-notice {
+  color: var(--color-gray-400);
+  border-color: var(--color-gray-600);
+}
+
+[data-theme="dark"] .auth-footer {
+  color: var(--color-gray-300);
+}
