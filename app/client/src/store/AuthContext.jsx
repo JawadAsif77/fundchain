@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db } from '../lib/supabase.js';
+import { getUserRoleStatus } from '../lib/api.js';
 
 const AuthContext = createContext(null);
 
@@ -14,6 +15,7 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [roleStatus, setRoleStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -31,6 +33,7 @@ export const AuthProvider = ({ children }) => {
         } else if (session?.user && mounted) {
           setUser(session.user);
           await loadUserProfile(session.user.id, session.user);
+          await loadUserRoleStatus(session.user.id);
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
@@ -53,9 +56,11 @@ export const AuthProvider = ({ children }) => {
       if (session?.user) {
         setUser(session.user);
         await loadUserProfile(session.user.id, session.user);
+        await loadUserRoleStatus(session.user.id);
       } else {
         setUser(null);
         setProfile(null);
+        setRoleStatus(null);
       }
       
       setLoading(false);
@@ -66,6 +71,19 @@ export const AuthProvider = ({ children }) => {
       subscription?.unsubscribe();
     };
   }, []);
+
+  const loadUserRoleStatus = async (userId) => {
+    try {
+      console.log('Loading role status for userId:', userId);
+      const status = await getUserRoleStatus(userId);
+      console.log('Role status loaded:', status);
+      setRoleStatus(status);
+    } catch (error) {
+      console.error('Error loading role status:', error);
+      // Don't set error state for role status - it's optional
+      setRoleStatus(null);
+    }
+  };
 
   const loadUserProfile = async (userId, userSession = null) => {
     try {
@@ -166,6 +184,10 @@ export const AuthProvider = ({ children }) => {
       
       setUser(null);
       setProfile(null);
+      setRoleStatus(null);
+      
+      // Force redirect to home page after logout
+      window.location.href = '/';
     } catch (error) {
       console.error('Logout error:', error);
       throw error;
@@ -211,10 +233,16 @@ export const AuthProvider = ({ children }) => {
     setError(null);
   };
 
-  // Helper to get full user data (auth + profile)
+  // Helper to get full user data (auth + profile + role)
   const getCurrentUser = () => {
-    if (!user || !profile) return null;
-    
+     // If there's no authenticated user at all, return null
+    if (!user) return null;
+
+    // If profile hasn't loaded yet, return basic auth user so auth-dependent
+    // components (like navigation) can proceed while profile loads
+    if (!profile) return user;
+
+    // Merge auth user, profile data, and role status once all are available
     return {
       ...user,
       ...profile,
@@ -223,15 +251,33 @@ export const AuthProvider = ({ children }) => {
       email: user.email,
       email_confirmed_at: user.email_confirmed_at,
       last_sign_in_at: user.last_sign_in_at,
+      // Phase 3 role system
+      roleStatus,
       // Legacy compatibility
       displayName: profile.full_name,
       role: profile.is_accredited_investor ? 'accredited_investor' : 'investor'
     };
   };
 
+  // Helper to determine if user needs role selection
+  const needsRoleSelection = () => {
+    return user && !roleStatus?.hasRole;
+  };
+
+  // Helper to determine if user needs KYC
+  const needsKYC = () => {
+    return user && roleStatus?.hasRole && !roleStatus?.isKYCVerified;
+  };
+
+  // Helper to determine if user is fully onboarded
+  const isFullyOnboarded = () => {
+    return user && roleStatus?.hasRole && roleStatus?.isKYCVerified;
+  };
+
   const value = {
     user: getCurrentUser(),
     profile,
+    roleStatus,
     login,
     register,
     logout,
@@ -242,7 +288,22 @@ export const AuthProvider = ({ children }) => {
     clearError,
     // Helper methods
     isAuthenticated: !!user,
-    isEmailConfirmed: !!user?.email_confirmed_at
+    isEmailConfirmed: !!user?.email_confirmed_at,
+    // Phase 3 onboarding helpers
+    needsRoleSelection,
+    needsKYC,
+    isFullyOnboarded,
+    // Refresh role status after role selection or KYC
+    refreshRoleStatus: async () => {
+      try {
+        const { data: { user: currentUser } } = await auth.getUser();
+        if (currentUser) {
+          await loadUserRoleStatus(currentUser.id);
+        }
+      } catch (error) {
+        console.error('Error refreshing role status:', error);
+      }
+    }
   };
 
   return (
