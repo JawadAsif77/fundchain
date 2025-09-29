@@ -327,63 +327,242 @@ export const selectRole = async (role) => {
  * @param {string} userId - Optional user ID, uses current auth user if not provided
  */
 export const getUserRoleStatus = async (userId = null) => {
+  const defaultStatus = {
+    hasRole: false,
+    role: null,
+    isKYCVerified: false,
+    companyData: null,
+    success: true
+  };
+
   try {
+    console.log('getUserRoleStatus: Starting with userId:', userId);
     let targetUserId = userId;
     
     // If no userId provided, get current auth user
     if (!targetUserId) {
+      console.log('getUserRoleStatus: No userId provided, getting current auth user');
       const { data: { user } } = await supabaseClient.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+      if (!user) {
+        console.warn('getUserRoleStatus called without authenticated user');
+        return defaultStatus;
+      }
       targetUserId = user.id;
+      console.log('getUserRoleStatus: Got auth user ID:', targetUserId);
     }
 
-    // Get user with role
+    console.log('getUserRoleStatus: Querying users table for ID:', targetUserId);
+    // Get user with role information
     const { data: userData, error: userError } = await supabaseClient
       .from('users')
       .select('role, full_name, email')
       .eq('id', targetUserId)
       .single();
 
-    // If user doesn't exist in users table, return default status
+    console.log('getUserRoleStatus: Query result - userData:', userData, 'error:', userError);
+
+    // If the user record hasn't been created yet, create it
     if (userError && userError.code === 'PGRST116') {
-      return {
-        success: true,
-        hasRole: false,
-        role: null,
-        isKYCVerified: false,
-        companyData: null
-      };
+      console.log('getUserRoleStatus: User record not found (PGRST116), creating user record');
+      try {
+        await createUserRecord(targetUserId);
+        console.log('getUserRoleStatus: User record created successfully, returning defaults');
+        return defaultStatus;
+      } catch (createError) {
+        console.error('getUserRoleStatus: Failed to create user record:', createError);
+        return defaultStatus;
+      }
     }
 
-    if (userError) throw userError;
+    if (userError) {
+      console.error('getUserRoleStatus: Unexpected error:', userError);
+      throw userError;
+    }
 
-    // If creator, check company status
-    let companyData = null;
-    if (userData.role === 'creator') {
+    const status = {
+      ...defaultStatus,
+      hasRole: !!userData?.role,
+      role: userData?.role ?? null,
+      success: true
+    };
+
+    console.log('getUserRoleStatus: Base status created:', status);
+
+    // Investors don't require KYC in the current mock flow
+    if (status.role === 'investor') {
+      const finalStatus = {
+        ...status,
+        isKYCVerified: true
+      };
+      console.log('getUserRoleStatus: Returning investor status:', finalStatus);
+      return finalStatus;
+    }
+
+    // Creators may need to complete company verification (KYC)
+    if (status.role === 'creator') {
+      console.log('getUserRoleStatus: Creator role, checking company data');
       const { data: company, error: companyError } = await supabaseClient
         .from('companies')
         .select('*')
         .eq('owner_id', targetUserId)
         .single();
 
-      // No error if company doesn't exist yet
-      if (!companyError || companyError.code === 'PGRST116') {
-        companyData = company;
+      console.log('getUserRoleStatus: Company query result - data:', company, 'error:', companyError);
+
+      // If no company yet, treat as needing KYC
+      if (companyError && companyError.code !== 'PGRST116') {
+        console.error('getUserRoleStatus: Company query error:', companyError);
+        throw companyError;
+      }
+
+      const finalStatus = {
+        ...status,
+        companyData: company ?? null,
+        isKYCVerified: company?.verified ?? false
+      };
+      console.log('getUserRoleStatus: Returning creator status:', finalStatus);
+      return finalStatus;
+    }
+    
+    console.log('getUserRoleStatus: Returning default status (no specific role):', status);
+    return status;
+    
+  } catch (error) {
+    console.error('Error getting user role status:', error);
+    console.error('Error stack:', error.stack);
+    return {
+      ...defaultStatus,
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+/**
+ * Creates a user record in the public.users table if it doesn't exist
+ * This should be called when a user first signs up or when we detect they don't have a record
+ */
+export const createUserRecord = async (userId = null) => {
+  try {
+    let targetUserId = userId;
+    let userEmail = null;
+    
+    // If no userId provided, get current auth user
+    if (!targetUserId) {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) {
+        throw new Error('No authenticated user found');
+      }
+      targetUserId = user.id;
+      userEmail = user.email;
+    } else {
+      // If userId provided, we need to get the email from auth
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (user && user.id === targetUserId) {
+        userEmail = user.email;
       }
     }
 
-    return {
-      success: true,
-      data: {
-        user: userData,
-        company: companyData
-      }
-    };
+    console.log('createUserRecord: Creating user record for ID:', targetUserId, 'email:', userEmail);
+
+    // Create the user record
+    const { data, error } = await supabaseClient
+      .from('users')
+      .insert({
+        id: targetUserId,
+        email: userEmail,
+        full_name: userEmail ? userEmail.split('@')[0] : null, // Use email prefix as initial name
+        role: null, // No role assigned yet
+        verification_level: 'none',
+        trust_score: 0
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('createUserRecord: Error creating user record:', error);
+      throw error;
+    }
+
+    console.log('createUserRecord: Successfully created user record:', data);
+    return data;
+    
   } catch (error) {
-    console.error('Error getting user role status:', error);
-    return { success: false, error: error.message };
+    console.error('createUserRecord: Error:', error);
+    throw error;
   }
 };
+
+// Debug functions - can be called from browser console
+if (typeof window !== 'undefined') {
+  window.debugUserRoleStatus = async () => {
+    try {
+      console.log('=== DEBUG getUserRoleStatus ===');
+      const result = await getUserRoleStatus();
+      console.log('Result:', result);
+      return result;
+    } catch (error) {
+      console.error('Debug error:', error);
+      return error;
+    }
+  };
+  
+  window.debugAuth = async () => {
+    try {
+      console.log('=== DEBUG AUTH STATE ===');
+      const { data: { user }, error } = await supabaseClient.auth.getUser();
+      console.log('Auth user:', user);
+      console.log('Auth error:', error);
+      return { user, error };
+    } catch (error) {
+      console.error('Debug auth error:', error);
+      return error;
+    }
+  };
+  
+  window.debugCreateUser = async () => {
+    try {
+      console.log('=== DEBUG CREATE USER ===');
+      const result = await createUserRecord();
+      console.log('Create user result:', result);
+      return result;
+    } catch (error) {
+      console.error('Debug create user error:', error);
+      return error;
+    }
+  };
+  
+  window.testDirectQuery = async () => {
+    try {
+      console.log('=== DIRECT DATABASE QUERY TEST ===');
+      const userId = '08a623b6-4482-4dd3-a01f-7191dd4e624a';
+      
+      const { data: userData, error: userError } = await supabaseClient
+        .from('users')
+        .select('role, full_name, email')
+        .eq('id', userId)
+        .single();
+      
+      console.log('Direct query result - userData:', userData, 'error:', userError);
+      
+      if (!userError) {
+        const status = {
+          hasRole: !!userData?.role,
+          role: userData?.role ?? null,
+          isKYCVerified: userData?.role === 'investor' ? true : false,
+          companyData: null,
+          success: true
+        };
+        console.log('Expected status:', status);
+        return status;
+      }
+      return { error: userError };
+    } catch (error) {
+      console.error('Direct query test error:', error);
+      return error;
+    }
+  };
+}
 
 // =============================================================================
 // KYC / COMPANY MANAGEMENT
@@ -397,6 +576,7 @@ export const submitKYC = async (formData) => {
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
+    // Create company record with comprehensive data
     const { data, error } = await supabaseClient
       .from('companies')
       .insert({
@@ -405,7 +585,11 @@ export const submitKYC = async (formData) => {
         registration_number: formData.registrationNumber,
         country: formData.country,
         website: formData.website,
-        verified: false
+        business_description: formData.businessDescription,
+        owner_info: formData.ownerInfo,
+        team_info: formData.teamInfo,
+        verified: false,
+        kyc_status: 'pending'
       })
       .select()
       .single();
@@ -632,4 +816,187 @@ export const formatCurrency = (amount) => {
     style: 'currency',
     currency: 'USD'
   }).format(amount);
+};
+
+// =============================================================================
+// USER PROJECT MANAGEMENT
+// =============================================================================
+
+/**
+ * Get user's projects (for creators)
+ */
+export const getUserProjects = async (userId = null) => {
+  try {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    const targetUserId = userId || user?.id;
+    
+    if (!targetUserId) throw new Error('User not authenticated');
+
+    const { data, error } = await supabaseClient
+      .from('projects')
+      .select(`
+        *,
+        project_milestones (
+          id,
+          name,
+          description,
+          payout_percentage,
+          is_completed,
+          completed_at
+        ),
+        project_investments (
+          id,
+          amount,
+          status,
+          created_at
+        )
+      `)
+      .eq('creator_id', targetUserId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Calculate aggregated stats for each project
+    const projectsWithStats = data?.map(project => {
+      const investments = project.project_investments || [];
+      const totalRaised = investments
+        .filter(inv => inv.status === 'completed')
+        .reduce((sum, inv) => sum + inv.amount, 0);
+      
+      const totalInvestors = new Set(
+        investments
+          .filter(inv => inv.status === 'completed')
+          .map(inv => inv.investor_id)
+      ).size;
+
+      const fundingProgress = project.goal_amount > 0 
+        ? (totalRaised / project.goal_amount) * 100 
+        : 0;
+
+      return {
+        ...project,
+        total_raised: totalRaised,
+        total_investors: totalInvestors,
+        funding_progress: Math.min(fundingProgress, 100),
+        milestones: project.project_milestones || [],
+        investments: investments
+      };
+    });
+
+    return { success: true, data: projectsWithStats || [] };
+  } catch (error) {
+    console.error('Error fetching user projects:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
+ * Get user's investments (for investors)
+ */
+export const getUserInvestments = async (userId = null) => {
+  try {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    const targetUserId = userId || user?.id;
+    
+    if (!targetUserId) throw new Error('User not authenticated');
+
+    const { data, error } = await supabaseClient
+      .from('project_investments')
+      .select(`
+        *,
+        projects (
+          id,
+          title,
+          slug,
+          summary,
+          description,
+          category,
+          goal_amount,
+          deadline,
+          image_url,
+          status,
+          created_at
+        )
+      `)
+      .eq('investor_id', targetUserId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error fetching user investments:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
+ * Update project details
+ */
+export const updateProject = async (projectId, updates) => {
+  try {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabaseClient
+      .from('projects')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', projectId)
+      .eq('creator_id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error updating project:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Delete project (and associated data)
+ */
+export const deleteProject = async (projectId) => {
+  try {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Check if project has any completed investments
+    const { data: investments } = await supabaseClient
+      .from('project_investments')
+      .select('status')
+      .eq('project_id', projectId)
+      .eq('status', 'completed');
+
+    if (investments && investments.length > 0) {
+      throw new Error('Cannot delete project with completed investments');
+    }
+
+    // Delete in order: milestones, investments, then project
+    await supabaseClient
+      .from('project_milestones')
+      .delete()
+      .eq('project_id', projectId);
+
+    await supabaseClient
+      .from('project_investments')
+      .delete()
+      .eq('project_id', projectId);
+
+    const { error } = await supabaseClient
+      .from('projects')
+      .delete()
+      .eq('id', projectId)
+      .eq('creator_id', user.id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    return { success: false, error: error.message };
+  }
 };

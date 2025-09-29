@@ -7,6 +7,7 @@ const SelectRole = () => {
   const [selectedRole, setSelectedRole] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const navigate = useNavigate();
   const { refreshRoleStatus } = useAuth();
 
@@ -17,13 +18,7 @@ const SelectRole = () => {
     setLoading(true);
     setError('');
     setSelectedRole(role);
-    
-    // Add timeout to prevent hanging
-    const timeoutId = setTimeout(() => {
-      setLoading(false);
-      setError('Request timed out. Please try again.');
-      setSelectedRole(null);
-    }, 15000); // 15 second timeout
+    setMessage(`Setting up your ${role} account...`);
     
     try {
       console.log('Calling selectRole API...');
@@ -31,44 +26,32 @@ const SelectRole = () => {
       console.log('selectRole result:', result);
       
       if (result.success) {
-        console.log('Role selection successful, refreshing status...');
+        console.log('Role selection successful');
+        setMessage('Role selected! Setting up your dashboard...');
         
-        // Try to refresh role status with timeout
-        try {
-          const refreshPromise = refreshRoleStatus();
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Refresh timeout')), 5000)
-          );
-          
-          await Promise.race([refreshPromise, timeoutPromise]);
-          console.log('Status refreshed successfully');
-        } catch (refreshError) {
-          console.warn('Status refresh failed or timed out, continuing anyway:', refreshError);
-          // Continue with navigation even if refresh fails
+        // Refresh role status
+        console.log('Refreshing role status...');
+        await refreshRoleStatus();
+        console.log('Status refreshed successfully');
+        
+        // Small delay to ensure state updates
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Navigate based on role
+        console.log('Navigating based on role:', role);
+        if (role === 'investor') {
+          setMessage('Taking you to your dashboard...');
+          navigate('/dashboard', { replace: true });
+        } else if (role === 'creator') {
+          setMessage('Taking you to KYC verification...');
+          navigate('/kyc', { replace: true });
         }
-        
-        console.log('Navigating to next page...');
-        
-        // Clear timeout since we're successful
-        clearTimeout(timeoutId);
-        
-        // Force navigation regardless of refresh status
-        setTimeout(() => {
-          // Redirect based on role
-          if (role === 'investor') {
-            navigate('/dashboard');
-          } else if (role === 'creator') {
-            navigate('/kyc');
-          }
-        }, 100); // Small delay to ensure state updates
       } else {
-        clearTimeout(timeoutId);
         console.error('Role selection failed:', result.error);
         setError(result.error || 'Failed to select role');
         setSelectedRole(null);
       }
     } catch (err) {
-      clearTimeout(timeoutId);
       console.error('Role selection error:', err);
       setError('An unexpected error occurred: ' + err.message);
       setSelectedRole(null);

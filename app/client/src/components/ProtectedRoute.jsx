@@ -16,7 +16,8 @@ const ProtectedRoute = ({
     isEmailConfirmed,
     needsRoleSelection,
     needsKYC,
-    isFullyOnboarded
+    isFullyOnboarded,
+    roleStatus
   } = useAuth();
   const location = useLocation();
 
@@ -53,6 +54,13 @@ const ProtectedRoute = ({
   // If route requires role but user doesn't have one
   if (requireRole && needsRoleSelection()) {
     return <Navigate to="/select-role" replace />;
+  }
+  
+  // If route requires specific role but user has different role
+  if (typeof requireRole === 'string' && roleStatus?.role !== requireRole) {
+    return <Navigate to="/dashboard" state={{ 
+      message: `This page is only accessible to ${requireRole}s.` 
+    }} replace />;
   }
   
   // If route requires KYC but user isn't verified

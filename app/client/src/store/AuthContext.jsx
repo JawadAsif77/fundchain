@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { auth, db } from '../lib/supabase.js';
+import { auth, db, supabase } from '../lib/supabase.js';
 import { getUserRoleStatus } from '../lib/api.js';
 
 const AuthContext = createContext(null);
@@ -13,6 +13,7 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
+  console.log('AuthProvider initializing...');
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [roleStatus, setRoleStatus] = useState(null);
@@ -25,39 +26,83 @@ export const AuthProvider = ({ children }) => {
 
     const getInitialSession = async () => {
       try {
+        console.log('AuthContext: Getting initial session...');
         const { session, error } = await auth.getSession();
         
         if (error) {
           console.error('Error getting session:', error);
           setError(error.message);
         } else if (session?.user && mounted) {
+          console.log('AuthContext: Session found, setting user:', session.user.id);
           setUser(session.user);
-          await loadUserProfile(session.user.id, session.user);
-          await loadUserRoleStatus(session.user.id);
+          
+          try {
+            console.log('AuthContext: Loading initial user profile...');
+            await loadUserProfile(session.user.id, session.user);
+            console.log('AuthContext: Initial user profile loaded successfully');
+          } catch (profileError) {
+            console.error('AuthContext: Error loading initial user profile:', profileError);
+          }
+          
+          try {
+            console.log('AuthContext: Loading initial user role status...');
+            await loadUserRoleStatus(session.user.id);
+            console.log('AuthContext: Initial user role status loaded successfully');
+          } catch (roleError) {
+            console.error('AuthContext: Error loading initial user role status:', roleError);
+          }
+        } else {
+          console.log('AuthContext: No session found');
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
         setError(error.message);
       } finally {
         if (mounted) {
+          console.log('AuthContext: Setting loading to false');
           setLoading(false);
         }
       }
     };
 
+    // Add timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (mounted) {
+        console.log('AuthContext: Loading timeout reached, forcing loading to false');
+        setLoading(false);
+      }
+    }, 8000); // 8 second timeout
+
     getInitialSession();
 
     // Listen for auth state changes
     const { data: { subscription } } = auth.onAuthStateChange(async (event, session) => {
+      console.log('AuthContext: Auth state change event:', event);
       if (!mounted) return;
 
       setError(null);
       
       if (session?.user) {
+        console.log('AuthContext: Setting user from auth change:', session.user.id);
         setUser(session.user);
-        await loadUserProfile(session.user.id, session.user);
-        await loadUserRoleStatus(session.user.id);
+        
+        try {
+          console.log('AuthContext: Loading user profile...');
+          await loadUserProfile(session.user.id, session.user);
+          console.log('AuthContext: User profile loaded successfully');
+        } catch (profileError) {
+          console.error('AuthContext: Error loading user profile:', profileError);
+        }
+        
+        try {
+          console.log('AuthContext: Loading user role status...');
+          await loadUserRoleStatus(session.user.id);
+          console.log('AuthContext: User role status loaded successfully');
+        } catch (roleError) {
+          console.error('AuthContext: Error loading user role status:', roleError);
+        }
       } else {
+        console.log('AuthContext: Clearing user from auth change');
         setUser(null);
         setProfile(null);
         setRoleStatus(null);
@@ -68,6 +113,7 @@ export const AuthProvider = ({ children }) => {
 
     return () => {
       mounted = false;
+      clearTimeout(timeout);
       subscription?.unsubscribe();
     };
   }, []);
@@ -75,13 +121,31 @@ export const AuthProvider = ({ children }) => {
   const loadUserRoleStatus = async (userId) => {
     try {
       console.log('Loading role status for userId:', userId);
+      
+      // Add more debugging for the API call
+      console.log('Calling getUserRoleStatus API...');
       const status = await getUserRoleStatus(userId);
-      console.log('Role status loaded:', status);
-      setRoleStatus(status);
+      console.log('getUserRoleStatus API returned:', status);
+      
+      if (status && typeof status === 'object') {
+        console.log('Setting roleStatus to:', status);
+        setRoleStatus(status);
+        console.log('Role status set in context successfully');
+      } else {
+        console.warn('Invalid role status returned, setting to null:', status);
+        setRoleStatus(null);
+      }
     } catch (error) {
       console.error('Error loading role status:', error);
-      // Don't set error state for role status - it's optional
-      setRoleStatus(null);
+      console.error('Error details:', error.message, error.stack);
+      // Set a default status if there's an error
+      setRoleStatus({
+        hasRole: false,
+        role: null,
+        isKYCVerified: false,
+        companyData: null,
+        success: false
+      });
     }
   };
 
@@ -174,23 +238,33 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      console.log('Logging out user...');
       setError(null);
-      const { error } = await auth.signOut();
       
-      if (error) {
-        setError(error.message);
-        throw error;
-      }
-      
+      // Clear local state immediately
       setUser(null);
       setProfile(null);
       setRoleStatus(null);
       
-      // Force redirect to home page after logout
+      // Attempt to sign out from Supabase
+      const { error } = await auth.signOut();
+      
+      if (error) {
+        console.warn('Supabase logout error (but continuing with logout):', error);
+        // Don't throw here, we still want to redirect
+      }
+      
+      // Force redirect to home page after logout (always execute)
+      console.log('Redirecting to home page...');
       window.location.href = '/';
+      
     } catch (error) {
       console.error('Logout error:', error);
-      throw error;
+      // Even if there's an error, clear state and redirect
+      setUser(null);
+      setProfile(null);
+      setRoleStatus(null);
+      window.location.href = '/';
     }
   };
 
@@ -261,17 +335,47 @@ export const AuthProvider = ({ children }) => {
 
   // Helper to determine if user needs role selection
   const needsRoleSelection = () => {
-    return user && !roleStatus?.hasRole;
+    if (!user) {
+      console.log('needsRoleSelection: No user');
+      return false;
+    }
+    if (!roleStatus || roleStatus.success === false) {
+      console.log('needsRoleSelection: No valid roleStatus');
+      return false;
+    }
+    const result = roleStatus.hasRole === false;
+    console.log('needsRoleSelection result:', result, 'roleStatus:', roleStatus);
+    return result;
   };
 
   // Helper to determine if user needs KYC
   const needsKYC = () => {
-    return user && roleStatus?.hasRole && !roleStatus?.isKYCVerified;
+    if (!user) {
+      console.log('needsKYC: No user');
+      return false;
+    }
+    if (!roleStatus || roleStatus.success === false) {
+      console.log('needsKYC: No valid roleStatus');
+      return false;
+    }
+    const result = roleStatus.hasRole && roleStatus.isKYCVerified === false;
+    console.log('needsKYC result:', result, 'roleStatus:', roleStatus);
+    return result;
   };
 
   // Helper to determine if user is fully onboarded
   const isFullyOnboarded = () => {
-    return user && roleStatus?.hasRole && roleStatus?.isKYCVerified;
+    if (!user) {
+      console.log('isFullyOnboarded: No user');
+      return false;
+    }
+    if (!roleStatus || roleStatus.success === false) {
+      console.log('isFullyOnboarded: No valid roleStatus');
+      return false;
+    }
+    const result = roleStatus.hasRole && roleStatus.isKYCVerified === true;
+    console.log('isFullyOnboarded result:', result, 'roleStatus:', roleStatus);
+    return result;
   };
 
   const value = {
@@ -296,9 +400,14 @@ export const AuthProvider = ({ children }) => {
     // Refresh role status after role selection or KYC
     refreshRoleStatus: async () => {
       try {
-        const { data: { user: currentUser } } = await auth.getUser();
+        console.log('Refreshing role status...');
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser) {
+          console.log('Current user found, loading role status for:', currentUser.id);
           await loadUserRoleStatus(currentUser.id);
+          console.log('Role status refreshed successfully');
+        } else {
+          console.warn('No current user found during refresh');
         }
       } catch (error) {
         console.error('Error refreshing role status:', error);
