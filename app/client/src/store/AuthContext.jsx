@@ -12,6 +12,15 @@ export const useAuth = () => {
   return context;
 };
 
+const defaultRoleStatus = {
+  hasRole: false,
+  role: null,
+  isKYCVerified: false,
+  companyData: null,
+  success: true,
+  kycStatus: 'not_started'
+};
+
 export const AuthProvider = ({ children }) => {
   console.log('AuthProvider initializing...');
   const [user, setUser] = useState(null);
@@ -121,31 +130,37 @@ export const AuthProvider = ({ children }) => {
   const loadUserRoleStatus = async (userId) => {
     try {
       console.log('Loading role status for userId:', userId);
-      
+
       // Add more debugging for the API call
       console.log('Calling getUserRoleStatus API...');
       const status = await getUserRoleStatus(userId);
       console.log('getUserRoleStatus API returned:', status);
-      
+
       if (status && typeof status === 'object') {
-        console.log('Setting roleStatus to:', status);
-        setRoleStatus(status);
+        const mergedStatus = {
+          ...defaultRoleStatus,
+          ...status
+        };
+        console.log('Setting roleStatus to:', mergedStatus);
+        setRoleStatus(mergedStatus);
         console.log('Role status set in context successfully');
-      } else {
-        console.warn('Invalid role status returned, setting to null:', status);
-        setRoleStatus(null);
+        return mergedStatus;
       }
+
+      console.warn('Invalid role status returned, resetting to defaults:', status);
+      setRoleStatus(defaultRoleStatus);
+      return defaultRoleStatus;
     } catch (error) {
       console.error('Error loading role status:', error);
       console.error('Error details:', error.message, error.stack);
       // Set a default status if there's an error
-      setRoleStatus({
-        hasRole: false,
-        role: null,
-        isKYCVerified: false,
-        companyData: null,
-        success: false
-      });
+      const fallbackStatus = {
+        ...defaultRoleStatus,
+        success: false,
+        error: error.message
+      };
+      setRoleStatus(fallbackStatus);
+      return fallbackStatus;
     }
   };
 
@@ -339,8 +354,8 @@ export const AuthProvider = ({ children }) => {
       console.log('needsRoleSelection: No user');
       return false;
     }
-    if (!roleStatus || roleStatus.success === false) {
-      console.log('needsRoleSelection: No valid roleStatus');
+    if (!roleStatus) {
+      console.log('needsRoleSelection: Role status not yet loaded');
       return false;
     }
     const result = roleStatus.hasRole === false;
@@ -354,11 +369,15 @@ export const AuthProvider = ({ children }) => {
       console.log('needsKYC: No user');
       return false;
     }
-    if (!roleStatus || roleStatus.success === false) {
-      console.log('needsKYC: No valid roleStatus');
+    if (!roleStatus) {
+      console.log('needsKYC: Role status not yet loaded');
       return false;
     }
-    const result = roleStatus.hasRole && roleStatus.isKYCVerified === false;
+    if (roleStatus.role !== 'creator') {
+      console.log('needsKYC: User is not a creator');
+      return false;
+    }
+    const result = !roleStatus.companyData;
     console.log('needsKYC result:', result, 'roleStatus:', roleStatus);
     return result;
   };
@@ -369,11 +388,22 @@ export const AuthProvider = ({ children }) => {
       console.log('isFullyOnboarded: No user');
       return false;
     }
-    if (!roleStatus || roleStatus.success === false) {
-      console.log('isFullyOnboarded: No valid roleStatus');
+    if (!roleStatus) {
+      console.log('isFullyOnboarded: Role status not yet loaded');
       return false;
     }
-    const result = roleStatus.hasRole && roleStatus.isKYCVerified === true;
+    if (!roleStatus.hasRole) {
+      console.log('isFullyOnboarded: User has no role');
+      return false;
+    }
+
+    if (roleStatus.role === 'creator') {
+      const result = !!roleStatus.companyData;
+      console.log('isFullyOnboarded (creator) result:', result, 'roleStatus:', roleStatus);
+      return result;
+    }
+
+    const result = true;
     console.log('isFullyOnboarded result:', result, 'roleStatus:', roleStatus);
     return result;
   };
@@ -404,14 +434,30 @@ export const AuthProvider = ({ children }) => {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser) {
           console.log('Current user found, loading role status for:', currentUser.id);
-          await loadUserRoleStatus(currentUser.id);
+          const status = await loadUserRoleStatus(currentUser.id);
           console.log('Role status refreshed successfully');
-        } else {
-          console.warn('No current user found during refresh');
+          return status;
         }
+
+        console.warn('No current user found during refresh');
+        setRoleStatus(defaultRoleStatus);
+        return defaultRoleStatus;
       } catch (error) {
         console.error('Error refreshing role status:', error);
+        const fallbackStatus = {
+          ...defaultRoleStatus,
+          success: false,
+          error: error.message
+        };
+        setRoleStatus(fallbackStatus);
+        return fallbackStatus;
       }
+    },
+    updateRoleStatus: (updates) => {
+      setRoleStatus(prev => ({
+        ...(prev || defaultRoleStatus),
+        ...updates
+      }));
     }
   };
 

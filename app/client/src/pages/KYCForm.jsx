@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { submitKYC } from '../lib/api.js';
 import { useAuth } from '../store/AuthContext.jsx';
@@ -7,8 +7,28 @@ const KYCForm = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
   const navigate = useNavigate();
-  const { refreshRoleStatus } = useAuth();
+  const { roleStatus, refreshRoleStatus, updateRoleStatus } = useAuth();
+
+  useEffect(() => {
+    if (!roleStatus) return;
+
+    if (roleStatus.role !== 'creator') {
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+
+    if (roleStatus.companyData) {
+      const onboardingState = roleStatus.companyData.verified ? 'kyc-approved' : 'kyc-pending';
+      setStatusMessage(
+        roleStatus.companyData.verified
+          ? 'Your business profile is verified. Redirecting to your dashboard...'
+          : 'We already have your verification on file. Redirecting to your dashboard...'
+      );
+      navigate('/dashboard', { replace: true, state: { onboarding: onboardingState } });
+    }
+  }, [roleStatus, navigate]);
 
   // Form data state
   const [formData, setFormData] = useState({
@@ -112,10 +132,11 @@ const KYCForm = () => {
 
     setLoading(true);
     setError('');
+    setStatusMessage('Submitting your verification...');
 
     try {
       console.log('Submitting KYC form:', formData);
-      
+
       const result = await submitKYC({
         companyName: formData.companyName,
         registrationNumber: formData.registrationNumber,
@@ -137,14 +158,29 @@ const KYCForm = () => {
 
       if (result.success) {
         console.log('KYC submitted successfully');
-        await refreshRoleStatus();
-        navigate('/dashboard');
+        const status = await refreshRoleStatus();
+        if (status?.role === 'creator') {
+          updateRoleStatus(status);
+        } else {
+          updateRoleStatus({
+            hasRole: true,
+            role: 'creator',
+            companyData: result.data,
+            isKYCVerified: !!result.data?.verified,
+            success: true,
+            kycStatus: result.data?.verified ? 'approved' : 'pending'
+          });
+        }
+
+        setStatusMessage('Verification submitted! Redirecting to your dashboard...');
+        navigate('/dashboard', { replace: true, state: { onboarding: 'kyc-submitted' } });
       } else {
         setError(result.error || 'Failed to submit KYC form');
       }
     } catch (err) {
       console.error('KYC submission error:', err);
       setError('An unexpected error occurred');
+      setStatusMessage('');
     } finally {
       setLoading(false);
     }
@@ -611,6 +647,20 @@ const KYCForm = () => {
             fontSize: '14px'
           }}>
             {error}
+          </div>
+        )}
+
+        {statusMessage && !error && (
+          <div style={{
+            backgroundColor: '#ecfdf5',
+            border: '1px solid #bbf7d0',
+            borderRadius: '8px',
+            padding: '12px',
+            marginBottom: '24px',
+            color: '#047857',
+            fontSize: '14px'
+          }}>
+            {statusMessage}
           </div>
         )}
 

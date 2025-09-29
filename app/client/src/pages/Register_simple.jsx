@@ -10,6 +10,7 @@ const Register = () => {
     confirmPassword: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
   const { register, error } = useAuth();
   const navigate = useNavigate();
 
@@ -30,13 +31,26 @@ const Register = () => {
     }
 
     setIsSubmitting(true);
+    setStatusMessage('Creating your account...');
     try {
-      await register(formData.email, formData.password, {
+      const data = await register(formData.email, formData.password, {
         full_name: formData.fullName
       });
-      navigate('/dashboard');
+      if (data?.session) {
+        setStatusMessage('Account created! Let’s choose how you want to use FundChain.');
+        navigate('/select-role', { replace: true, state: { onboarding: 'welcome' } });
+      } else {
+        setStatusMessage('Check your inbox to confirm your email before signing in.');
+        navigate('/login', {
+          replace: true,
+          state: {
+            message: 'We sent you a verification link. Confirm your email to start using FundChain.'
+          }
+        });
+      }
     } catch (err) {
       console.error('Registration error:', err);
+      setStatusMessage('');
     } finally {
       setIsSubmitting(false);
     }
@@ -69,15 +83,28 @@ const Register = () => {
         </h2>
 
         {error && (
-          <div style={{ 
-            backgroundColor: '#fee', 
-            color: '#c33', 
-            padding: '12px', 
-            borderRadius: '6px', 
+          <div style={{
+            backgroundColor: '#fee',
+            color: '#c33',
+            padding: '12px',
+            borderRadius: '6px',
             marginBottom: '20px',
             border: '1px solid #fcc'
           }}>
             {error}
+          </div>
+        )}
+
+        {statusMessage && !error && (
+          <div style={{
+            backgroundColor: '#f0fdf4',
+            color: '#047857',
+            padding: '12px',
+            borderRadius: '6px',
+            marginBottom: '20px',
+            border: '1px solid #bbf7d0'
+          }}>
+            {statusMessage}
           </div>
         )}
 

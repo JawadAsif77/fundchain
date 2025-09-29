@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { selectRole } from '../lib/api.js';
 import { useAuth } from '../store/AuthContext.jsx';
@@ -9,11 +9,28 @@ const SelectRole = () => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
-  const { refreshRoleStatus } = useAuth();
+  const { roleStatus, refreshRoleStatus, updateRoleStatus } = useAuth();
+
+  useEffect(() => {
+    if (!roleStatus) return;
+
+    if (roleStatus.hasRole) {
+      setMessage('Redirecting you to the right place...');
+      if (roleStatus.role === 'investor') {
+        navigate('/dashboard', { replace: true, state: { onboarding: 'role-confirmed' } });
+      } else if (roleStatus.role === 'creator') {
+        if (roleStatus.companyData) {
+          navigate('/dashboard', { replace: true, state: { onboarding: 'kyc-complete' } });
+        } else {
+          navigate('/kyc', { replace: true });
+        }
+      }
+    }
+  }, [roleStatus, navigate]);
 
   const handleRoleSelect = async (role) => {
     if (loading) return;
-    
+
     console.log('Starting role selection for:', role);
     setLoading(true);
     setError('');
@@ -24,27 +41,27 @@ const SelectRole = () => {
       console.log('Calling selectRole API...');
       const result = await selectRole(role);
       console.log('selectRole result:', result);
-      
+
       if (result.success) {
         console.log('Role selection successful');
         setMessage('Role selected! Setting up your dashboard...');
-        
+
         // Refresh role status
         console.log('Refreshing role status...');
-        await refreshRoleStatus();
+        const status = await refreshRoleStatus();
         console.log('Status refreshed successfully');
-        
-        // Small delay to ensure state updates
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Navigate based on role
-        console.log('Navigating based on role:', role);
-        if (role === 'investor') {
-          setMessage('Taking you to your dashboard...');
-          navigate('/dashboard', { replace: true });
-        } else if (role === 'creator') {
-          setMessage('Taking you to KYC verification...');
-          navigate('/kyc', { replace: true });
+
+        if (status?.hasRole) {
+          updateRoleStatus(status);
+        } else {
+          updateRoleStatus({
+            hasRole: true,
+            role,
+            isKYCVerified: role === 'investor',
+            companyData: null,
+            success: true,
+            kycStatus: role === 'investor' ? 'not_required' : 'not_started'
+          });
         }
       } else {
         console.error('Role selection failed:', result.error);
@@ -124,6 +141,19 @@ const SelectRole = () => {
             >
               Try Again
             </button>
+          </div>
+        )}
+
+        {message && !error && (
+          <div style={{
+            marginBottom: '24px',
+            padding: '12px',
+            borderRadius: '8px',
+            backgroundColor: '#eff6ff',
+            color: '#1d4ed8',
+            fontSize: '14px'
+          }}>
+            {message}
           </div>
         )}
 

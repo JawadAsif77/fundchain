@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 
 const Login = () => {
+  const location = useLocation();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [infoMessage, setInfoMessage] = useState(location?.state?.message || '');
   const { login, error, user } = useAuth();
   const navigate = useNavigate();
-  
+
   // Effect to handle navigation after user is set
   useEffect(() => {
     if (user && isSubmitting) {
@@ -18,6 +20,13 @@ const Login = () => {
       navigate('/dashboard');
     }
   }, [user, isSubmitting, navigate]);
+
+  useEffect(() => {
+    if (location?.state?.message) {
+      setInfoMessage(location.state.message);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location, navigate]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -83,16 +92,16 @@ const Login = () => {
           Sign in to your account
         </p>
 
-        {error && (
-          <div style={{ 
-            backgroundColor: '#fee', 
-            color: '#c33', 
-            padding: '12px', 
-            borderRadius: '6px', 
+        {(infoMessage || error) && (
+          <div style={{
+            backgroundColor: error ? '#fee' : '#f0fdf4',
+            color: error ? '#c33' : '#047857',
+            padding: '12px',
+            borderRadius: '6px',
             marginBottom: '20px',
-            border: '1px solid #fcc'
+            border: error ? '1px solid #fcc' : '1px solid #bbf7d0'
           }}>
-            {error}
+            {error || infoMessage}
           </div>
         )}
 

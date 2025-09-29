@@ -29,24 +29,23 @@ const Dashboard = () => {
   console.log('Dashboard - user:', user);
   console.log('Dashboard - roleStatus:', roleStatus);
 
+  const isCreator = roleStatus?.role === 'creator';
+  const isInvestor = roleStatus?.role === 'investor';
+  const kycStatus = roleStatus?.kycStatus;
+  const showKYCPendingBanner = isCreator && roleStatus?.companyData && !roleStatus?.companyData?.verified;
+
   // Handle redirects with useEffect to avoid state updates during render
   useEffect(() => {
     console.log('Dashboard useEffect - loading:', loading, 'authLoading:', authLoading, 'user:', !!user);
-    if (!loading && !authLoading && user) {
-      if (!roleStatus) {
-        console.log('User exists but no roleStatus, redirecting to role selection...');
-        navigate('/select-role', { replace: true });
-        return;
-      }
-      
-      if (roleStatus && !roleStatus?.hasRole) {
+    if (!loading && !authLoading && user && roleStatus) {
+      if (!roleStatus?.hasRole) {
         console.log('User has no role, redirecting to role selection...');
         navigate('/select-role', { replace: true });
         return;
       }
 
-      if (roleStatus?.role === 'creator' && !roleStatus?.isKYCVerified) {
-        console.log('Creator needs KYC, redirecting...');
+      if (roleStatus?.role === 'creator' && !roleStatus?.companyData) {
+        console.log('Creator needs to complete business profile, redirecting to KYC...');
         navigate('/kyc', { replace: true });
         return;
       }
@@ -408,7 +407,7 @@ const Dashboard = () => {
       </div>
 
       {/* KYC Status */}
-      {!roleStatus?.isKYCVerified && (
+      {!roleStatus?.companyData && (
         <div style={{
           backgroundColor: '#fef3c7',
           border: '1px solid #f59e0b',
@@ -420,12 +419,12 @@ const Dashboard = () => {
             <span style={{ fontSize: '20px' }}>⚠️</span>
             <div>
               <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#92400e' }}>
-                KYC Verification Required
+                Tell us about your business
               </h3>
               <p style={{ fontSize: '13px', color: '#92400e', margin: '4px 0' }}>
-                Complete your business verification to create and manage projects
+                Complete your verification to unlock project creation and fundraising tools.
               </p>
-              <Link 
+              <Link
                 to="/kyc"
                 style={{
                   display: 'inline-block',
@@ -455,7 +454,7 @@ const Dashboard = () => {
           marginBottom: '20px' 
         }}>
           <h2 style={{ fontSize: '20px', fontWeight: '600' }}>Your Projects</h2>
-          {roleStatus?.isKYCVerified ? (
+          {roleStatus?.companyData ? (
             <button
               onClick={() => {
                 navigate('/create-project');
@@ -474,12 +473,12 @@ const Dashboard = () => {
               Create Project
             </button>
           ) : (
-            <span style={{ 
-              fontSize: '12px', 
+            <span style={{
+              fontSize: '12px',
               color: '#6b7280',
               fontStyle: 'italic'
             }}>
-              Complete KYC to create projects
+              Complete verification to create projects
             </span>
           )}
         </div>
@@ -495,15 +494,15 @@ const Dashboard = () => {
             ))}
           </div>
         ) : (
-          <EmptyState 
+          <EmptyState
             title="No projects yet"
             description={
-              roleStatus?.isKYCVerified 
+              roleStatus?.companyData
                 ? "Create your first project to start raising funds"
-                : "Complete your KYC verification to start creating projects"
+                : "Complete your verification to start creating projects"
             }
             action={
-              roleStatus?.isKYCVerified 
+              roleStatus?.companyData
                 ? {
                     label: "Create Project",
                     onClick: () => navigate('/create-project')
@@ -520,16 +519,50 @@ const Dashboard = () => {
   );
 
   return (
-    <div style={{ 
-      maxWidth: '1200px', 
-      margin: '0 auto', 
-      padding: '40px 20px' 
+    <div style={{
+      maxWidth: '1200px',
+      margin: '0 auto',
+      padding: '40px 20px'
     }}>
+      {showKYCPendingBanner && (
+        <div style={{
+          marginBottom: '24px',
+          padding: '16px',
+          borderRadius: '12px',
+          backgroundColor: '#fff7ed',
+          border: '1px solid #fdba74',
+          color: '#9a3412',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div>
+            <strong>Your verification is under review.</strong>{' '}
+            You can start preparing campaigns while our team finishes the checks.
+          </div>
+          <Link
+            to="/kyc"
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#f97316',
+              color: 'white',
+              borderRadius: '6px',
+              textDecoration: 'none',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            Update details
+          </Link>
+        </div>
+      )}
+
       {/* Header */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: '32px',
         flexWrap: 'wrap',
         gap: '16px'
@@ -554,25 +587,25 @@ const Dashboard = () => {
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <span style={{
             padding: '4px 12px',
-            backgroundColor: roleStatus?.role === 'investor' ? '#dbeafe' : '#dcfce7',
-            color: roleStatus?.role === 'investor' ? '#1e40af' : '#166534',
+            backgroundColor: isInvestor ? '#dbeafe' : '#dcfce7',
+            color: isInvestor ? '#1e40af' : '#166534',
             borderRadius: '20px',
             fontSize: '12px',
             fontWeight: '500'
           }}>
-            {roleStatus?.role === 'investor' ? '💰 Investor' : '🚀 Creator'}
+            {isInvestor ? '💰 Investor' : '🚀 Creator'}
           </span>
-          
-          {roleStatus?.isKYCVerified && (
+
+          {isCreator && (
             <span style={{
               padding: '4px 12px',
-              backgroundColor: '#dcfce7',
-              color: '#166534',
+              backgroundColor: roleStatus?.companyData?.verified ? '#dcfce7' : '#fee2e2',
+              color: roleStatus?.companyData?.verified ? '#166534' : '#991b1b',
               borderRadius: '20px',
               fontSize: '12px',
               fontWeight: '500'
             }}>
-              ✅ Verified
+              {roleStatus?.companyData?.verified ? '✅ Verified' : '⏳ KYC Pending'}
             </span>
           )}
         </div>
