@@ -175,12 +175,46 @@ export const AuthProvider = ({ children }) => {
         if (error.code === 'PGRST116') {
           console.log('Creating new profile for user');
           const sessionUser = userSession || user;
-          const newProfile = {
-            id: userId,
-            email: sessionUser?.email || '',
-            full_name: sessionUser?.user_metadata?.full_name || '',
-            avatar_url: sessionUser?.user_metadata?.avatar_url || null
-          };
+          
+          // Check if there's pending profile data from registration
+          const pendingProfileData = localStorage.getItem('pendingUserProfile');
+          let newProfile;
+          
+          if (pendingProfileData) {
+            try {
+              const pendingData = JSON.parse(pendingProfileData);
+              if (pendingData.id === userId) {
+                console.log('Found pending profile data, using it:', pendingData);
+                newProfile = {
+                  id: userId,
+                  email: pendingData.email,
+                  username: pendingData.username,
+                  full_name: pendingData.full_name,
+                  role: pendingData.role,
+                  is_verified: 'no'
+                };
+                // Clean up the stored data
+                localStorage.removeItem('pendingUserProfile');
+              }
+            } catch (parseError) {
+              console.error('Error parsing pending profile data:', parseError);
+              localStorage.removeItem('pendingUserProfile');
+            }
+          }
+          
+          // Fallback to user metadata if no pending data
+          if (!newProfile) {
+            console.log('No pending data, creating profile from user metadata');
+            newProfile = {
+              id: userId,
+              email: sessionUser?.email || '',
+              full_name: sessionUser?.user_metadata?.full_name || '',
+              username: sessionUser?.user_metadata?.username || null,
+              role: sessionUser?.user_metadata?.role || 'investor',
+              avatar_url: sessionUser?.user_metadata?.avatar_url || null,
+              is_verified: 'no'
+            };
+          }
           
           const { data: createdProfile, error: createError } = await db.users.createProfile(newProfile);
           
