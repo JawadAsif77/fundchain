@@ -21,6 +21,59 @@ const defaultRoleStatus = {
   kycStatus: 'not_started'
 };
 
+const clearSupabaseAuthStorage = () => {
+  if (typeof window === 'undefined') return;
+
+  const clearStorage = (storage) => {
+    if (!storage) return;
+
+    const keysToRemove = [];
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i);
+      if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach((key) => {
+      try {
+        storage.removeItem(key);
+      } catch (removeError) {
+        console.warn('Unable to remove storage key:', key, removeError);
+      }
+    });
+  };
+
+  try {
+    clearStorage(window.localStorage);
+  } catch (storageError) {
+    console.warn('Unable to clear Supabase localStorage keys:', storageError);
+  }
+
+  try {
+    clearStorage(window.sessionStorage);
+  } catch (sessionError) {
+    console.warn('Unable to clear Supabase sessionStorage keys:', sessionError);
+  }
+
+  try {
+    if (typeof document !== 'undefined') {
+      document.cookie.split(';').forEach((cookie) => {
+        const trimmed = cookie.trim();
+        if (!trimmed) return;
+
+        const cookieName = trimmed.split('=')[0];
+        if (cookieName && (cookieName.startsWith('sb-') || cookieName.includes('supabase'))) {
+          document.cookie = `${cookieName}=; Max-Age=0; path=/; SameSite=Lax;`;
+          document.cookie = `${cookieName}=; Max-Age=0; path=/; domain=${window.location.hostname}; SameSite=Lax;`;
+        }
+      });
+    }
+  } catch (cookieError) {
+    console.warn('Unable to clear Supabase cookies:', cookieError);
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   console.log('AuthProvider initializing...');
   const [user, setUser] = useState(null);
@@ -295,7 +348,7 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('Logging out user...');
       setError(null);
-      
+
       // Clear local state immediately
       setUser(null);
       setProfile(null);
@@ -306,8 +359,11 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('fundchain-theme'); // Optional: reset theme
       
       // Attempt to sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+
+      // Ensure any lingering local auth data is purged
+      clearSupabaseAuthStorage();
+
       if (error) {
         console.warn('Supabase logout error (but continuing with logout):', error);
         // Don't throw here, we still want to redirect
@@ -324,6 +380,7 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
       setRoleStatus(null);
       localStorage.removeItem('pendingUserProfile');
+      clearSupabaseAuthStorage();
       window.location.href = '/';
     }
   };
@@ -489,6 +546,19 @@ export const AuthProvider = ({ children }) => {
     // Helper methods
     isAuthenticated: !!user,
     isEmailConfirmed: !!user?.email_confirmed_at,
+    needsProfileCompletion: () => {
+      if (!user) return false;
+      if (!profile) return true;
+
+      const requiredFields = ['full_name', 'username'];
+      return requiredFields.some((field) => {
+        const value = profile?.[field];
+        if (typeof value === 'string') {
+          return value.trim() === '';
+        }
+        return !value;
+      });
+    },
     // Phase 3 onboarding helpers
     needsRoleSelection,
     needsKYC,

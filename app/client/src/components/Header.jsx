@@ -165,8 +165,8 @@ const Header = () => {
             )}
             
             {user && (
-              <Link 
-                to="/dashboard" 
+              <Link
+                to="/dashboard"
                 style={{
                   color: isActiveLink('/dashboard') ? 'var(--color-primary)' : 'var(--color-text)',
                   fontWeight: 'var(--font-semibold)',
@@ -176,6 +176,20 @@ const Header = () => {
                 }}
               >
                 Dashboard
+              </Link>
+            )}
+            {user && (
+              <Link
+                to="/profile"
+                style={{
+                  color: isActiveLink('/profile') ? 'var(--color-primary)' : 'var(--color-text)',
+                  fontWeight: 'var(--font-semibold)',
+                  padding: 'var(--space-2) 0',
+                  textDecoration: 'none',
+                  transition: 'var(--transition-default)'
+                }}
+              >
+                Edit Profile
               </Link>
             )}
           </nav>
@@ -206,7 +220,14 @@ const Header = () => {
                 }} className="md:block">
                   Welcome, {user.displayName}
                 </span>
-                <button 
+                <Link
+                  to="/profile"
+                  className="btn btn--ghost btn--sm"
+                  onClick={closeMobileMenu}
+                >
+                  Edit Profile
+                </Link>
+                <button
                   onClick={handleLogout}
                   className="btn btn--ghost btn--sm"
                 >
@@ -304,8 +325,8 @@ const Header = () => {
                 Explore
               </Link>
               {user && (
-                <Link 
-                  to="/dashboard" 
+                <Link
+                  to="/dashboard"
                   onClick={closeMobileMenu}
                   style={{
                     padding: 'var(--space-3) 0',
@@ -318,6 +339,23 @@ const Header = () => {
                   }}
                 >
                   Dashboard
+                </Link>
+              )}
+              {user && (
+                <Link
+                  to="/profile"
+                  onClick={closeMobileMenu}
+                  style={{
+                    padding: 'var(--space-3) 0',
+                    borderBottom: '1px solid var(--color-border-light)',
+                    color: 'var(--color-text)',
+                    textDecoration: 'none',
+                    fontSize: 'var(--text-md)',
+                    fontWeight: 'var(--font-semibold)',
+                    transition: 'var(--transition-default)'
+                  }}
+                >
+                  Edit Profile
                 </Link>
               )}
               
@@ -350,7 +388,7 @@ const Header = () => {
                 paddingTop: 'var(--space-2)'
               }}>
                 {user ? (
-                  <button 
+                  <button
                     onClick={handleLogout}
                     className="btn btn--ghost"
                   >

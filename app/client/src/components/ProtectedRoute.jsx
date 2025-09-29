@@ -9,11 +9,12 @@ const ProtectedRoute = ({
   requireRole = false,
   requireKYC = false 
 }) => {
-  const { 
-    user, 
-    loading, 
-    isAuthenticated, 
+  const {
+    user,
+    loading,
+    isAuthenticated,
     isEmailConfirmed,
+    needsProfileCompletion,
     needsRoleSelection,
     needsKYC,
     isFullyOnboarded,
@@ -40,7 +41,12 @@ const ProtectedRoute = ({
 
   // Handle onboarding flow redirects
   const currentPath = location.pathname;
-  
+
+  // Force profile completion before accessing other protected areas
+  if (needsProfileCompletion() && currentPath !== '/profile') {
+    return <Navigate to="/profile" state={{ message: 'Please complete your profile to continue.' }} replace />;
+  }
+
   // If user needs KYC and not on KYC page
   if (needsKYC() && currentPath !== '/kyc') {
     return <Navigate to="/kyc" replace />;
