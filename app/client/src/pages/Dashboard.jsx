@@ -39,8 +39,8 @@ const Dashboard = () => {
     console.log('Dashboard useEffect - loading:', loading, 'authLoading:', authLoading, 'user:', !!user);
     if (!loading && !authLoading && user && roleStatus) {
       if (!roleStatus?.hasRole) {
-        console.log('User has no role, redirecting to role selection...');
-        navigate('/select-role', { replace: true });
+        console.log('User has no role, redirecting to profile...');
+        navigate('/profile', { replace: true });
         return;
       }
 

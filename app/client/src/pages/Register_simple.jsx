@@ -82,45 +82,89 @@ const Register = () => {
 
       // Step 2: Create profile immediately using RPC function
       console.log('Step 2: Creating profile via RPC function...');
-      const { data: profileData, error: profileError } = await supabase
-        .rpc('create_user_profile', {
-          user_id: authData.user.id,
-          user_email: formData.email,
-          user_username: formData.username,
-          user_full_name: formData.fullName,
-          user_role: selectedRole,
-          user_verified: 'no'
+      
+      try {
+        const { data: profileData, error: profileError } = await supabase
+          .rpc('create_user_profile', {
+            user_id: authData.user.id,
+            user_email: formData.email,
+            user_username: formData.username,
+            user_full_name: formData.fullName,
+            user_role: selectedRole,
+            user_verified: 'no'
+          });
+
+        console.log('RPC Response Details:', { 
+          profileData, 
+          profileError,
+          userId: authData.user.id,
+          email: formData.email,
+          username: formData.username,
+          role: selectedRole
         });
 
-      console.log('RPC Result:', { profileData, profileError });
+        if (profileError) {
+          console.error('RPC Profile creation failed:', profileError);
+          
+          // Try fallback method - direct insert
+          console.log('Trying fallback: direct insert...');
+          const { data: insertData, error: insertError } = await supabase
+            .from('users')
+            .insert({
+              id: authData.user.id,
+              email: formData.email,
+              username: formData.username,
+              full_name: formData.fullName,
+              role: selectedRole,
+              is_verified: 'no'
+            })
+            .select();
 
-      if (profileError) {
-        console.error('RPC Profile creation failed:', profileError);
-        throw new Error(`Profile creation failed: ${profileError.message}`);
-      }
-
-      if (profileData?.error) {
-        console.error('RPC returned error:', profileData);
-        throw new Error(`Profile creation failed: ${profileData.message}`);
-      }
-
-      console.log('Step 2 Complete: Profile created successfully!');
-      setStatusMessage('Account created successfully!');
-
-      // Step 3: Handle navigation
-      if (authData.session) {
-        console.log('Session available, redirecting to dashboard...');
-        setTimeout(() => {
-          navigate('/dashboard', { replace: true });
-        }, 1000);
-      } else {
-        console.log('Email confirmation required...');
-        navigate('/login', {
-          replace: true,
-          state: {
-            message: 'Please check your email and click the confirmation link to complete your registration.'
+          if (insertError) {
+            console.error('Direct insert also failed:', insertError);
+            console.log('Profile creation failed, but continuing with registration...');
+            setStatusMessage('Account created! Profile will be completed on first login.');
+          } else {
+            console.log('Profile created via direct insert:', insertData);
+            setStatusMessage('Account created successfully!');
           }
-        });
+        } else if (profileData?.error) {
+          console.error('RPC returned error:', profileData);
+          console.log('RPC error occurred, but continuing with registration...');
+          setStatusMessage('Account created! Profile will be completed on first login.');
+        } else {
+          console.log('Step 2 Complete: Profile created successfully via RPC!', profileData);
+          setStatusMessage('Account created successfully!');
+        }
+      } catch (profileErr) {
+        console.error('Profile creation attempt failed:', profileErr);
+        console.log('Continuing with registration despite profile creation failure...');
+        setStatusMessage('Account created! Profile will be completed on first login.');
+      }
+
+      // Step 3: Handle navigation - ALWAYS navigate regardless of profile creation success
+      console.log('Step 3: Handling navigation...');
+      
+      if (authData.session) {
+        // Route to profile page for profile completion
+        console.log('Session available, redirecting to profile page in 2 seconds...');
+        setStatusMessage(prev => prev + ' Redirecting to profile setup...');
+        setTimeout(() => {
+          console.log('Executing navigation to profile...');
+          navigate('/profile', { replace: true });
+        }, 2000);
+      } else {
+        console.log('No session - email confirmation required, redirecting to login...');
+        setStatusMessage('Please check your email to confirm your account.');
+        setTimeout(() => {
+          console.log('Executing navigation to login...');
+          navigate('/login', {
+            replace: true,
+            state: {
+              message: 'Please check your email and click the confirmation link to complete your registration.'
+            }
+          });
+        }, 2000);
       }
     } catch (err) {
       console.error('Registration error:', err);

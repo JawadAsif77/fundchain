@@ -36,7 +36,7 @@ export const AuthProvider = ({ children }) => {
     const getInitialSession = async () => {
       try {
         console.log('AuthContext: Getting initial session...');
-        const { session, error } = await auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Error getting session:', error);
@@ -85,7 +85,7 @@ export const AuthProvider = ({ children }) => {
     getInitialSession();
 
     // Listen for auth state changes
-    const { data: { subscription } } = auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('AuthContext: Auth state change event:', event);
       if (!mounted) return;
 
@@ -244,13 +244,19 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      const { data, error } = await auth.signIn(email, password);
+      console.log('Attempting login for:', email);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password
+      });
       
       if (error) {
+        console.error('Login error:', error);
         setError(error.message);
         throw error;
       }
       
+      console.log('Login successful, user data:', data);
       return data;
     } catch (error) {
       console.error('Login error:', error);
@@ -295,8 +301,12 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
       setRoleStatus(null);
       
+      // Clear any stored data
+      localStorage.removeItem('pendingUserProfile');
+      localStorage.removeItem('fundchain-theme'); // Optional: reset theme
+      
       // Attempt to sign out from Supabase
-      const { error } = await auth.signOut();
+      const { error } = await supabase.auth.signOut();
       
       if (error) {
         console.warn('Supabase logout error (but continuing with logout):', error);
@@ -313,6 +323,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setProfile(null);
       setRoleStatus(null);
+      localStorage.removeItem('pendingUserProfile');
       window.location.href = '/';
     }
   };
@@ -397,6 +408,27 @@ export const AuthProvider = ({ children }) => {
     return result;
   };
 
+  // Helper to validate current session
+  const validateSession = async () => {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
+        console.log('Session validation failed, clearing state');
+        setUser(null);
+        setProfile(null);
+        setRoleStatus(null);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error validating session:', error);
+      setUser(null);
+      setProfile(null);
+      setRoleStatus(null);
+      return false;
+    }
+  };
+
   // Helper to determine if user needs KYC
   const needsKYC = () => {
     if (!user) {
@@ -461,6 +493,7 @@ export const AuthProvider = ({ children }) => {
     needsRoleSelection,
     needsKYC,
     isFullyOnboarded,
+    validateSession, // Add session validation
     // Refresh role status after role selection or KYC
     refreshRoleStatus: async () => {
       try {

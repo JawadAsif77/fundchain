@@ -10,16 +10,38 @@ const Login = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [infoMessage, setInfoMessage] = useState(location?.state?.message || '');
-  const { login, error, user } = useAuth();
+  const { login, error, user, roleStatus, profile } = useAuth();
   const navigate = useNavigate();
 
   // Effect to handle navigation after user is set
   useEffect(() => {
     if (user && isSubmitting) {
-      console.log('User is now authenticated, navigating to dashboard...');
-      navigate('/dashboard');
+      console.log('User is now authenticated:', user.id);
+      
+      // Give some time for roleStatus to load, but don't wait indefinitely
+      const navigationTimeout = setTimeout(() => {
+        if (roleStatus && roleStatus.role) {
+          // Check if profile is complete enough
+          if (!roleStatus.hasRole || !profile?.full_name || !profile?.username) {
+            console.log('Profile incomplete, redirecting to profile page...');
+            navigate('/profile');
+          } else {
+            // Route based on user role
+            const targetRoute = roleStatus.role === 'creator' ? '/explore' : '/dashboard';
+            console.log(`Navigating ${roleStatus.role} to ${targetRoute}...`);
+            navigate(targetRoute);
+          }
+        } else {
+          // Fallback: if roleStatus isn't available, go to profile
+          console.log('Role status not available, redirecting to profile...');
+          navigate('/profile');
+        }
+      }, 2000); // Wait 2 seconds for roleStatus to load
+
+      // Clean up timeout if component unmounts
+      return () => clearTimeout(navigationTimeout);
     }
-  }, [user, isSubmitting, navigate]);
+  }, [user, isSubmitting, navigate, roleStatus, profile]);
 
   useEffect(() => {
     if (location?.state?.message) {
