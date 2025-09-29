@@ -467,51 +467,63 @@ export const getUserRoleStatus = async (userId = null) => {
  * Creates a user record in the public.users table if it doesn't exist
  * This should be called when a user first signs up or when we detect they don't have a record
  */
-export const createUserRecord = async (userId = null) => {
+export const createUserRecord = async (userId = null, profileOverrides = {}) => {
   try {
+    const { data: { user: authUser } } = await supabaseClient.auth.getUser();
+
     let targetUserId = userId;
-    let userEmail = null;
-    
-    // If no userId provided, get current auth user
+    let resolvedUser = null;
+
     if (!targetUserId) {
-      const { data: { user } } = await supabaseClient.auth.getUser();
-      if (!user) {
+      if (!authUser) {
         throw new Error('No authenticated user found');
       }
-      targetUserId = user.id;
-      userEmail = user.email;
-    } else {
-      // If userId provided, we need to get the email from auth
-      const { data: { user } } = await supabaseClient.auth.getUser();
-      if (user && user.id === targetUserId) {
-        userEmail = user.email;
-      }
+      targetUserId = authUser.id;
+      resolvedUser = authUser;
+    } else if (authUser && authUser.id === targetUserId) {
+      resolvedUser = authUser;
     }
 
-    console.log('createUserRecord: Creating user record for ID:', targetUserId, 'email:', userEmail);
+    if (!targetUserId) {
+      throw new Error('Unable to determine user ID for profile creation');
+    }
 
-    // Create the user record
+    const metadata = resolvedUser?.user_metadata || {};
+
+    const payload = {
+      id: targetUserId,
+      email: profileOverrides.email ?? resolvedUser?.email ?? null,
+      username: profileOverrides.username ?? metadata.username ?? null,
+      full_name: profileOverrides.full_name ?? metadata.full_name ?? metadata.name ?? null,
+      avatar_url: profileOverrides.avatar_url ?? metadata.avatar_url ?? null,
+      role: profileOverrides.role ?? metadata.role ?? 'investor',
+      is_verified: profileOverrides.is_verified ?? 'no'
+    };
+
+    if (!payload.email) {
+      throw new Error('Email is required to create user profile');
+    }
+
+    console.log('createUserRecord: Upserting user profile with payload:', payload);
+
+    const sanitizedPayload = Object.fromEntries(
+      Object.entries(payload).filter(([, value]) => value !== undefined)
+    );
+
     const { data, error } = await supabaseClient
       .from('users')
-      .insert({
-        id: targetUserId,
-        email: userEmail,
-        full_name: userEmail ? userEmail.split('@')[0] : null, // Use email prefix as initial name
-        role: null, // No role assigned yet
-        verification_level: 'none',
-        trust_score: 0
-      })
+      .upsert(sanitizedPayload, { onConflict: 'id' })
       .select()
       .single();
 
     if (error) {
-      console.error('createUserRecord: Error creating user record:', error);
+      console.error('createUserRecord: Error upserting user record:', error);
       throw error;
     }
 
-    console.log('createUserRecord: Successfully created user record:', data);
+    console.log('createUserRecord: Successfully upserted user record:', data);
     return data;
-    
+
   } catch (error) {
     console.error('createUserRecord: Error:', error);
     throw error;

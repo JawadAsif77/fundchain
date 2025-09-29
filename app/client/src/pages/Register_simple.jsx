@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../store/AuthContext';
 import { supabase } from '../lib/supabase';
+import { createUserRecord } from '../lib/api.js';
 
 const Register = () => {
   const [step, setStep] = useState('role'); // 'role' or 'form'
@@ -80,31 +80,65 @@ const Register = () => {
         throw new Error('No user returned from signup');
       }
 
-      // Step 2: Create profile immediately using RPC function
-      console.log('Step 2: Creating profile via RPC function...');
-      const { data: profileData, error: profileError } = await supabase
-        .rpc('create_user_profile', {
-          user_id: authData.user.id,
-          user_email: formData.email,
-          user_username: formData.username,
-          user_full_name: formData.fullName,
-          user_role: selectedRole,
-          user_verified: 'no'
-        });
+      // Step 2: Ensure a profile record exists in public.users
+      const pendingProfile = {
+        id: authData.user.id,
+        email: formData.email,
+        username: formData.username || null,
+        full_name: formData.fullName || null,
+        role: selectedRole,
+        is_verified: 'no'
+      };
 
-      console.log('RPC Result:', { profileData, profileError });
+      localStorage.setItem('pendingUserProfile', JSON.stringify(pendingProfile));
 
-      if (profileError) {
-        console.error('RPC Profile creation failed:', profileError);
-        throw new Error(`Profile creation failed: ${profileError.message}`);
+      let profileCreated = false;
+
+      // Try creating the profile directly if we already have a session
+      if (authData.session) {
+        try {
+          console.log('Step 2: Creating profile via direct upsert...');
+          const createdProfile = await createUserRecord(authData.user.id, pendingProfile);
+          console.log('Direct profile creation succeeded:', createdProfile);
+          profileCreated = true;
+        } catch (directError) {
+          console.warn('Direct profile creation failed, falling back to RPC:', directError);
+        }
+      } else {
+        console.log('No active session returned, using RPC to create profile.');
       }
 
-      if (profileData?.error) {
-        console.error('RPC returned error:', profileData);
-        throw new Error(`Profile creation failed: ${profileData.message}`);
+      if (!profileCreated) {
+        console.log('Step 2 fallback: Creating profile via RPC function...');
+        const { data: profileData, error: profileError } = await supabase
+          .rpc('create_user_profile', {
+            user_id: authData.user.id,
+            user_email: formData.email,
+            user_username: formData.username,
+            user_full_name: formData.fullName,
+            user_role: selectedRole,
+            user_verified: 'no'
+          });
+
+        console.log('RPC Result:', { profileData, profileError });
+
+        if (profileError) {
+          console.error('RPC Profile creation failed:', profileError);
+          throw new Error(`Profile creation failed: ${profileError.message}`);
+        }
+
+        if (profileData?.error) {
+          console.error('RPC returned error:', profileData);
+          throw new Error(`Profile creation failed: ${profileData.message}`);
+        }
+
+        profileCreated = true;
       }
 
-      console.log('Step 2 Complete: Profile created successfully!');
+      if (profileCreated) {
+        console.log('Step 2 Complete: Profile created successfully!');
+        localStorage.removeItem('pendingUserProfile');
+      }
       setStatusMessage('Account created successfully!');
 
       // Step 3: Handle navigation
