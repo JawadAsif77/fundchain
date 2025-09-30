@@ -189,7 +189,7 @@ const Header = () => {
                   transition: 'var(--transition-default)'
                 }}
               >
-                Edit Profile
+                👤 Profile
               </Link>
             )}
           </nav>
@@ -225,7 +225,7 @@ const Header = () => {
                   className="btn btn--ghost btn--sm"
                   onClick={closeMobileMenu}
                 >
-                  Edit Profile
+                  👤 Profile
                 </Link>
                 <button
                   onClick={handleLogout}
@@ -355,7 +355,7 @@ const Header = () => {
                     transition: 'var(--transition-default)'
                   }}
                 >
-                  Edit Profile
+                  👤 Profile
                 </Link>
               )}
               

@@ -20,20 +20,29 @@ const Login = () => {
       
       // Give some time for roleStatus to load, but don't wait indefinitely
       const navigationTimeout = setTimeout(() => {
-        if (roleStatus && roleStatus.role) {
-          // Check if profile is complete enough
-          if (!roleStatus.hasRole || !profile?.full_name || !profile?.username) {
-            console.log('Profile incomplete, redirecting to profile page...');
+        if (roleStatus && roleStatus.hasRole && roleStatus.role) {
+          // Check if user has basic profile info (don't require full profile completion)
+          const hasBasicProfile = profile?.full_name && profile?.username;
+          
+          if (!hasBasicProfile) {
+            console.log('Basic profile incomplete, redirecting to profile page...');
             navigate('/profile');
           } else {
-            // Route based on user role
-            const targetRoute = roleStatus.role === 'creator' ? '/explore' : '/dashboard';
-            console.log(`Navigating ${roleStatus.role} to ${targetRoute}...`);
-            navigate(targetRoute);
+            // Route based on user role to their appropriate DEFAULT page
+            if (roleStatus.role === 'creator') {
+              console.log('Redirecting creator to dashboard...');
+              navigate('/dashboard');
+            } else if (roleStatus.role === 'investor') {
+              console.log('Redirecting investor to explore (default page)...');
+              navigate('/explore');  // Investors go to explore by default
+            } else {
+              console.log('Unknown role, redirecting to explore...');
+              navigate('/explore');
+            }
           }
         } else {
-          // Fallback: if roleStatus isn't available, go to profile
-          console.log('Role status not available, redirecting to profile...');
+          // User doesn't have a role yet, redirect to profile for role selection
+          console.log('No role selected, redirecting to profile for role selection...');
           navigate('/profile');
         }
       }, 2000); // Wait 2 seconds for roleStatus to load

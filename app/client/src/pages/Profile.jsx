@@ -229,6 +229,12 @@ const Profile = () => {
         applyProfileToState(updatedProfile);
       }
       setMessage('Profile updated successfully!');
+      
+      // If this was initial profile setup (user came from registration), 
+      // show a success message with option to continue
+      if (needsProfileCompletion && needsProfileCompletion()) {
+        setMessage('Profile setup complete! You can now continue to your dashboard.');
+      }
     } catch (submitError) {
       console.error('Error updating profile:', submitError);
       setError(submitError.message || 'Failed to update profile');
@@ -246,10 +252,36 @@ const Profile = () => {
   };
 
   const handleContinue = () => {
-    if ((roleStatus?.role || formData.role) === 'creator') {
+    const userRole = roleStatus?.role || formData.role;
+    if (userRole === 'creator') {
+      console.log('Creator completing profile, redirecting to dashboard...');
+      navigate('/dashboard');
+    } else if (userRole === 'investor') {
+      console.log('Investor completing profile, redirecting to explore...');
       navigate('/explore');
     } else {
+      // Fallback - redirect to explore as it's more general
+      console.log('Unknown role, redirecting to explore...');
+      navigate('/explore');
+    }
+  };
+
+  const handleSkip = () => {
+    const userRole = roleStatus?.role || formData.role;
+    console.log('User skipping profile completion, role:', userRole);
+    
+    // Save minimal data (at least the role) before skipping
+    if (formData.role && formData.role !== (roleStatus?.role || '')) {
+      handleSubmit({ preventDefault: () => {} }); // Save role if it was changed
+    }
+    
+    // Redirect based on role
+    if (userRole === 'investor') {
+      navigate('/explore');
+    } else if (userRole === 'creator') {
       navigate('/dashboard');
+    } else {
+      navigate('/explore'); // Default
     }
   };
 
@@ -591,32 +623,44 @@ const Profile = () => {
               display: 'flex',
               flexWrap: 'wrap',
               gap: '1rem',
-              justifyContent: 'flex-end',
+              justifyContent: 'space-between',
               borderTop: '1px solid var(--color-border)',
               paddingTop: '1.5rem'
             }}>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="btn btn--ghost"
-                disabled={isSubmitting}
-              >
-                Reset
-              </button>
-              <button
-                type="submit"
-                className="btn btn--primary"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Saving...' : 'Save Profile'}
-              </button>
-              <button
-                type="button"
-                onClick={handleContinue}
-                className="btn btn--accent"
-              >
-                Go to {(roleStatus?.role || formData.role) === 'creator' ? 'Explore' : 'Dashboard'}
-              </button>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button
+                  type="button"
+                  onClick={handleSkip}
+                  className="btn btn--ghost"
+                  style={{ color: 'var(--color-muted)' }}
+                >
+                  Skip for Now
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="btn btn--ghost"
+                  disabled={isSubmitting}
+                >
+                  Reset
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Profile'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleContinue}
+                  className="btn btn--accent"
+                >
+                  Go to {(roleStatus?.role || formData.role) === 'creator' ? 'Dashboard' : 'Explore'}
+                </button>
+              </div>
             </div>
           </form>
 

@@ -146,8 +146,8 @@ const Register = () => {
       console.log('Step 3: Handling navigation...');
       
       if (authData.session) {
-        // Route to profile page for profile completion
-        console.log('Session available, redirecting to profile page in 2 seconds...');
+        // Route to profile page for role selection and basic profile completion
+        console.log('Session available, redirecting to profile page for role selection...');
         setStatusMessage(prev => prev + ' Redirecting to profile setup...');
         setTimeout(() => {
           console.log('Executing navigation to profile...');

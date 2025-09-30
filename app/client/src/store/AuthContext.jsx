@@ -66,11 +66,79 @@ const clearSupabaseAuthStorage = () => {
         if (cookieName && (cookieName.startsWith('sb-') || cookieName.includes('supabase'))) {
           document.cookie = `${cookieName}=; Max-Age=0; path=/; SameSite=Lax;`;
           document.cookie = `${cookieName}=; Max-Age=0; path=/; domain=${window.location.hostname}; SameSite=Lax;`;
+          // Also clear for root domain
+          document.cookie = `${cookieName}=; Max-Age=0; path=/; domain=.${window.location.hostname}; SameSite=Lax;`;
         }
       });
     }
   } catch (cookieError) {
     console.warn('Unable to clear Supabase cookies:', cookieError);
+  }
+};
+
+// Enhanced function to clear ALL authentication data
+const clearAllAuthData = async () => {
+  if (typeof window === 'undefined') return;
+
+  // Clear all localStorage
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (
+        key.startsWith('sb-') || 
+        key.includes('supabase') || 
+        key === 'pendingUserProfile' ||
+        key === 'fundchain-theme' ||
+        key.includes('auth') ||
+        key.includes('user') ||
+        key.includes('session')
+      )) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+  } catch (error) {
+    console.warn('Error clearing localStorage:', error);
+  }
+
+  // Clear all sessionStorage
+  try {
+    sessionStorage.clear();
+  } catch (error) {
+    console.warn('Error clearing sessionStorage:', error);
+  }
+
+  // Clear ALL cookies
+  try {
+    if (typeof document !== 'undefined') {
+      document.cookie.split(';').forEach((cookie) => {
+        const cookieName = cookie.split('=')[0].trim();
+        if (cookieName) {
+          // Clear for multiple domain configurations
+          const domains = ['', `domain=${window.location.hostname}`, `domain=.${window.location.hostname}`];
+          if (window.location.hostname === 'localhost') {
+            domains.push('domain=localhost');
+          }
+          
+          domains.forEach(domain => {
+            document.cookie = `${cookieName}=; Max-Age=0; path=/; ${domain}; SameSite=Lax;`;
+          });
+        }
+      });
+    }
+  } catch (error) {
+    console.warn('Error clearing cookies:', error);
+  }
+
+  // Clear caches (for PWA/service workers)
+  try {
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+    }
+  } catch (error) {
+    console.warn('Error clearing caches:', error);
   }
 };
 
@@ -354,34 +422,33 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
       setRoleStatus(null);
       
-      // Clear any stored data
-      localStorage.removeItem('pendingUserProfile');
-      localStorage.removeItem('fundchain-theme'); // Optional: reset theme
+      // Clear ALL authentication data thoroughly
+      await clearAllAuthData();
       
-      // Attempt to sign out from Supabase
+      // Sign out from Supabase
       const { error } = await supabase.auth.signOut({ scope: 'global' });
-
-      // Ensure any lingering local auth data is purged
-      clearSupabaseAuthStorage();
-
       if (error) {
-        console.warn('Supabase logout error (but continuing with logout):', error);
-        // Don't throw here, we still want to redirect
+        console.warn('Supabase logout warning:', error.message);
       }
       
-      // Force redirect to home page after logout (always execute)
-      console.log('Redirecting to home page...');
-      window.location.href = '/';
+      // Additional cleanup for any remaining Supabase data
+      clearSupabaseAuthStorage();
+      
+      console.log('Logout complete, redirecting...');
+      
+      // Use replace to prevent back button issues
+      window.location.replace('/');
       
     } catch (error) {
       console.error('Logout error:', error);
-      // Even if there's an error, clear state and redirect
+      
+      // Emergency cleanup - ensure logout happens even if there's an error
       setUser(null);
       setProfile(null);
       setRoleStatus(null);
-      localStorage.removeItem('pendingUserProfile');
+      await clearAllAuthData();
       clearSupabaseAuthStorage();
-      window.location.href = '/';
+      window.location.replace('/');
     }
   };
 

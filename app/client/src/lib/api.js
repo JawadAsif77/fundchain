@@ -132,12 +132,46 @@ export const userApi = {
     return { data: user };
   },
 
-  // Update user profile (placeholder for Phase 2)
+  // Update user profile
   async updateProfile(userId, profileData) {
-    await delay(1000);
-    
-    // PHASE 2: Implement actual profile updates with Supabase
-    throw new Error('Profile updates will be available in Phase 2 with database integration');
+    try {
+      console.log('Updating profile for user:', userId, 'with data:', profileData);
+      
+      // Clean the profile data - remove empty strings and null values where appropriate
+      const cleanedData = {};
+      
+      Object.keys(profileData).forEach(key => {
+        const value = profileData[key];
+        if (value !== undefined && value !== '') {
+          cleanedData[key] = value;
+        }
+      });
+      
+      // Ensure updated_at is set
+      cleanedData.updated_at = new Date().toISOString();
+      
+      console.log('Cleaned profile data:', cleanedData);
+      
+      // Update the users table
+      const { data, error } = await supabase
+        .from('users')
+        .update(cleanedData)
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase profile update error:', error);
+        throw new Error(`Failed to update profile: ${error.message}`);
+      }
+
+      console.log('Profile updated successfully:', data);
+      return { data, error: null };
+      
+    } catch (error) {
+      console.error('Profile update error:', error);
+      return { data: null, error: error };
+    }
   }
 };
 

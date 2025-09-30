@@ -39,16 +39,20 @@ const Dashboard = () => {
     console.log('Dashboard useEffect - loading:', loading, 'authLoading:', authLoading, 'user:', !!user);
     if (!loading && !authLoading && user && roleStatus) {
       if (!roleStatus?.hasRole) {
-        console.log('User has no role, redirecting to profile...');
+        console.log('User has no role, redirecting to profile for role selection...');
         navigate('/profile', { replace: true });
         return;
       }
 
+      // For creators: check if they need to complete business profile/KYC
       if (roleStatus?.role === 'creator' && !roleStatus?.companyData) {
         console.log('Creator needs to complete business profile, redirecting to KYC...');
         navigate('/kyc', { replace: true });
         return;
       }
+
+      // Both investors and creators can access dashboard
+      // This is now the universal dashboard with role-specific content
     }
   }, [user, roleStatus, loading, authLoading, navigate]);
 
