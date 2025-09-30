@@ -50,6 +50,29 @@
   height: 4rem;
 }
 
+/* Desktop Navigation */
+.desktop-nav {
+  display: flex !important;
+  align-items: center;
+  gap: 2rem;
+}
+
+/* Mobile Menu Button */
+.mobile-menu-btn {
+  display: none !important;
+}
+
+/* Responsive Navigation */
+@media (max-width: 768px) {
+  .desktop-nav {
+    display: none !important;
+  }
+  
+  .mobile-menu-btn {
+    display: block !important;
+  }
+}
+
 .logo {
   font-size: var(--font-size-xl);
   font-weight: 700;

@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, logout, validateSession } = useAuth();
-  const { theme, toggleTheme, isDark } = useTheme();
   const location = useLocation();
 
   // Session health monitor
@@ -123,24 +121,7 @@ const Header = () => {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav style={{
-            display: 'none',
-            alignItems: 'center',
-            gap: 'var(--space-6)'
-          }} className="md:flex">
-            <Link 
-              to="/" 
-              style={{
-                color: isActiveLink('/') ? 'var(--color-primary)' : 'var(--color-text)',
-                fontWeight: 'var(--font-semibold)',
-                padding: 'var(--space-2) 0',
-                textDecoration: 'none',
-                transition: 'var(--transition-default)',
-                position: 'relative'
-              }}
-            >
-              Home
-            </Link>
+          <nav className="desktop-nav">
             <Link 
               to="/explore" 
               style={{
@@ -148,56 +129,53 @@ const Header = () => {
                 fontWeight: 'var(--font-semibold)',
                 padding: 'var(--space-2) 0',
                 textDecoration: 'none',
+                transition: 'var(--transition-default)',
+                position: 'relative'
+              }}
+            >
+              Opportunities
+            </Link>
+            
+            {/* Navigation Links - always visible */}
+            <a 
+              href={location.pathname === '/' ? "#how-it-works" : "/#how-it-works"}
+              onClick={location.pathname === '/' ? (e) => handleAnchorClick(e, 'how-it-works') : undefined}
+              style={{
+                color: 'var(--color-text)',
+                fontWeight: 'var(--font-semibold)',
+                padding: 'var(--space-2) 0',
+                textDecoration: 'none',
                 transition: 'var(--transition-default)'
               }}
             >
-              Explore
-            </Link>
-            
-            {/* Anchor Links for Home Page */}
-            {location.pathname === '/' && (
-              <>
-                <a 
-                  href="#features"
-                  onClick={(e) => handleAnchorClick(e, 'features')}
-                  style={{
-                    color: 'var(--color-text)',
-                    fontWeight: 'var(--font-semibold)',
-                    padding: 'var(--space-2) 0',
-                    textDecoration: 'none',
-                    transition: 'var(--transition-default)'
-                  }}
-                >
-                  Features
-                </a>
-                <a 
-                  href="#how-it-works"
-                  onClick={(e) => handleAnchorClick(e, 'how-it-works')}
-                  style={{
-                    color: 'var(--color-text)',
-                    fontWeight: 'var(--font-semibold)',
-                    padding: 'var(--space-2) 0',
-                    textDecoration: 'none',
-                    transition: 'var(--transition-default)'
-                  }}
-                >
-                  How It Works
-                </a>
-                <a 
-                  href="#opportunities"
-                  onClick={(e) => handleAnchorClick(e, 'opportunities')}
-                  style={{
-                    color: 'var(--color-text)',
-                    fontWeight: 'var(--font-semibold)',
-                    padding: 'var(--space-2) 0',
-                    textDecoration: 'none',
-                    transition: 'var(--transition-default)'
-                  }}
-                >
-                  Opportunities
-                </a>
-              </>
-            )}
+              How it Works
+            </a>
+            <a 
+              href="#governance"
+              style={{
+                color: 'var(--color-text)',
+                fontWeight: 'var(--font-semibold)',
+                padding: 'var(--space-2) 0',
+                textDecoration: 'none',
+                transition: 'var(--transition-default)',
+                cursor: 'pointer'
+              }}
+            >
+              Governance
+            </a>
+            <a 
+              href="#analytics"
+              style={{
+                color: 'var(--color-text)',
+                fontWeight: 'var(--font-semibold)',
+                padding: 'var(--space-2) 0',
+                textDecoration: 'none',
+                transition: 'var(--transition-default)',
+                cursor: 'pointer'
+              }}
+            >
+              Analytics
+            </a>
             
             {user && (
               <Link
@@ -229,23 +207,12 @@ const Header = () => {
             )}
           </nav>
 
-          {/* Auth Actions & Theme Toggle */}
+          {/* Auth Actions */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: 'var(--space-3)'
           }}>
-            {/* Dark Mode Toggle */}
-            <button 
-              className={`md:block theme-toggle ${isDark ? 'dark' : ''}`}
-              onClick={toggleTheme}
-              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              style={{
-                display: 'none'
-              }}
-            />
-
             {user ? (
               <>
                 <span style={{
@@ -283,8 +250,8 @@ const Header = () => {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="mobile-menu-btn"
               style={{
-                display: 'block',
                 background: 'none',
                 border: 'none',
                 padding: 'var(--space-2)',
@@ -293,7 +260,6 @@ const Header = () => {
                 borderRadius: 'var(--radius-md)',
                 transition: 'var(--transition-default)'
               }}
-              className="md:hidden"
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 {mobileMenuOpen ? (
@@ -330,21 +296,6 @@ const Header = () => {
               gap: 'var(--space-4)'
             }}>
               <Link 
-                to="/" 
-                onClick={closeMobileMenu}
-                style={{
-                  padding: 'var(--space-3) 0',
-                  borderBottom: '1px solid var(--color-border-light)',
-                  color: 'var(--color-text)',
-                  textDecoration: 'none',
-                  fontSize: 'var(--text-md)',
-                  fontWeight: 'var(--font-semibold)',
-                  transition: 'var(--transition-default)'
-                }}
-              >
-                Home
-              </Link>
-              <Link 
                 to="/explore" 
                 onClick={closeMobileMenu}
                 style={{
@@ -357,8 +308,60 @@ const Header = () => {
                   transition: 'var(--transition-default)'
                 }}
               >
-                Explore
+                Opportunities
               </Link>
+              <a 
+                href={location.pathname === '/' ? "#how-it-works" : "/#how-it-works"}
+                onClick={(e) => {
+                  closeMobileMenu();
+                  if (location.pathname === '/') {
+                    handleAnchorClick(e, 'how-it-works');
+                  }
+                }}
+                style={{
+                  padding: 'var(--space-3) 0',
+                  borderBottom: '1px solid var(--color-border-light)',
+                  color: 'var(--color-text)',
+                  textDecoration: 'none',
+                  fontSize: 'var(--text-md)',
+                  fontWeight: 'var(--font-semibold)',
+                  transition: 'var(--transition-default)'
+                }}
+              >
+                How it Works
+              </a>
+              <a 
+                href="#governance"
+                onClick={closeMobileMenu}
+                style={{
+                  padding: 'var(--space-3) 0',
+                  borderBottom: '1px solid var(--color-border-light)',
+                  color: 'var(--color-text)',
+                  textDecoration: 'none',
+                  fontSize: 'var(--text-md)',
+                  fontWeight: 'var(--font-semibold)',
+                  transition: 'var(--transition-default)',
+                  cursor: 'pointer'
+                }}
+              >
+                Governance
+              </a>
+              <a 
+                href="#analytics"
+                onClick={closeMobileMenu}
+                style={{
+                  padding: 'var(--space-3) 0',
+                  borderBottom: '1px solid var(--color-border-light)',
+                  color: 'var(--color-text)',
+                  textDecoration: 'none',
+                  fontSize: 'var(--text-md)',
+                  fontWeight: 'var(--font-semibold)',
+                  transition: 'var(--transition-default)',
+                  cursor: 'pointer'
+                }}
+              >
+                Analytics
+              </a>
               {user && (
                 <Link
                   to="/dashboard"
@@ -393,28 +396,6 @@ const Header = () => {
                   👤 Profile
                 </Link>
               )}
-              
-              {/* Mobile Theme Toggle */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: 'var(--space-3) 0',
-                borderBottom: '1px solid var(--color-border-light)'
-              }}>
-                <span style={{
-                  fontSize: 'var(--text-md)',
-                  fontWeight: 'var(--font-semibold)',
-                  color: 'var(--color-text)'
-                }}>
-                  Dark Mode
-                </span>
-                <button 
-                  className={`theme-toggle ${isDark ? 'dark' : ''}`}
-                  onClick={toggleTheme}
-                  aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-                />
-              </div>
               
               <div style={{
                 display: 'flex',
