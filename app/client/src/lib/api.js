@@ -405,10 +405,10 @@ export const getUserRoleStatus = async (userId = null) => {
     }
 
     console.log('getUserRoleStatus: Querying users table for ID:', targetUserId);
-    // Get user with role information
+    // Get user with role information and verification status
     const { data: userData, error: userError } = await supabaseClient
       .from('users')
-      .select('role, full_name, email')
+      .select('role, full_name, email, is_verified')
       .eq('id', targetUserId)
       .maybeSingle();
 
@@ -452,44 +452,47 @@ export const getUserRoleStatus = async (userId = null) => {
       return finalStatus;
     }
 
-    // Creators may need to complete company verification (KYC)
+    // Creators need to complete KYC verification
     if (status.role === 'creator') {
-      console.log('getUserRoleStatus: Creator role, checking company data');
-      const { data: company, error: companyError } = await supabaseClient
-        .from('companies')
-        .select('id, owner_id, name, registration_number, country, website, verified, verification_notes, created_at, updated_at')
-        .eq('owner_id', targetUserId)
+      console.log('getUserRoleStatus: Creator role, checking verification status');
+      
+      // Check user verification status from users table
+      const userVerificationStatus = userData?.is_verified || 'no';
+      
+      // Check if there's a KYC submission in user_verifications table
+      const { data: kycData, error: kycError } = await supabaseClient
+        .from('user_verifications')
+        .select('id, verification_status, submitted_at, reviewed_at')
+        .eq('user_id', targetUserId)
         .maybeSingle();
 
-      console.log('getUserRoleStatus: Company query result - data:', company, 'error:', companyError);
+      console.log('getUserRoleStatus: KYC query result - data:', kycData, 'error:', kycError);
 
-      // If no company yet, treat as needing KYC
-      if (companyError && companyError.code !== 'PGRST116') {
-        console.error('getUserRoleStatus: Company query error:', companyError);
-        throw companyError;
+      let kycStatus = 'not_started';
+      let isKYCVerified = false;
+
+      if (userVerificationStatus === 'yes') {
+        kycStatus = 'approved';
+        isKYCVerified = true;
+      } else if (userVerificationStatus === 'pending') {
+        kycStatus = 'pending';
+        isKYCVerified = false;
+      } else if (kycData) {
+        // There's a KYC submission, check its status
+        kycStatus = kycData.verification_status || 'pending';
+        isKYCVerified = kycStatus === 'approved';
       }
-
-      let companyNotes = null;
-      if (company?.verification_notes) {
-        try {
-          companyNotes = JSON.parse(company.verification_notes);
-        } catch (parseError) {
-          console.warn('getUserRoleStatus: Failed to parse verification notes JSON:', parseError);
-        }
-      }
-
-      const companyData = company
-        ? {
-            ...company,
-            metadata: companyNotes || null
-          }
-        : null;
 
       const finalStatus = {
         ...status,
-        companyData,
-        isKYCVerified: company?.verified ?? false,
-        kycStatus: company ? (company.verified ? 'approved' : 'pending') : 'not_started'
+        companyData: kycData ? {
+          id: kycData.id,
+          verified: isKYCVerified,
+          submitted_at: kycData.submitted_at,
+          reviewed_at: kycData.reviewed_at
+        } : null,
+        isKYCVerified,
+        kycStatus
       };
       console.log('getUserRoleStatus: Returning creator status:', finalStatus);
       return finalStatus;

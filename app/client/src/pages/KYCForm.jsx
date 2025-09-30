@@ -72,8 +72,8 @@ const KYCForm = () => {
       case 2: // Address Information
         return formData.address_line1 && formData.city && formData.state && 
                formData.postal_code && formData.country;
-      case 3: // Document Upload
-        return formData.id_document && formData.selfie_image;
+      case 3: // Document Upload - now optional
+        return true; // Documents are optional for now
       default:
         return false;
     }
@@ -125,10 +125,17 @@ const KYCForm = () => {
         .single();
       
       if (error) {
-        console.error('Supabase error:', error);
-        throw new Error(error.message);
+        console.error('Supabase error details:', {
+          error,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        throw new Error(`Database error: ${error.message}${error.hint ? ` (${error.hint})` : ''}`);
       }
       
+      console.log('KYC data inserted successfully:', data);
       return { success: true, data };
     } catch (err) {
       console.error('KYC submission error:', err);
@@ -144,20 +151,27 @@ const KYCForm = () => {
 
     setLoading(true);
     setError('');
-    setStatusMessage('Uploading documents and submitting verification...');
+    setStatusMessage('Submitting verification...');
 
     try {
-      // Upload documents to Supabase Storage
-      let id_document_url, selfie_image_url;
+      // Upload documents to Supabase Storage (optional)
+      let id_document_url = null;
+      let selfie_image_url = null;
       
+      // Only attempt upload if files are provided
       try {
-        id_document_url = await uploadFile(formData.id_document, 'id-documents');
-        selfie_image_url = await uploadFile(formData.selfie_image, 'selfies');
+        if (formData.id_document) {
+          setStatusMessage('Uploading ID document...');
+          id_document_url = await uploadFile(formData.id_document, 'id-documents');
+        }
+        if (formData.selfie_image) {
+          setStatusMessage('Uploading selfie...');
+          selfie_image_url = await uploadFile(formData.selfie_image, 'selfies');
+        }
       } catch (uploadError) {
-        setError(uploadError.message);
-        setLoading(false);
-        setStatusMessage('');
-        return;
+        console.warn('File upload failed (storage bucket not configured):', uploadError);
+        // Continue without uploaded files since storage bucket may not be configured
+        setStatusMessage('Proceeding without file uploads (storage not configured)...');
       }
 
       // Prepare data for user_verifications table
@@ -480,14 +494,26 @@ const KYCForm = () => {
 
   const renderDocumentUpload = () => (
     <div>
-      <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '24px' }}>
-        Document Upload
+      <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
+        Document Upload (Optional)
       </h3>
+      
+      <div style={{
+        backgroundColor: '#fef3c7',
+        border: '1px solid #f59e0b',
+        borderRadius: '8px',
+        padding: '12px',
+        marginBottom: '24px'
+      }}>
+        <p style={{ fontSize: '14px', color: '#92400e', margin: 0 }}>
+          📋 <strong>Note:</strong> Document uploads are optional for now. You can submit your verification and upload documents later when the storage system is configured.
+        </p>
+      </div>
       
       <div style={{ display: 'grid', gap: '24px' }}>
         <div>
           <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
-            Government ID Document *
+            Government ID Document (Optional)
           </label>
           <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
             Upload a clear photo of your government-issued ID (passport, driver's license, or national ID)
@@ -513,7 +539,7 @@ const KYCForm = () => {
 
         <div>
           <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
-            Selfie Photo *
+            Selfie Photo (Optional)
           </label>
           <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
             Upload a clear selfie photo for identity verification

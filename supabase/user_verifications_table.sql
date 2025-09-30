@@ -33,8 +33,8 @@ CREATE TABLE public.user_verifications (
     business_email CITEXT NULL, -- Optional business email
     
     -- Document URLs (stored in Supabase Storage)
-    id_document_url TEXT NOT NULL, -- Government ID (front/back or combined)
-    selfie_image_url TEXT NOT NULL, -- Selfie for identity verification
+    id_document_url TEXT NULL, -- Government ID (front/back or combined) - optional for now
+    selfie_image_url TEXT NULL, -- Selfie for identity verification - optional for now
     
     -- Verification Details
     verification_type kyc_verification_type NOT NULL DEFAULT 'individual',
