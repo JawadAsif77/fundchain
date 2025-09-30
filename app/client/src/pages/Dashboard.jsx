@@ -11,7 +11,7 @@ const Dashboard = () => {
   console.log('Dashboard component rendering...');
   
   // ALL HOOKS MUST BE DECLARED FIRST - BEFORE ANY RETURNS OR CONDITIONS
-  const { user, roleStatus, isFullyOnboarded, loading: authLoading } = useAuth();
+  const { user, profile, roleStatus, isFullyOnboarded, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [projects, setProjects] = useState([]);
   const [investments, setInvestments] = useState([]);
@@ -21,6 +21,7 @@ const Dashboard = () => {
   // Debug logging
   console.log('Dashboard - Auth State:', {
     user: user ? { id: user.id, email: user.email } : null,
+    profile: profile ? { id: profile.id, role: profile.role, is_verified: profile.is_verified } : null,
     roleStatus,
     isFullyOnboarded,
     authLoading
@@ -44,17 +45,32 @@ const Dashboard = () => {
         return;
       }
 
-      // For creators: check if they need to complete business profile/KYC
-      if (roleStatus?.role === 'creator' && !roleStatus?.companyData) {
-        console.log('Creator needs to complete business profile, redirecting to KYC...');
-        navigate('/kyc', { replace: true });
-        return;
+      // For creators: always check verification status
+      if (roleStatus?.role === 'creator') {
+        // Check user's verification status from the profile object
+        const userVerificationStatus = profile?.is_verified || 'no';
+        
+        console.log('Creator verification status:', userVerificationStatus);
+        
+        // If verification status is 'no', redirect to KYC
+        if (userVerificationStatus === 'no') {
+          console.log('Creator has no verification, redirecting to KYC...');
+          navigate('/kyc', { replace: true });
+          return;
+        }
+        
+        // If no KYC submission exists yet (backward compatibility)
+        if (!roleStatus?.companyData && userVerificationStatus !== 'pending' && userVerificationStatus !== 'yes') {
+          console.log('Creator needs to complete verification, redirecting to KYC...');
+          navigate('/kyc', { replace: true });
+          return;
+        }
       }
 
-      // Both investors and creators can access dashboard
+      // Both investors and creators can access dashboard (if creators have submitted KYC)
       // This is now the universal dashboard with role-specific content
     }
-  }, [user, roleStatus, loading, authLoading, navigate]);
+  }, [user, profile, roleStatus, loading, authLoading, navigate]);
 
   // Load projects/campaigns based on user role
   useEffect(() => {
