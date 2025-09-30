@@ -12,6 +12,68 @@ export const useAuth = () => {
   return context;
 };
 
+const defaultRoleStatus = {
+  hasRole: false,
+  role: null,
+  isKYCVerified: false,
+  companyData: null,
+  success: true,
+  kycStatus: 'not_started'
+};
+
+const clearSupabaseAuthStorage = () => {
+  if (typeof window === 'undefined') return;
+
+  const clearStorage = (storage) => {
+    if (!storage) return;
+
+    const keysToRemove = [];
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i);
+      if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach((key) => {
+      try {
+        storage.removeItem(key);
+      } catch (removeError) {
+        console.warn('Unable to remove storage key:', key, removeError);
+      }
+    });
+  };
+
+  try {
+    clearStorage(window.localStorage);
+  } catch (storageError) {
+    console.warn('Unable to clear Supabase localStorage keys:', storageError);
+  }
+
+  try {
+    clearStorage(window.sessionStorage);
+  } catch (sessionError) {
+    console.warn('Unable to clear Supabase sessionStorage keys:', sessionError);
+  }
+
+  try {
+    if (typeof document !== 'undefined') {
+      document.cookie.split(';').forEach((cookie) => {
+        const trimmed = cookie.trim();
+        if (!trimmed) return;
+
+        const cookieName = trimmed.split('=')[0];
+        if (cookieName && (cookieName.startsWith('sb-') || cookieName.includes('supabase'))) {
+          document.cookie = `${cookieName}=; Max-Age=0; path=/; SameSite=Lax;`;
+          document.cookie = `${cookieName}=; Max-Age=0; path=/; domain=${window.location.hostname}; SameSite=Lax;`;
+        }
+      });
+    }
+  } catch (cookieError) {
+    console.warn('Unable to clear Supabase cookies:', cookieError);
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   console.log('AuthProvider initializing...');
   const [user, setUser] = useState(null);
@@ -27,7 +89,7 @@ export const AuthProvider = ({ children }) => {
     const getInitialSession = async () => {
       try {
         console.log('AuthContext: Getting initial session...');
-        const { session, error } = await auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Error getting session:', error);
@@ -76,7 +138,7 @@ export const AuthProvider = ({ children }) => {
     getInitialSession();
 
     // Listen for auth state changes
-    const { data: { subscription } } = auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('AuthContext: Auth state change event:', event);
       if (!mounted) return;
 
@@ -121,31 +183,37 @@ export const AuthProvider = ({ children }) => {
   const loadUserRoleStatus = async (userId) => {
     try {
       console.log('Loading role status for userId:', userId);
-      
+
       // Add more debugging for the API call
       console.log('Calling getUserRoleStatus API...');
       const status = await getUserRoleStatus(userId);
       console.log('getUserRoleStatus API returned:', status);
-      
+
       if (status && typeof status === 'object') {
-        console.log('Setting roleStatus to:', status);
-        setRoleStatus(status);
+        const mergedStatus = {
+          ...defaultRoleStatus,
+          ...status
+        };
+        console.log('Setting roleStatus to:', mergedStatus);
+        setRoleStatus(mergedStatus);
         console.log('Role status set in context successfully');
-      } else {
-        console.warn('Invalid role status returned, setting to null:', status);
-        setRoleStatus(null);
+        return mergedStatus;
       }
+
+      console.warn('Invalid role status returned, resetting to defaults:', status);
+      setRoleStatus(defaultRoleStatus);
+      return defaultRoleStatus;
     } catch (error) {
       console.error('Error loading role status:', error);
       console.error('Error details:', error.message, error.stack);
       // Set a default status if there's an error
-      setRoleStatus({
-        hasRole: false,
-        role: null,
-        isKYCVerified: false,
-        companyData: null,
-        success: false
-      });
+      const fallbackStatus = {
+        ...defaultRoleStatus,
+        success: false,
+        error: error.message
+      };
+      setRoleStatus(fallbackStatus);
+      return fallbackStatus;
     }
   };
 
@@ -160,12 +228,46 @@ export const AuthProvider = ({ children }) => {
         if (error.code === 'PGRST116') {
           console.log('Creating new profile for user');
           const sessionUser = userSession || user;
-          const newProfile = {
-            id: userId,
-            email: sessionUser?.email || '',
-            full_name: sessionUser?.user_metadata?.full_name || '',
-            avatar_url: sessionUser?.user_metadata?.avatar_url || null
-          };
+          
+          // Check if there's pending profile data from registration
+          const pendingProfileData = localStorage.getItem('pendingUserProfile');
+          let newProfile;
+          
+          if (pendingProfileData) {
+            try {
+              const pendingData = JSON.parse(pendingProfileData);
+              if (pendingData.id === userId) {
+                console.log('Found pending profile data, using it:', pendingData);
+                newProfile = {
+                  id: userId,
+                  email: pendingData.email,
+                  username: pendingData.username,
+                  full_name: pendingData.full_name,
+                  role: pendingData.role,
+                  is_verified: 'no'
+                };
+                // Clean up the stored data
+                localStorage.removeItem('pendingUserProfile');
+              }
+            } catch (parseError) {
+              console.error('Error parsing pending profile data:', parseError);
+              localStorage.removeItem('pendingUserProfile');
+            }
+          }
+          
+          // Fallback to user metadata if no pending data
+          if (!newProfile) {
+            console.log('No pending data, creating profile from user metadata');
+            newProfile = {
+              id: userId,
+              email: sessionUser?.email || '',
+              full_name: sessionUser?.user_metadata?.full_name || '',
+              username: sessionUser?.user_metadata?.username || null,
+              role: sessionUser?.user_metadata?.role || 'investor',
+              avatar_url: sessionUser?.user_metadata?.avatar_url || null,
+              is_verified: 'no'
+            };
+          }
           
           const { data: createdProfile, error: createError } = await db.users.createProfile(newProfile);
           
@@ -195,13 +297,19 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      const { data, error } = await auth.signIn(email, password);
+      console.log('Attempting login for:', email);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password
+      });
       
       if (error) {
+        console.error('Login error:', error);
         setError(error.message);
         throw error;
       }
       
+      console.log('Login successful, user data:', data);
       return data;
     } catch (error) {
       console.error('Login error:', error);
@@ -240,15 +348,22 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('Logging out user...');
       setError(null);
-      
+
       // Clear local state immediately
       setUser(null);
       setProfile(null);
       setRoleStatus(null);
       
-      // Attempt to sign out from Supabase
-      const { error } = await auth.signOut();
+      // Clear any stored data
+      localStorage.removeItem('pendingUserProfile');
+      localStorage.removeItem('fundchain-theme'); // Optional: reset theme
       
+      // Attempt to sign out from Supabase
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+
+      // Ensure any lingering local auth data is purged
+      clearSupabaseAuthStorage();
+
       if (error) {
         console.warn('Supabase logout error (but continuing with logout):', error);
         // Don't throw here, we still want to redirect
@@ -264,6 +379,8 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setProfile(null);
       setRoleStatus(null);
+      localStorage.removeItem('pendingUserProfile');
+      clearSupabaseAuthStorage();
       window.location.href = '/';
     }
   };
@@ -339,13 +456,34 @@ export const AuthProvider = ({ children }) => {
       console.log('needsRoleSelection: No user');
       return false;
     }
-    if (!roleStatus || roleStatus.success === false) {
-      console.log('needsRoleSelection: No valid roleStatus');
+    if (!roleStatus) {
+      console.log('needsRoleSelection: Role status not yet loaded');
       return false;
     }
     const result = roleStatus.hasRole === false;
     console.log('needsRoleSelection result:', result, 'roleStatus:', roleStatus);
     return result;
+  };
+
+  // Helper to validate current session
+  const validateSession = async () => {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
+        console.log('Session validation failed, clearing state');
+        setUser(null);
+        setProfile(null);
+        setRoleStatus(null);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error validating session:', error);
+      setUser(null);
+      setProfile(null);
+      setRoleStatus(null);
+      return false;
+    }
   };
 
   // Helper to determine if user needs KYC
@@ -354,11 +492,15 @@ export const AuthProvider = ({ children }) => {
       console.log('needsKYC: No user');
       return false;
     }
-    if (!roleStatus || roleStatus.success === false) {
-      console.log('needsKYC: No valid roleStatus');
+    if (!roleStatus) {
+      console.log('needsKYC: Role status not yet loaded');
       return false;
     }
-    const result = roleStatus.hasRole && roleStatus.isKYCVerified === false;
+    if (roleStatus.role !== 'creator') {
+      console.log('needsKYC: User is not a creator');
+      return false;
+    }
+    const result = !roleStatus.companyData;
     console.log('needsKYC result:', result, 'roleStatus:', roleStatus);
     return result;
   };
@@ -369,11 +511,22 @@ export const AuthProvider = ({ children }) => {
       console.log('isFullyOnboarded: No user');
       return false;
     }
-    if (!roleStatus || roleStatus.success === false) {
-      console.log('isFullyOnboarded: No valid roleStatus');
+    if (!roleStatus) {
+      console.log('isFullyOnboarded: Role status not yet loaded');
       return false;
     }
-    const result = roleStatus.hasRole && roleStatus.isKYCVerified === true;
+    if (!roleStatus.hasRole) {
+      console.log('isFullyOnboarded: User has no role');
+      return false;
+    }
+
+    if (roleStatus.role === 'creator') {
+      const result = !!roleStatus.companyData;
+      console.log('isFullyOnboarded (creator) result:', result, 'roleStatus:', roleStatus);
+      return result;
+    }
+
+    const result = true;
     console.log('isFullyOnboarded result:', result, 'roleStatus:', roleStatus);
     return result;
   };
@@ -393,10 +546,24 @@ export const AuthProvider = ({ children }) => {
     // Helper methods
     isAuthenticated: !!user,
     isEmailConfirmed: !!user?.email_confirmed_at,
+    needsProfileCompletion: () => {
+      if (!user) return false;
+      if (!profile) return true;
+
+      const requiredFields = ['full_name', 'username'];
+      return requiredFields.some((field) => {
+        const value = profile?.[field];
+        if (typeof value === 'string') {
+          return value.trim() === '';
+        }
+        return !value;
+      });
+    },
     // Phase 3 onboarding helpers
     needsRoleSelection,
     needsKYC,
     isFullyOnboarded,
+    validateSession, // Add session validation
     // Refresh role status after role selection or KYC
     refreshRoleStatus: async () => {
       try {
@@ -404,14 +571,30 @@ export const AuthProvider = ({ children }) => {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser) {
           console.log('Current user found, loading role status for:', currentUser.id);
-          await loadUserRoleStatus(currentUser.id);
+          const status = await loadUserRoleStatus(currentUser.id);
           console.log('Role status refreshed successfully');
-        } else {
-          console.warn('No current user found during refresh');
+          return status;
         }
+
+        console.warn('No current user found during refresh');
+        setRoleStatus(defaultRoleStatus);
+        return defaultRoleStatus;
       } catch (error) {
         console.error('Error refreshing role status:', error);
+        const fallbackStatus = {
+          ...defaultRoleStatus,
+          success: false,
+          error: error.message
+        };
+        setRoleStatus(fallbackStatus);
+        return fallbackStatus;
       }
+    },
+    updateRoleStatus: (updates) => {
+      setRoleStatus(prev => ({
+        ...(prev || defaultRoleStatus),
+        ...updates
+      }));
     }
   };
 

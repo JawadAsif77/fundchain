@@ -13,8 +13,8 @@ import Campaign from './pages/Campaign';
 import Login from './pages/Login_simple';
 import Register from './pages/Register_simple';
 import Dashboard from './pages/Dashboard';
+import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
-import SelectRole from './pages/SelectRole';
 import KYCForm from './pages/KYCForm';
 import CreateProject from './pages/CreateProject';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -51,15 +51,17 @@ function App() {
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
                   
-                  {/* Onboarding routes */}
+                  {/* Profile route */}
                   <Route 
-                    path="/select-role" 
+                    path="/profile" 
                     element={
                       <ProtectedRoute requireEmailConfirmed>
-                        <SelectRole />
+                        <Profile />
                       </ProtectedRoute>
                     } 
                   />
+                  
+                  {/* Onboarding routes */}
                   <Route 
                     path="/kyc" 
                     element={
