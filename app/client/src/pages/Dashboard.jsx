@@ -32,7 +32,7 @@ const Dashboard = () => {
   const isCreator = roleStatus?.role === 'creator';
   const isInvestor = roleStatus?.role === 'investor';
   const kycStatus = roleStatus?.kycStatus;
-  const showKYCPendingBanner = isCreator && roleStatus?.companyData && !roleStatus?.companyData?.verified;
+  const showKYCPendingBanner = isCreator && (kycStatus === 'pending' || (roleStatus?.companyData && !roleStatus?.isKYCVerified));
 
   // Handle redirects with useEffect to avoid state updates during render
   useEffect(() => {
@@ -542,8 +542,8 @@ const Dashboard = () => {
           gap: '12px'
         }}>
           <div>
-            <strong>Your verification is under review.</strong>{' '}
-            You can start preparing campaigns while our team finishes the checks.
+            <strong>Identity verification is pending.</strong>{' '}
+            Your verification is under review. You can start preparing campaigns while our team finishes the checks.
           </div>
           <Link
             to="/kyc"
@@ -603,13 +603,13 @@ const Dashboard = () => {
           {isCreator && (
             <span style={{
               padding: '4px 12px',
-              backgroundColor: roleStatus?.companyData?.verified ? '#dcfce7' : '#fee2e2',
-              color: roleStatus?.companyData?.verified ? '#166534' : '#991b1b',
+              backgroundColor: roleStatus?.isKYCVerified ? '#dcfce7' : '#fee2e2',
+              color: roleStatus?.isKYCVerified ? '#166534' : '#991b1b',
               borderRadius: '20px',
               fontSize: '12px',
               fontWeight: '500'
             }}>
-              {roleStatus?.companyData?.verified ? '✅ Verified' : '⏳ KYC Pending'}
+              {roleStatus?.isKYCVerified ? '✅ Verified' : '⏳ Identity Verification Pending'}
             </span>
           )}
         </div>
