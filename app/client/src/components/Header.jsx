@@ -1,13 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { supabase } from '../lib/supabase';
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, logout, validateSession } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
   const location = useLocation();
+
+  // Session health monitor
+  useEffect(() => {
+    if (!user) return;
+
+    // Check session health every 5 minutes
+    const sessionCheck = setInterval(async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error || !session) {
+          console.warn('Header: Session invalid, logging out user');
+          logout();
+          return;
+        }
+        
+        // Check if token expires in next 10 minutes
+        const expiresAt = session.expires_at * 1000;
+        const tenMinutes = 10 * 60 * 1000;
+        
+        if (expiresAt - Date.now() < tenMinutes) {
+          console.log('Header: Token expiring soon, attempting refresh...');
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            console.error('Header: Token refresh failed:', refreshError);
+          }
+        }
+      } catch (error) {
+        console.error('Header: Session check failed:', error);
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
+
+    return () => clearInterval(sessionCheck);
+  }, [user, logout]);
 
   const isActiveLink = (path) => {
     if (path === '/') {

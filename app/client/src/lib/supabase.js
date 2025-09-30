@@ -8,13 +8,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables. Please check your .env.local file.');
 }
 
-// Create Supabase client
+// Create Supabase client with enhanced session management
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
-  }
+    detectSessionInUrl: true,
+    // Refresh tokens 5 minutes before expiry
+    tokenRefreshMargin: 300, // 5 minutes in seconds
+    // Retry failed refresh attempts
+    refreshTokenRetries: 3
+  },
+  // Enable debug mode to see auth events
+  debug: process.env.NODE_ENV === 'development'
 });
 
 // Auth helper functions

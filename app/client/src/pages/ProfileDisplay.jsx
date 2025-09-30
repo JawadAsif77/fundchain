@@ -5,17 +5,28 @@ import Loader from '../components/Loader';
 import '../styles/profile-display.css';
 
 const ProfileDisplay = () => {
-  const { user, updateProfile } = useAuth();
+  const { user, profile, loading: authLoading, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
-    if (user) {
-      setUserProfile(user);
+    console.log('📋 ProfileDisplay: User data:', user);
+    console.log('📋 ProfileDisplay: Profile data:', profile);
+    console.log('📋 ProfileDisplay: Auth loading:', authLoading);
+    
+    // Use profile from AuthContext if available, otherwise fall back to user
+    const profileData = profile || user;
+    
+    if (profileData && !authLoading) {
+      console.log('✅ ProfileDisplay: Setting profile data:', profileData);
+      setUserProfile(profileData);
+      setLoading(false);
+    } else if (!authLoading) {
+      console.log('⚠️ ProfileDisplay: No profile data available');
       setLoading(false);
     }
-  }, [user]);
+  }, [user, profile, authLoading]);
 
   const handleEditProfile = () => {
     navigate('/profile-edit');
@@ -43,9 +54,14 @@ const ProfileDisplay = () => {
     ].filter(link => link.url);
   };
 
-  if (loading) return <Loader />;
+  if (loading || authLoading) return <Loader />;
 
-  if (!userProfile || (!userProfile.full_name && !userProfile.bio && !userProfile.username)) {
+  // More lenient check - only show "Complete Profile" if truly missing essential data
+  const needsCompletion = !userProfile || 
+    (!userProfile.full_name && !userProfile.username && !userProfile.email);
+  
+  if (needsCompletion) {
+    console.log('⚠️ ProfileDisplay: Profile needs completion');
     return (
       <div className="profile-display-container">
         <div className="profile-error">

@@ -199,22 +199,43 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Add timeout to prevent infinite loading
+    // Add timeout to prevent infinite loading (increased from 8s to 30s)
     const timeout = setTimeout(() => {
       if (mounted) {
         console.log('AuthContext: Loading timeout reached, forcing loading to false');
         setLoading(false);
       }
-    }, 8000); // 8 second timeout
+    }, 30000); // Increased to 30 second timeout
 
     getInitialSession();
 
-    // Listen for auth state changes
+    // Listen for auth state changes with enhanced token refresh handling
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('AuthContext: Auth state change event:', event);
       if (!mounted) return;
 
       setError(null);
+      
+      // Handle token refresh specifically
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('AuthContext: Token refreshed successfully');
+        if (session?.user) {
+          setUser(session.user);
+          // Don't reload profile on token refresh to avoid unnecessary calls
+        }
+        setLoading(false);
+        return;
+      }
+      
+      // Handle sign out
+      if (event === 'SIGNED_OUT') {
+        console.log('AuthContext: User signed out');
+        setUser(null);
+        setProfile(null);
+        setRoleStatus(null);
+        setLoading(false);
+        return;
+      }
       
       if (session?.user) {
         console.log('AuthContext: Setting user from auth change:', session.user.id);
@@ -251,6 +272,43 @@ export const AuthProvider = ({ children }) => {
       subscription?.unsubscribe();
     };
   }, []);
+
+  // Session validation helper
+  const validateSession = async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.warn('AuthContext: Session validation error:', error);
+        return false;
+      }
+      
+      if (!session || !session.user) {
+        console.warn('AuthContext: No valid session found');
+        return false;
+      }
+      
+      // Check if token is about to expire (within 5 minutes)
+      const expiresAt = session.expires_at * 1000; // Convert to milliseconds
+      const now = Date.now();
+      const fiveMinutes = 5 * 60 * 1000;
+      
+      if (expiresAt - now < fiveMinutes) {
+        console.log('AuthContext: Token expiring soon, refreshing...');
+        const { error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          console.error('AuthContext: Token refresh failed:', refreshError);
+          return false;
+        }
+        console.log('✅ Token refreshed successfully');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('AuthContext: Session validation failed:', error);
+      return false;
+    }
+  };
 
   const loadUserRoleStatus = async (userId) => {
     try {
@@ -458,28 +516,58 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateProfile = async (updates) => {
-    try {
-      if (!user) throw new Error('No user logged in');
-      
-      setError(null);
-      console.log('AuthContext: Updating profile for user:', user.id, 'with updates:', updates);
-      
-      // Use the correct API function
-      const result = await userApi.updateProfile(user.id, updates);
-      
-      if (result.error) {
-        setError(result.error.message);
-        throw result.error;
+    const maxRetries = 3;
+    let attempt = 0;
+    
+    const updateWithRetry = async () => {
+      try {
+        attempt++;
+        console.log(`💾 Profile update attempt ${attempt}/${maxRetries}`);
+        
+        if (!user) throw new Error('No user logged in');
+        
+        // Validate session before attempting update
+        const isSessionValid = await validateSession();
+        if (!isSessionValid) {
+          throw new Error('Session expired. Please log in again.');
+        }
+        
+        setError(null);
+        console.log('AuthContext: Updating profile for user:', user.id, 'with updates:', updates);
+        
+        // Use the correct API function
+        const result = await userApi.updateProfile(user.id, updates);
+        
+        if (result.error) {
+          setError(result.error.message);
+          throw result.error;
+        }
+        
+        console.log('✅ Profile update successful:', result.data);
+        setProfile(result.data);
+        return result.data;
+        
+      } catch (error) {
+        console.error(`❌ Profile update attempt ${attempt} failed:`, error);
+        
+        // Retry on certain errors
+        if (attempt < maxRetries && (
+          error.message?.includes('JWT') ||
+          error.message?.includes('session') ||
+          error.message?.includes('expired') ||
+          error.code === 'PGRST301'
+        )) {
+          console.log(`🔄 Retrying profile update in 2 seconds...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return updateWithRetry();
+        }
+        
+        setError(error.message || 'Failed to update profile');
+        throw error;
       }
-      
-      console.log('AuthContext: Profile update successful:', result.data);
-      setProfile(result.data);
-      return result.data;
-    } catch (error) {
-      console.error('Update profile error:', error);
-      setError(error.message || 'Failed to update profile');
-      throw error;
-    }
+    };
+    
+    return updateWithRetry();
   };
 
   const resetPassword = async (email) => {
@@ -540,27 +628,6 @@ export const AuthProvider = ({ children }) => {
     const result = roleStatus.hasRole === false;
     console.log('needsRoleSelection result:', result, 'roleStatus:', roleStatus);
     return result;
-  };
-
-  // Helper to validate current session
-  const validateSession = async () => {
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error || !user) {
-        console.log('Session validation failed, clearing state');
-        setUser(null);
-        setProfile(null);
-        setRoleStatus(null);
-        return false;
-      }
-      return true;
-    } catch (error) {
-      console.error('Error validating session:', error);
-      setUser(null);
-      setProfile(null);
-      setRoleStatus(null);
-      return false;
-    }
   };
 
   // Helper to determine if user needs KYC

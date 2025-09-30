@@ -133,122 +133,55 @@ export const userApi = {
     return { data: user };
   },
 
-  // Update user profile
+  // Update user profile using RPC to bypass RLS
   async updateProfile(userId, profileData) {
     try {
-      console.log('🔄 Starting profile update for user:', userId);
+      console.log('🔄 Starting RPC profile update for user:', userId);
       console.log('📝 Raw profile data received:', profileData);
       
-      // Clean the profile data - remove empty strings and null values where appropriate
-      const cleanedData = {};
+      // Prepare data for RPC function (only include supported parameters)
+      const rpcParams = {
+        user_id: userId,
+        p_full_name: profileData.full_name || null,
+        p_username: profileData.username || null,
+        p_linkedin_url: profileData.linkedin_url || null,
+        p_twitter_url: profileData.twitter_url || null,
+        p_instagram_url: profileData.instagram_url || null
+      };
       
-      // List of columns that should exist in your users table (basic columns first)
-      const basicColumns = ['full_name', 'username', 'email', 'role', 'updated_at'];
-      const enhancedColumns = [
-        'avatar_url', 'bio', 'location', 'phone', 'date_of_birth', 
-        'social_links', 'preferences', 'linkedin_url', 'twitter_url', 'instagram_url'
-      ];
-      const advancedColumns = [
-        'verification_level', 'trust_score', 'is_verified', 'is_accredited_investor',
-        'total_invested', 'total_campaigns_backed', 'followers_count', 'following_count',
-        'last_active_at', 'referral_code'
-      ];
+      console.log('🚀 Calling update_user_profile RPC with:', rpcParams);
       
-      const allAllowedColumns = [...basicColumns, ...enhancedColumns, ...advancedColumns];
+      // Add timeout to prevent hanging
+      const rpcPromise = supabase.rpc('update_user_profile', rpcParams);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('RPC call timed out after 10 seconds')), 10000)
+      );
       
-      Object.keys(profileData).forEach(key => {
-        const value = profileData[key];
-        // Only include allowed columns and non-empty values
-        if (allAllowedColumns.includes(key) && value !== undefined && value !== '') {
-          cleanedData[key] = value;
-        } else if (allAllowedColumns.includes(key) && value === null) {
-          // Allow explicit null values to clear fields
-          cleanedData[key] = null;
-        } else if (!allAllowedColumns.includes(key)) {
-          console.warn('⚠️ Skipping unknown column:', key);
-        }
-      });
-      
-      // Ensure updated_at is set
-      cleanedData.updated_at = new Date().toISOString();
-      
-      console.log('✅ Cleaned profile data to send:', cleanedData);
-      
-      // Try the update with different approaches
-      console.log('🚀 Attempting database update...');
-      
-      // First try: Update with all cleaned data
-      let { data, error } = await supabase
-        .from('users')
-        .update(cleanedData)
-        .eq('id', userId)
-        .select()
-        .single();
-
-      // If error, try with only basic columns
-      if (error) {
-        console.warn('❌ Full update failed:', error.message);
-        console.log('🔄 Trying with basic columns only...');
-        
-        const basicOnlyData = {};
-        basicColumns.forEach(col => {
-          if (cleanedData[col] !== undefined) {
-            basicOnlyData[col] = cleanedData[col];
-          }
-        });
-        
-        console.log('📦 Basic columns data:', basicOnlyData);
-        
-        const basicResult = await supabase
-          .from('users')
-          .update(basicOnlyData)
-          .eq('id', userId)
-          .select()
-          .single();
-          
-        if (basicResult.error) {
-          console.error('❌ Even basic update failed:', basicResult.error);
-          throw new Error(`Database update failed: ${basicResult.error.message}`);
-        } else {
-          console.log('✅ Basic update succeeded, trying enhanced columns...');
-          
-          // Try enhanced columns one by one
-          for (const col of enhancedColumns) {
-            if (cleanedData[col] !== undefined) {
-              try {
-                await supabase
-                  .from('users')
-                  .update({ [col]: cleanedData[col] })
-                  .eq('id', userId);
-                console.log(`✅ Updated ${col}`);
-              } catch (colError) {
-                console.warn(`⚠️ Failed to update ${col}:`, colError.message);
-              }
-            }
-          }
-          
-          // Get final result
-          const finalResult = await supabase
-            .from('users')
-            .select()
-            .eq('id', userId)
-            .single();
-            
-          data = finalResult.data;
-          error = finalResult.error;
-        }
-      }
+      const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
 
       if (error) {
-        console.error('❌ Final database error:', error);
+        console.error('❌ RPC update failed:', error);
+        
+        // If RPC function doesn't exist, provide helpful error
+        if (error.message?.includes('does not exist')) {
+          throw new Error('RPC function not found. Please run the RPC setup SQL in Supabase first.');
+        }
+        
         throw new Error(`Failed to update profile: ${error.message}`);
       }
 
-      console.log('🎉 Profile updated successfully:', data);
-      return { data, error: null };
+      // RPC returns array, get first item
+      const updatedProfile = data && data.length > 0 ? data[0] : null;
+      
+      if (!updatedProfile) {
+        throw new Error('Profile update returned no data');
+      }
+
+      console.log('🎉 RPC Profile updated successfully:', updatedProfile);
+      return { data: updatedProfile, error: null };
       
     } catch (error) {
-      console.error('💥 Profile update error:', error);
+      console.error('💥 RPC Profile update error:', error);
       return { data: null, error: error };
     }
   }
