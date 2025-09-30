@@ -1,53 +1,640 @@
 # 🚀 FundChain - Investment Crowdfunding Platform
 
-> A comprehensive investment crowdfunding platform built with React, Vite, and Supabase, featuring GoFundMe-like social interactions and advanced campaign management.
+> A comprehensive investment crowdfunding platform built with React, Vite, and Supabase, featuring role-based authentication, project management, and investment tracking.
 
 [![React](https://img.shields.io/badge/React-18.2.0-blue.svg)](https://reactjs.org/)
 [![Vite](https://img.shields.io/badge/Vite-4.4.5-646CFF.svg)](https://vitejs.dev/)
 [![Supabase](https://img.shields.io/badge/Supabase-2.38.0-3ECF8E.svg)](https://supabase.com/)
-[![Version](https://img.shields.io/badge/Version-2.0.0_Phase_2-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/Version-3.0.0_Phase_3-brightgreen.svg)]()
 
 ## 📋 Table of Contents
 
-- [🌟 Overview](#-overview)
-- [🎯 Features](#-features)
-- [🏗️ Architecture](#️-architecture)
+- [🌟 Project Overview](#-project-overview)
+- [🎯 Features Implemented](#-features-implemented)
+- [🏗️ Technical Architecture](#️-technical-architecture)
 - [📊 Database Schema](#-database-schema)
-- [🔧 Technologies](#-technologies)
-- [⚡ Installation](#-installation)
+- [🔧 Installation & Setup](#-installation--setup)
 - [🚀 Development Journey](#-development-journey)
-- [📱 Components](#-components)
-- [🔐 Authentication](#-authentication)
-- [🗄️ Database Operations](#️-database-operations)
-- [🔒 Security](#-security)
-- [📈 Phase Development](#-phase-development)
-- [🎨 UI/UX Design](#-uiux-design)
-- [🔍 Testing](#-testing)
+- [🔐 Authentication System](#-authentication-system)
+- [📱 Component Architecture](#-component-architecture)
+- [🛠️ Recent Fixes & Improvements](#️-recent-fixes--improvements)
+- [🐛 Debugging Guide](#-debugging-guide)
 - [📦 Deployment](#-deployment)
-- [🤝 Contributing](#-contributing)
+- [🔮 Future Development](#-future-development)
 
-## 🌟 Overview
+## 🌟 Project Overview
 
-FundChain is a modern investment crowdfunding platform that bridges the gap between entrepreneurs and investors. Built with cutting-edge web technologies, it provides a comprehensive ecosystem for campaign creation, investment management, and social engagement.
+FundChain is a modern investment crowdfunding platform that connects entrepreneurs with investors. The platform supports two main user roles:
 
-### 🎯 Mission
-Democratize access to investment opportunities while providing entrepreneurs with the tools they need to bring their visions to life.
+- **Investors**: Browse projects, make investments, track portfolio performance
+- **Creators**: Create projects, manage milestones, handle KYC verification
 
-### 🌍 Vision
-To become the leading platform for equity crowdfunding, combining the social engagement of platforms like GoFundMe with the sophisticated financial tools needed for serious investment opportunities.
+### 🎯 Current Status
+- ✅ **Phase 1**: Authentication and basic UI components
+- ✅ **Phase 2**: Database integration with Supabase
+- ✅ **Phase 3**: Role-based features, project creation, KYC verification
+- 🔄 **Current**: Authentication flow fixes and error handling improvements
 
-## 🎯 Features
+## 🎯 Features Implemented
 
-### ✅ Core Features (Phase 1 - Completed)
+### ✅ **Authentication & User Management**
+- **Multi-role Authentication**: Investor/Creator role selection
+- **Secure Session Management**: Supabase Auth integration
+- **Automatic User Creation**: Creates user records in database automatically
+- **Role-based Routing**: Different dashboards for different user types
+- **Onboarding Flow**: Guided setup for new users
 
-#### 🔐 **User Management**
-- **Authentication System**: Email/password authentication via Supabase Auth
-- **User Profiles**: Comprehensive profiles with verification levels
-- **Role-based Access**: Investor, creator, and admin roles
-- **Profile Verification**: Multi-level verification system (email, identity, business)
+### ✅ **Project Management (Phase 3)**
+- **Project Creation**: Full project creation workflow with milestones
+- **KYC Verification**: Company registration and verification for creators
+- **Milestone Tracking**: Break down projects into fundable milestones
+- **Image Upload**: Project images and company documents
 
-#### 💼 **Campaign Management**
-- **Campaign Creation**: Rich campaign creation with detailed descriptions
+### ✅ **Investment Features**
+- **Portfolio Dashboard**: Investment tracking for investors
+- **Project Discovery**: Browse and filter available projects
+- **Investment History**: Track all investment activities
+
+### ✅ **Error Handling & Reliability**
+- **Error Boundary**: Catches and displays React errors gracefully
+- **Comprehensive Logging**: Detailed logging throughout the application
+- **Loading States**: Proper loading indicators and timeouts
+- **Race Condition Prevention**: Fixed multiple authentication timing issues
+
+## 🏗️ Technical Architecture
+
+### Frontend Stack
+```
+React 18.2.0          # UI Framework
+Vite 4.5.14           # Build Tool & Dev Server
+React Router 6.x      # Client-side Routing
+Tailwind CSS          # Styling Framework
+Supabase JS Client    # Database & Auth Client
+```
+
+### Backend Infrastructure
+```
+Supabase              # Backend-as-a-Service
+PostgreSQL            # Database
+Row Level Security    # Data Protection
+Real-time Updates     # Live Data Sync
+```
+
+### Key Components Architecture
+```
+src/
+├── components/           # Reusable UI components
+│   ├── ErrorBoundary.jsx     # Error handling wrapper
+│   ├── ProtectedRoute.jsx    # Route protection
+│   └── Header.jsx            # Navigation component
+├── pages/               # Page components
+│   ├── Dashboard.jsx         # Role-based dashboard
+│   ├── SelectRole.jsx        # Role selection page
+│   ├── CreateProject.jsx     # Project creation form
+│   └── KYCForm.jsx          # Creator verification
+├── store/               # State management
+│   └── AuthContext.jsx      # Authentication state
+├── lib/                 # Utilities and API
+│   ├── api.js               # API functions
+│   └── supabase.js          # Supabase configuration
+└── mock/                # Mock data for development
+```
+
+## 📊 Database Schema
+
+### Core Tables
+
+#### Users Table
+```sql
+CREATE TABLE public.users (
+    id UUID PRIMARY KEY REFERENCES auth.users(id),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    full_name VARCHAR(255),
+    avatar_url TEXT,
+    bio TEXT,
+    location VARCHAR(255),
+    phone VARCHAR(20),
+    date_of_birth DATE,
+    is_verified BOOLEAN DEFAULT false,
+    is_accredited_investor BOOLEAN DEFAULT false,
+    total_invested DECIMAL(15,2) DEFAULT 0,
+    total_campaigns_backed INTEGER DEFAULT 0,
+    verification_level INTEGER DEFAULT 0,
+    trust_score INTEGER DEFAULT 0,
+    role VARCHAR(20) CHECK (role IN ('investor', 'creator')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+#### Companies Table (Phase 3)
+```sql
+CREATE TABLE public.companies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    legal_name VARCHAR(255),
+    description TEXT,
+    industry VARCHAR(100),
+    founded_date DATE,
+    headquarters VARCHAR(255),
+    website_url TEXT,
+    logo_url TEXT,
+    employee_count INTEGER,
+    registration_number VARCHAR(100),
+    tax_id VARCHAR(100),
+    verified BOOLEAN DEFAULT false,
+    verification_documents JSONB DEFAULT '[]',
+    financial_info JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+#### Projects Table (Phase 3)
+```sql
+CREATE TABLE public.projects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE,
+    creator_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    short_description VARCHAR(500),
+    category VARCHAR(100),
+    funding_goal DECIMAL(15,2) NOT NULL,
+    current_funding DECIMAL(15,2) DEFAULT 0,
+    equity_offered DECIMAL(5,2),
+    valuation DECIMAL(15,2),
+    min_investment DECIMAL(15,2) DEFAULT 100,
+    max_investment DECIMAL(15,2),
+    deadline DATE NOT NULL,
+    status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'funded', 'closed', 'cancelled')),
+    images JSONB DEFAULT '[]',
+    documents JSONB DEFAULT '[]',
+    tags JSONB DEFAULT '[]',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+#### Milestones Table (Phase 3)
+```sql
+CREATE TABLE public.milestones (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    funding_target DECIMAL(15,2) NOT NULL,
+    funding_percentage DECIMAL(5,2) NOT NULL CHECK (funding_percentage > 0 AND funding_percentage <= 100),
+    deadline DATE,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'completed', 'failed')),
+    deliverables JSONB DEFAULT '[]',
+    order_index INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+#### Investments Table
+```sql
+CREATE TABLE public.investments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    investor_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+    amount DECIMAL(15,2) NOT NULL CHECK (amount > 0),
+    equity_percentage DECIMAL(8,4),
+    investment_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled')),
+    payment_method VARCHAR(50),
+    transaction_id VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+### Indexes and Constraints
+```sql
+-- Performance indexes
+CREATE INDEX idx_users_role ON public.users(role);
+CREATE INDEX idx_users_verification_level ON public.users(verification_level);
+CREATE INDEX idx_projects_status ON public.projects(status);
+CREATE INDEX idx_projects_category ON public.projects(category);
+CREATE INDEX idx_projects_creator ON public.projects(creator_id);
+CREATE INDEX idx_investments_investor ON public.investments(investor_id);
+CREATE INDEX idx_investments_project ON public.investments(project_id);
+CREATE INDEX idx_milestones_project ON public.milestones(project_id);
+
+-- Ensure milestone percentages add up to 100%
+CREATE OR REPLACE FUNCTION validate_milestone_percentages()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (SELECT SUM(funding_percentage) FROM public.milestones WHERE project_id = NEW.project_id) > 100 THEN
+        RAISE EXCEPTION 'Total milestone percentages cannot exceed 100%';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER validate_milestone_percentages_trigger
+    BEFORE INSERT OR UPDATE ON public.milestones
+    FOR EACH ROW EXECUTE FUNCTION validate_milestone_percentages();
+```
+
+## 🔧 Installation & Setup
+
+### Prerequisites
+```bash
+Node.js >= 18.0.0
+npm >= 9.0.0
+Git
+Supabase account
+```
+
+### 1. Clone Repository
+```bash
+git clone https://github.com/JawadAsif77/fundchain.git
+cd fundchain/app/client
+```
+
+### 2. Install Dependencies
+```bash
+npm install
+```
+
+### 3. Environment Configuration
+Create `.env.local` file:
+```bash
+# Supabase Configuration
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+### 4. Database Setup
+1. Create a new Supabase project
+2. Run the SQL schema files:
+   - Execute `supabase/schema.sql` for base tables
+   - Execute `supabase/phase3_schema.sql` for Phase 3 features
+3. Enable Row Level Security policies
+4. Set up authentication providers
+
+### 5. Start Development Server
+```bash
+npm run dev
+```
+
+The application will be available at `http://localhost:5173`
+
+## 🚀 Development Journey
+
+### Phase 1: Foundation (Completed)
+- ✅ Basic React app setup with Vite
+- ✅ Tailwind CSS integration
+- ✅ Basic component structure
+- ✅ Mock data for development
+
+### Phase 2: Database Integration (Completed)
+- ✅ Supabase integration
+- ✅ Authentication system
+- ✅ Database schema design
+- ✅ API layer implementation
+
+### Phase 3: Advanced Features (Recently Completed)
+- ✅ Role-based authentication
+- ✅ Project creation workflow
+- ✅ KYC verification system
+- ✅ Milestone management
+- ✅ Investment tracking
+
+### Recent Critical Fixes (September 2025)
+- ✅ **Fixed React Hooks Violation**: Resolved "rendered more hooks than during the previous render" error in Dashboard
+- ✅ **Authentication Flow Repair**: Fixed infinite redirect loops between Dashboard and SelectRole
+- ✅ **Error Handling Enhancement**: Added comprehensive error boundaries and logging
+- ✅ **User Record Creation**: Automatic user record creation when missing from database
+- ✅ **Loading State Synchronization**: Fixed race conditions between auth and component loading
+
+## 🔐 Authentication System
+
+### User Flow
+1. **Registration/Login** → Supabase Auth
+2. **Role Selection** → User chooses investor or creator role
+3. **Profile Completion** → Additional user information
+4. **KYC Verification** (Creators only) → Company registration
+5. **Dashboard Access** → Role-based dashboard
+
+### Authentication Context (`src/store/AuthContext.jsx`)
+```javascript
+// Key features:
+- Session management with Supabase
+- Role status loading and caching
+- Error handling and recovery
+- Loading state management
+- Automatic user record creation
+```
+
+### Critical Authentication Functions
+
+#### `getUserRoleStatus(userId)`
+- Checks if user exists in database
+- Returns role, KYC status, and company data
+- Automatically creates user record if missing
+- Comprehensive error handling and logging
+
+#### `loadUserRoleStatus(userId)`
+- Called by AuthContext when user authenticates
+- Updates roleStatus state
+- Handles errors gracefully
+- Triggers dashboard updates
+
+### Protected Routes
+```javascript
+// ProtectedRoute component handles:
+- Authentication verification
+- Role-based redirects
+- Onboarding flow management
+- Loading states
+```
+
+## 📱 Component Architecture
+
+### Core Components
+
+#### `Dashboard.jsx` - Role-based Main Interface
+```javascript
+// Features:
+- Dynamic content based on user role
+- Investment tracking (investors)
+- Project management (creators)
+- Error boundary integration
+- Proper loading state handling
+```
+
+#### `SelectRole.jsx` - Role Selection Interface
+```javascript
+// Features:
+- Visual role selection (investor/creator)
+- Role assignment API integration
+- Error handling and timeouts
+- Redirect to appropriate dashboard
+```
+
+#### `CreateProject.jsx` - Project Creation Form
+```javascript
+// Features:
+- Multi-step project creation
+- Milestone management
+- Image upload handling
+- Form validation
+- Draft saving capability
+```
+
+#### `KYCForm.jsx` - Creator Verification
+```javascript
+// Features:
+- Company information collection
+- Document upload
+- Verification status tracking
+- Multi-step form process
+```
+
+#### `ErrorBoundary.jsx` - Error Handling
+```javascript
+// Features:
+- Catches React errors
+- Displays user-friendly error messages
+- Error reporting capabilities
+- Graceful degradation
+```
+
+### Component Communication
+```
+AuthContext (Global State)
+    ↓
+ProtectedRoute (Route Guard)
+    ↓
+Dashboard (Role-based Content)
+    ↓
+Specific Components (CreateProject, KYCForm, etc.)
+```
+
+## 🛠️ Recent Fixes & Improvements
+
+### Critical Bug Fixes
+
+#### 1. React Hooks Violation Fix
+**Problem**: Dashboard component had useEffect hooks after conditional returns, causing "rendered more hooks than during the previous render" error.
+
+**Solution**: 
+```javascript
+// BEFORE (Incorrect):
+const Dashboard = () => {
+  const { user, roleStatus } = useAuth();
+  
+  if (!user) return <div>Loading...</div>; // Early return
+  
+  useEffect(() => { /* This caused the error */ }, []); // Hook after return
+  
+  // ... rest of component
+};
+
+// AFTER (Fixed):
+const Dashboard = () => {
+  const { user, roleStatus } = useAuth();
+  
+  // ALL HOOKS FIRST
+  useEffect(() => { /* All hooks before any returns */ }, []);
+  
+  // THEN CONDITIONAL RETURNS
+  if (!user) return <div>Loading...</div>;
+  
+  // ... rest of component
+};
+```
+
+#### 2. Authentication Flow Infinite Loops
+**Problem**: Users getting stuck in redirect loops between Dashboard and SelectRole.
+
+**Solution**:
+- Added proper loading state synchronization
+- Enhanced error handling in AuthContext
+- Fixed race conditions between auth and component loading
+- Added timeout mechanisms
+
+#### 3. User Record Creation
+**Problem**: Users authenticated in Supabase Auth but missing from public.users table.
+
+**Solution**:
+```javascript
+// Automatic user creation in getUserRoleStatus
+if (userError && userError.code === 'PGRST116') {
+  console.log('User record not found, creating...');
+  await createUserRecord(targetUserId);
+  return defaultStatus;
+}
+```
+
+### Performance Improvements
+
+#### 1. Enhanced Logging System
+```javascript
+// Added comprehensive logging throughout the app
+console.log('AuthContext: Loading initial user role status...');
+console.log('getUserRoleStatus: Querying users table for ID:', targetUserId);
+console.log('Dashboard - Auth State:', { user, roleStatus, authLoading });
+```
+
+#### 2. Error Boundary Implementation
+```javascript
+// ErrorBoundary component catches all React errors
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  }
+  // ...
+}
+```
+
+#### 3. Loading State Management
+```javascript
+// Synchronized loading between AuthContext and components
+const { user, roleStatus, loading: authLoading } = useAuth();
+const [dashboardLoading, setDashboardLoading] = useState(true);
+
+// Wait for both auth and component loading to complete
+if (!dashboardLoading && !authLoading && user) {
+  // Proceed with rendering
+}
+```
+
+## 🐛 Debugging Guide
+
+### Common Issues and Solutions
+
+#### 1. "Rendered more hooks than during the previous render"
+**Cause**: Hooks called after conditional returns
+**Solution**: Move all hooks to the top of component, before any returns
+
+#### 2. Infinite redirect loops
+**Cause**: Loading states not properly synchronized
+**Solution**: Check both auth loading and component loading states
+
+#### 3. "Auth session missing" errors
+**Cause**: User not properly authenticated
+**Solution**: Verify Supabase configuration and session persistence
+
+#### 4. User roleStatus always null
+**Cause**: User record missing from database or API errors
+**Solution**: Check database for user record, verify API function execution
+
+### Debug Tools
+
+#### Browser Console Functions
+```javascript
+// Available in browser console for debugging:
+window.debugUserRoleStatus()  // Test role status loading
+window.debugAuth()           // Check auth state
+window.debugCreateUser()     // Test user creation
+window.testDirectQuery()     // Test direct database query
+```
+
+#### Database Debugging
+```bash
+# Test user existence
+node database-test.cjs
+
+# Check auth state
+node test-auth.cjs
+```
+
+### Logging Locations
+```
+AuthContext.jsx     - Authentication state changes
+Dashboard.jsx       - Component loading and role checks
+api.js             - Database queries and API calls
+ErrorBoundary.jsx  - React error catching
+```
+
+## 📦 Deployment
+
+### Build for Production
+```bash
+npm run build
+```
+
+### Deployment Platforms
+- **Vercel**: Recommended for React apps
+- **Netlify**: Alternative with great CI/CD
+- **Supabase**: Can host static sites
+
+### Environment Variables for Production
+```bash
+VITE_SUPABASE_URL=your_production_supabase_url
+VITE_SUPABASE_ANON_KEY=your_production_anon_key
+```
+
+### Database Migration
+1. Export schema from development Supabase
+2. Import to production Supabase
+3. Set up Row Level Security policies
+4. Configure authentication providers
+
+## 🔮 Future Development
+
+### Planned Features
+- [ ] **Real-time Notifications**: Investment updates, project milestones
+- [ ] **Payment Integration**: Stripe/PayPal for actual investments
+- [ ] **Document Management**: Secure document storage and verification
+- [ ] **Advanced Analytics**: Investment performance tracking
+- [ ] **Mobile App**: React Native mobile application
+- [ ] **Admin Dashboard**: Platform management interface
+
+### Technical Improvements
+- [ ] **Unit Testing**: Jest and React Testing Library
+- [ ] **E2E Testing**: Cypress or Playwright
+- [ ] **Performance Monitoring**: Error tracking and analytics
+- [ ] **CDN Integration**: Image and asset optimization
+- [ ] **SEO Optimization**: Meta tags and SSR considerations
+
+### Security Enhancements
+- [ ] **Two-Factor Authentication**: Enhanced account security
+- [ ] **Audit Logging**: Track all user actions
+- [ ] **Rate Limiting**: API protection
+- [ ] **Data Encryption**: Sensitive data protection
+
+## 📞 Support & Contact
+
+### Development Team
+- **Lead Developer**: Jawad Asif
+- **Repository**: https://github.com/JawadAsif77/fundchain
+- **Email**: asifjawad793@gmail.com
+
+### Technical Support
+For technical issues or questions:
+1. Check this README for common solutions
+2. Review the debugging guide
+3. Check browser console for error messages
+4. Verify database and authentication configuration
+
+### Contributing
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+---
+
+**Last Updated**: September 30, 2025  
+**Version**: 3.0.0 Phase 3  
+**Status**: Authentication fixes completed, ready for production deployment
 - **Multiple Campaign Types**: Donation, equity, reward-based, and debt campaigns
 - **Goal Setting**: Flexible funding models (All-or-Nothing, Keep-It-All)
 - **Campaign Status Tracking**: Draft, pending, active, successful, failed, cancelled
