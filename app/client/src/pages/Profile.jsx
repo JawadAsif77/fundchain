@@ -99,72 +99,60 @@ const Profile = () => {
         : profileData.is_verified
           ? 'yes'
           : 'no',
-      is_accredited_investor: !!profileData.is_accredited_investor,
-      total_invested: profileData.total_invested ?? 0,
-      total_campaigns_backed: profileData.total_campaigns_backed ?? 0,
-      verification_level: profileData.verification_level ?? 0,
-      trust_score: profileData.trust_score ?? 0,
+      is_accredited_investor: Boolean(profileData.is_accredited_investor),
+      total_invested: Number(profileData.total_invested || 0),
+      total_campaigns_backed: Number(profileData.total_campaigns_backed || 0),
+      verification_level: Number(profileData.verification_level || 0),
+      trust_score: Number(profileData.trust_score || 0),
       referral_code: profileData.referral_code || '',
       last_active_at: profileData.last_active_at || '',
-      followers_count: profileData.followers_count ?? 0,
-      following_count: profileData.following_count ?? 0
+      followers_count: Number(profileData.followers_count || 0),
+      following_count: Number(profileData.following_count || 0)
     });
 
     const rawPreferences = profileData.preferences;
-    const hasPreferences = rawPreferences && typeof rawPreferences === 'object' && !Array.isArray(rawPreferences);
-
-    setPreferencesInput(
-      hasPreferences && Object.keys(rawPreferences).length
-        ? JSON.stringify(rawPreferences, null, 2)
-        : ''
-    );
-  }, [roleStatus?.role, user]);
-
-  useEffect(() => {
-    if (location.state?.message) {
-      setMessage(location.state.message);
+    if (rawPreferences && typeof rawPreferences === 'object') {
+      setPreferencesInput(JSON.stringify(rawPreferences, null, 2));
+    } else if (rawPreferences && typeof rawPreferences === 'string') {
+      setPreferencesInput(rawPreferences);
+    } else {
+      setPreferencesInput('');
     }
-  }, [location.state]);
+  }, [user, roleStatus]);
 
   useEffect(() => {
     if (profile) {
       applyProfileToState(profile);
-    } else if (user) {
-      setFormData((prev) => ({
-        ...prev,
-        email: user.email || prev.email,
-        role: user.user_metadata?.role || prev.role
-      }));
     }
-  }, [applyProfileToState, profile, roleStatus, user]);
+  }, [profile, applyProfileToState]);
 
   useEffect(() => {
-    setAvatarError(false);
-  }, [formData.avatar_url]);
-
-  const handleInputChange = (event) => {
-    const { name, value } = event.target;
-
-    if (name.startsWith('social_links.')) {
-      const [, key] = name.split('.');
-      setFormData((prev) => ({
-        ...prev,
-        social_links: {
-          ...prev.social_links,
-          [key]: value
-        }
-      }));
-      return;
+    if (location?.state?.message) {
+      setMessage(location.state.message);
     }
+  }, [location]);
 
-    setFormData((prev) => ({
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
       ...prev,
       [name]: value
     }));
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const handleSocialLinksChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      social_links: {
+        ...prev.social_links,
+        [name]: value
+      }
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setIsSubmitting(true);
     setError('');
     setMessage('');
@@ -174,7 +162,7 @@ const Profile = () => {
       try {
         parsedPreferences = JSON.parse(preferencesInput);
       } catch (parseError) {
-        setError('Preferences must be valid JSON. Please fix the formatting and try again.');
+        setError('Invalid JSON in preferences field. Please correct the format.');
         setIsSubmitting(false);
         return;
       }
@@ -191,6 +179,7 @@ const Profile = () => {
     const updates = {
       full_name: formData.full_name || null,
       username: formData.username || null,
+      role: formData.role || 'investor',
       avatar_url: formData.avatar_url || null,
       bio: formData.bio || null,
       location: formData.location || null,
@@ -224,20 +213,34 @@ const Profile = () => {
     }
 
     try {
+      console.log('Submitting profile updates...');
       const updatedProfile = await updateProfile(updates);
       if (updatedProfile) {
         applyProfileToState(updatedProfile);
       }
-      setMessage('Profile updated successfully!');
       
-      // If this was initial profile setup (user came from registration), 
-      // show a success message with option to continue
-      if (needsProfileCompletion && needsProfileCompletion()) {
-        setMessage('Profile setup complete! You can now continue to your dashboard.');
-      }
+      setMessage('Profile updated successfully!');
+      setError(''); // Clear any previous errors
+      
+      // Auto-redirect after successful save (after a short delay to show success message)
+      setTimeout(() => {
+        const userRole = roleStatus?.role || formData.role;
+        if (userRole === 'investor') {
+          console.log('Profile saved, redirecting investor to explore...');
+          navigate('/explore');
+        } else if (userRole === 'creator') {
+          console.log('Profile saved, redirecting creator to dashboard...');
+          navigate('/dashboard');
+        } else {
+          console.log('Profile saved, redirecting to explore...');
+          navigate('/explore');
+        }
+      }, 1500); // Show success message for 1.5 seconds then redirect
+      
     } catch (submitError) {
       console.error('Error updating profile:', submitError);
       setError(submitError.message || 'Failed to update profile');
+      setMessage(''); // Clear any success message
     } finally {
       setIsSubmitting(false);
     }
@@ -298,464 +301,529 @@ const Profile = () => {
   }
 
   return (
-    <div className="container" style={{ padding: '2rem 0', maxWidth: '960px' }}>
-      <div className="card">
-        <div className="card__header">
-          <h1 className="card__title">Edit Your Profile</h1>
-          <p className="card__subtitle">
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: '#f8fafc',
+      padding: '2rem 0' 
+    }}>
+      <div className="container" style={{ maxWidth: '1000px' }}>
+        
+        {/* Header Section */}
+        <div style={{
+          background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+          borderRadius: '1rem',
+          padding: '3rem 2rem',
+          marginBottom: '2rem',
+          color: 'white',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '1rem',
+            flexWrap: 'wrap'
+          }}>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '2rem',
+              marginRight: '1rem',
+              marginBottom: '1rem'
+            }}>
+              {formData.avatar_url ? (
+                <img 
+                  src={formData.avatar_url} 
+                  alt="Profile"
+                  style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                  onError={() => setAvatarError(true)}
+                />
+              ) : (
+                <span>👤</span>
+              )}
+            </div>
+            <div>
+              <h1 style={{ margin: 0, fontSize: '2.5rem', fontWeight: '700' }}>
+                {formData.full_name || 'Complete Your Profile'}
+              </h1>
+              <p style={{ margin: '0.5rem 0 0', fontSize: '1.1rem', opacity: 0.9 }}>
+                {formData.role === 'creator' ? '🚀 Creator' : '💰 Investor'} • {user?.email}
+              </p>
+            </div>
+          </div>
+          <p style={{ 
+            margin: 0, 
+            fontSize: '1.1rem', 
+            opacity: 0.9,
+            maxWidth: '600px',
+            marginLeft: 'auto',
+            marginRight: 'auto'
+          }}>
             Keep your details up to date so the FundChain community can learn more about you.
           </p>
         </div>
 
-        <div className="card__content">
-          {needsProfileCompletion() && (
+        {/* Main Content */}
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '1rem',
+          padding: '2rem',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
+          border: '1px solid #e5e7eb'
+        }}>
+          
+          {/* Status Messages */}
+          {needsProfileCompletion && needsProfileCompletion() && (
             <div style={{
-              padding: '1rem',
-              backgroundColor: 'var(--color-warning-bg)',
-              color: 'var(--color-warning)',
-              borderRadius: '0.5rem',
-              marginBottom: '1rem'
+              padding: '1rem 1.5rem',
+              backgroundColor: '#fef3cd',
+              color: '#856404',
+              borderRadius: '0.75rem',
+              marginBottom: '2rem',
+              border: '1px solid #faebcd',
+              display: 'flex',
+              alignItems: 'center'
             }}>
-              Please complete the required fields marked with an asterisk (*) to unlock the full platform experience.
+              <span style={{ marginRight: '0.5rem', fontSize: '1.2rem' }}>⚡</span>
+              <span>Complete the required fields marked with an asterisk (*) to unlock the full platform experience.</span>
             </div>
           )}
 
           {message && (
             <div style={{
-              padding: '1rem',
-              backgroundColor: 'var(--color-success-bg)',
-              color: 'var(--color-success)',
-              borderRadius: '0.5rem',
-              marginBottom: '1rem'
+              padding: '1rem 1.5rem',
+              backgroundColor: '#d1edff',
+              color: '#0969da',
+              borderRadius: '0.75rem',
+              marginBottom: '2rem',
+              border: '1px solid #b6e3ff',
+              display: 'flex',
+              alignItems: 'center'
             }}>
-              {message}
+              <span style={{ marginRight: '0.5rem', fontSize: '1.2rem' }}>✅</span>
+              <span>{message}</span>
             </div>
           )}
 
           {error && (
             <div style={{
-              padding: '1rem',
-              backgroundColor: 'var(--color-error-bg)',
-              color: 'var(--color-error)',
-              borderRadius: '0.5rem',
-              marginBottom: '1rem'
+              padding: '1rem 1.5rem',
+              backgroundColor: '#ffebe9',
+              color: '#d1242f',
+              borderRadius: '0.75rem',
+              marginBottom: '2rem',
+              border: '1px solid #ffbdba',
+              display: 'flex',
+              alignItems: 'center'
             }}>
-              {error}
+              <span style={{ marginRight: '0.5rem', fontSize: '1.2rem' }}>❌</span>
+              <span>{error}</span>
             </div>
           )}
 
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1.5rem',
-            flexWrap: 'wrap',
-            marginBottom: '2rem'
-          }}>
-            <div style={{
-              width: '96px',
-              height: '96px',
-              borderRadius: '50%',
-              overflow: 'hidden',
-              border: '2px solid var(--color-border)',
-              backgroundColor: 'var(--color-bg-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {formData.avatar_url && !avatarError ? (
-                <img
-                  src={formData.avatar_url}
-                  alt={formData.full_name || 'Profile avatar'}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={() => setAvatarError(true)}
-                />
-              ) : (
-                <span style={{ color: 'var(--color-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '0 0.5rem' }}>
-                  No image
-                </span>
-              )}
-            </div>
-            <div>
-              <h2 style={{ margin: 0 }}>{formData.full_name || 'Add your name'}</h2>
-              <p style={{ margin: '0.25rem 0', color: 'var(--color-muted)' }}>
-                {formData.role ? formData.role.charAt(0).toUpperCase() + formData.role.slice(1) : 'Member'}
-              </p>
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <span style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  fontSize: '0.8rem',
-                  padding: '0.25rem 0.65rem',
-                  borderRadius: '999px',
-                  backgroundColor: 'var(--color-bg-secondary)'
-                }}>
-                  <span style={{
-                    display: 'inline-block',
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: profileMeta.is_verified === 'yes' ? 'var(--color-success)' : 'var(--color-border)'
-                  }} />
-                  Verified: {profileMeta.is_verified === 'yes' ? 'Yes' : 'No'}
-                </span>
-                <span style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  fontSize: '0.8rem',
-                  padding: '0.25rem 0.65rem',
-                  borderRadius: '999px',
-                  backgroundColor: 'var(--color-bg-secondary)'
-                }}>
-                  <span style={{
-                    display: 'inline-block',
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: profileMeta.is_accredited_investor ? 'var(--color-primary)' : 'var(--color-border)'
-                  }} />
-                  Accredited Investor: {profileMeta.is_accredited_investor ? 'Yes' : 'No'}
-                </span>
-              </div>
-            </div>
-          </div>
-
+          {/* Form */}
           <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '2rem' }}>
-              <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Basic Information</h3>
-              <div className="form__group">
-                <label className="form__label">Full Name *</label>
-                <input
-                  type="text"
-                  name="full_name"
-                  value={formData.full_name}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  required
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Username *</label>
-                <input
-                  type="text"
-                  name="username"
-                  value={formData.username}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  required
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Email Address</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  className="form__input"
-                  disabled
-                  style={{ backgroundColor: 'var(--color-bg-secondary)' }}
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Role</label>
-                <input
-                  type="text"
-                  name="role"
-                  value={formData.role}
-                  className="form__input"
-                  disabled
-                  style={{ backgroundColor: 'var(--color-bg-secondary)', textTransform: 'capitalize' }}
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Profile Picture URL</label>
-                <input
-                  type="url"
-                  name="avatar_url"
-                  value={formData.avatar_url}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  placeholder="https://"
-                />
-                <small style={{ color: 'var(--color-muted)' }}>
-                  Paste a direct link to an image to use it as your avatar.
-                </small>
-              </div>
-            </div>
+            <div style={{ display: 'grid', gap: '2rem' }}>
+              
+              {/* Basic Information */}
+              <div>
+                <h3 style={{ marginBottom: '1rem', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '0.5rem' }}>
+                  Basic Information
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+                  
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      name="full_name"
+                      value={formData.full_name}
+                      onChange={handleInputChange}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.5rem',
+                        fontSize: '1rem',
+                        backgroundColor: '#fff'
+                      }}
+                      placeholder="Enter your full name"
+                    />
+                  </div>
 
-            <div style={{ marginBottom: '2rem' }}>
-              <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Contact & Personal Details</h3>
-              <div className="form__group">
-                <label className="form__label">Phone Number</label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  placeholder="+1 555 000 1234"
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Location</label>
-                <input
-                  type="text"
-                  name="location"
-                  value={formData.location}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  placeholder="City, Country"
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Date of Birth</label>
-                <input
-                  type="date"
-                  name="date_of_birth"
-                  value={formData.date_of_birth}
-                  onChange={handleInputChange}
-                  className="form__input"
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Bio</label>
-                <textarea
-                  name="bio"
-                  value={formData.bio}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  rows="4"
-                  placeholder="Share your background, interests, and what you're looking for on FundChain."
-                />
-              </div>
-            </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                      Username *
+                    </label>
+                    <input
+                      type="text"
+                      name="username"
+                      value={formData.username}
+                      onChange={handleInputChange}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.5rem',
+                        fontSize: '1rem',
+                        backgroundColor: '#fff'
+                      }}
+                      placeholder="Choose a unique username"
+                    />
+                  </div>
 
-            <div style={{ marginBottom: '2rem' }}>
-              <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Social Links</h3>
-              <div className="form__group">
-                <label className="form__label">Website</label>
-                <input
-                  type="url"
-                  name="social_links.website"
-                  value={formData.social_links.website}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  placeholder="https://yourwebsite.com"
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">LinkedIn</label>
-                <input
-                  type="url"
-                  name="social_links.linkedin"
-                  value={formData.social_links.linkedin}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  placeholder="https://linkedin.com/in/yourprofile"
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Twitter</label>
-                <input
-                  type="url"
-                  name="social_links.twitter"
-                  value={formData.social_links.twitter}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  placeholder="https://twitter.com/yourhandle"
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Instagram</label>
-                <input
-                  type="url"
-                  name="social_links.instagram"
-                  value={formData.social_links.instagram}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  placeholder="https://instagram.com/yourprofile"
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Facebook</label>
-                <input
-                  type="url"
-                  name="social_links.facebook"
-                  value={formData.social_links.facebook}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  placeholder="https://facebook.com/yourprofile"
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">YouTube</label>
-                <input
-                  type="url"
-                  name="social_links.youtube"
-                  value={formData.social_links.youtube}
-                  onChange={handleInputChange}
-                  className="form__input"
-                  placeholder="https://youtube.com/yourchannel"
-                />
-              </div>
-            </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      disabled
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.5rem',
+                        fontSize: '1rem',
+                        backgroundColor: '#f3f4f6',
+                        color: '#6b7280'
+                      }}
+                    />
+                  </div>
 
-            <div style={{ marginBottom: '2rem' }}>
-              <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Preferences</h3>
-              <div className="form__group">
-                <label className="form__label">Custom Preferences (JSON)</label>
-                <textarea
-                  name="preferences"
-                  value={preferencesInput}
-                  onChange={(event) => setPreferencesInput(event.target.value)}
-                  className="form__input"
-                  rows="6"
-                  placeholder='{"investment_focus": "climate-tech"}'
-                />
-                <small style={{ color: 'var(--color-muted)' }}>
-                  Use JSON format to store any additional preferences. Leave blank to clear this field.
-                </small>
-              </div>
-            </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                      Role *
+                    </label>
+                    <select
+                      name="role"
+                      value={formData.role}
+                      onChange={handleInputChange}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.5rem',
+                        fontSize: '1rem',
+                        backgroundColor: '#fff'
+                      }}
+                    >
+                      <option value="investor">💰 Investor</option>
+                      <option value="creator">🚀 Creator</option>
+                    </select>
+                  </div>
 
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '1rem',
-              justifyContent: 'space-between',
-              borderTop: '1px solid var(--color-border)',
-              paddingTop: '1.5rem'
-            }}>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <button
-                  type="button"
-                  onClick={handleSkip}
-                  className="btn btn--ghost"
-                  style={{ color: 'var(--color-muted)' }}
-                >
-                  Skip for Now
-                </button>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="btn btn--ghost"
-                  disabled={isSubmitting}
-                >
-                  Reset
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn--primary"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Saving...' : 'Save Profile'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleContinue}
-                  className="btn btn--accent"
-                >
-                  Go to {(roleStatus?.role || formData.role) === 'creator' ? 'Dashboard' : 'Explore'}
-                </button>
+
+              {/* Additional Information */}
+              <div>
+                <h3 style={{ marginBottom: '1rem', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '0.5rem' }}>
+                  Additional Information
+                </h3>
+                <div style={{ display: 'grid', gap: '1rem' }}>
+                  
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                      Bio
+                    </label>
+                    <textarea
+                      name="bio"
+                      value={formData.bio}
+                      onChange={handleInputChange}
+                      rows="3"
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.5rem',
+                        fontSize: '1rem',
+                        backgroundColor: '#fff',
+                        resize: 'vertical'
+                      }}
+                      placeholder="Tell us about yourself..."
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                    
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                        Location
+                      </label>
+                      <input
+                        type="text"
+                        name="location"
+                        value={formData.location}
+                        onChange={handleInputChange}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '0.5rem',
+                          fontSize: '1rem',
+                          backgroundColor: '#fff'
+                        }}
+                        placeholder="City, Country"
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                        Phone
+                      </label>
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '0.5rem',
+                          fontSize: '1rem',
+                          backgroundColor: '#fff'
+                        }}
+                        placeholder="+1 (555) 123-4567"
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                        Date of Birth
+                      </label>
+                      <input
+                        type="date"
+                        name="date_of_birth"
+                        value={formData.date_of_birth}
+                        onChange={handleInputChange}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '0.5rem',
+                          fontSize: '1rem',
+                          backgroundColor: '#fff'
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                        Avatar URL
+                      </label>
+                      <input
+                        type="url"
+                        name="avatar_url"
+                        value={formData.avatar_url}
+                        onChange={handleInputChange}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '0.5rem',
+                          fontSize: '1rem',
+                          backgroundColor: '#fff'
+                        }}
+                        placeholder="https://example.com/avatar.jpg"
+                      />
+                    </div>
+
+                  </div>
+                </div>
               </div>
+
+              {/* Social Links */}
+              <div>
+                <h3 style={{ marginBottom: '1rem', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '0.5rem' }}>
+                  Social Links
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                  
+                  {Object.keys(EMPTY_SOCIAL_LINKS).map(platform => (
+                    <div key={platform}>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151', textTransform: 'capitalize' }}>
+                        {platform}
+                      </label>
+                      <input
+                        type="url"
+                        name={platform}
+                        value={formData.social_links[platform]}
+                        onChange={handleSocialLinksChange}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '0.5rem',
+                          fontSize: '1rem',
+                          backgroundColor: '#fff'
+                        }}
+                        placeholder={`https://${platform}.com/yourprofile`}
+                      />
+                    </div>
+                  ))}
+
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '1rem',
+                justifyContent: 'space-between',
+                paddingTop: '2rem',
+                borderTop: '1px solid #e5e7eb'
+              }}>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button
+                    type="button"
+                    onClick={handleSkip}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: 'transparent',
+                      color: '#6b7280',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.5rem',
+                      fontSize: '1rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    Skip for Now
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    disabled={isSubmitting}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: 'transparent',
+                      color: '#6b7280',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.5rem',
+                      fontSize: '1rem',
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                      opacity: isSubmitting ? 0.6 : 1,
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    style={{
+                      padding: '0.75rem 2rem',
+                      backgroundColor: '#4f46e5',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '0.5rem',
+                      fontSize: '1rem',
+                      fontWeight: '500',
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                      opacity: isSubmitting ? 0.6 : 1,
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {isSubmitting ? 'Saving...' : 'Save Profile'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleContinue}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#059669',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '0.5rem',
+                      fontSize: '1rem',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    Go to {formData.role === 'creator' ? 'Dashboard' : 'Explore'}
+                  </button>
+                </div>
+              </div>
+
             </div>
           </form>
 
-          <div style={{ marginTop: '2.5rem' }}>
-            <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Account Insights</h3>
+          {/* Account Insights */}
+          <div style={{ marginTop: '3rem' }}>
+            <h3 style={{ marginBottom: '1.5rem', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '0.5rem' }}>
+              Account Insights
+            </h3>
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
               gap: '1rem'
             }}>
               <div style={{
-                border: '1px solid var(--color-border)',
+                padding: '1.5rem',
+                backgroundColor: '#f8fafc',
                 borderRadius: '0.75rem',
-                padding: '1rem'
+                border: '1px solid #e5e7eb'
               }}>
-                <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.85rem' }}>Total Invested</p>
-                <p style={{ margin: '0.35rem 0 0', fontWeight: 'var(--font-semibold)' }}>
+                <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem', fontWeight: '500' }}>Total Invested</p>
+                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: '#111827' }}>
                   ${Number(profileMeta.total_invested || 0).toLocaleString()}
                 </p>
               </div>
               <div style={{
-                border: '1px solid var(--color-border)',
+                padding: '1.5rem',
+                backgroundColor: '#f8fafc',
                 borderRadius: '0.75rem',
-                padding: '1rem'
+                border: '1px solid #e5e7eb'
               }}>
-                <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.85rem' }}>Campaigns Backed</p>
-                <p style={{ margin: '0.35rem 0 0', fontWeight: 'var(--font-semibold)' }}>
+                <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem', fontWeight: '500' }}>Campaigns Backed</p>
+                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: '#111827' }}>
                   {profileMeta.total_campaigns_backed}
                 </p>
               </div>
               <div style={{
-                border: '1px solid var(--color-border)',
+                padding: '1.5rem',
+                backgroundColor: '#f8fafc',
                 borderRadius: '0.75rem',
-                padding: '1rem'
+                border: '1px solid #e5e7eb'
               }}>
-                <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.85rem' }}>Verification Level</p>
-                <p style={{ margin: '0.35rem 0 0', fontWeight: 'var(--font-semibold)' }}>
-                  {profileMeta.verification_level}
+                <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem', fontWeight: '500' }}>Verification Level</p>
+                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: '#111827' }}>
+                  {profileMeta.verification_level}/5
                 </p>
               </div>
               <div style={{
-                border: '1px solid var(--color-border)',
+                padding: '1.5rem',
+                backgroundColor: '#f8fafc',
                 borderRadius: '0.75rem',
-                padding: '1rem'
+                border: '1px solid #e5e7eb'
               }}>
-                <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.85rem' }}>Trust Score</p>
-                <p style={{ margin: '0.35rem 0 0', fontWeight: 'var(--font-semibold)' }}>
-                  {Number(profileMeta.trust_score || 0).toFixed(2)}
+                <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem', fontWeight: '500' }}>Trust Score</p>
+                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: '#111827' }}>
+                  {profileMeta.trust_score}%
                 </p>
-              </div>
-              <div style={{
-                border: '1px solid var(--color-border)',
-                borderRadius: '0.75rem',
-                padding: '1rem'
-              }}>
-                <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.85rem' }}>Followers</p>
-                <p style={{ margin: '0.35rem 0 0', fontWeight: 'var(--font-semibold)' }}>
-                  {profileMeta.followers_count}
-                </p>
-              </div>
-              <div style={{
-                border: '1px solid var(--color-border)',
-                borderRadius: '0.75rem',
-                padding: '1rem'
-              }}>
-                <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.85rem' }}>Following</p>
-                <p style={{ margin: '0.35rem 0 0', fontWeight: 'var(--font-semibold)' }}>
-                  {profileMeta.following_count}
-                </p>
-              </div>
-            </div>
-
-            <div style={{ marginTop: '1.5rem' }}>
-              <div className="form__group">
-                <label className="form__label">Referral Code</label>
-                <input
-                  type="text"
-                  value={profileMeta.referral_code || 'Not assigned'}
-                  className="form__input"
-                  disabled
-                  style={{ backgroundColor: 'var(--color-bg-secondary)' }}
-                />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Last Active</label>
-                <input
-                  type="text"
-                  value={formattedLastActive}
-                  className="form__input"
-                  disabled
-                  style={{ backgroundColor: 'var(--color-bg-secondary)' }}
-                />
               </div>
             </div>
           </div>
+
         </div>
       </div>
     </div>

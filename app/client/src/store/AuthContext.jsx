@@ -2,6 +2,9 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db, supabase } from '../lib/supabase.js';
 import { getUserRoleStatus } from '../lib/api.js';
 
+// Import the API functions we need
+import { userApi } from '../lib/api.js';
+
 const AuthContext = createContext(null);
 
 export const useAuth = () => {
@@ -414,7 +417,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      console.log('Logging out user...');
+      console.log('🚪 Starting logout process...');
       setError(null);
 
       // Clear local state immediately
@@ -426,21 +429,22 @@ export const AuthProvider = ({ children }) => {
       await clearAllAuthData();
       
       // Sign out from Supabase
+      console.log('🔐 Signing out from Supabase...');
       const { error } = await supabase.auth.signOut({ scope: 'global' });
       if (error) {
-        console.warn('Supabase logout warning:', error.message);
+        console.warn('⚠️ Supabase logout warning:', error.message);
       }
       
       // Additional cleanup for any remaining Supabase data
       clearSupabaseAuthStorage();
       
-      console.log('Logout complete, redirecting...');
+      console.log('✅ Logout complete, redirecting...');
       
       // Use replace to prevent back button issues
       window.location.replace('/');
       
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('❌ Logout error:', error);
       
       // Emergency cleanup - ensure logout happens even if there's an error
       setUser(null);
@@ -457,17 +461,22 @@ export const AuthProvider = ({ children }) => {
       if (!user) throw new Error('No user logged in');
       
       setError(null);
-      const { data, error } = await db.users.updateProfile(user.id, updates);
+      console.log('AuthContext: Updating profile for user:', user.id, 'with updates:', updates);
       
-      if (error) {
-        setError(error.message);
-        throw error;
+      // Use the correct API function
+      const result = await userApi.updateProfile(user.id, updates);
+      
+      if (result.error) {
+        setError(result.error.message);
+        throw result.error;
       }
       
-      setProfile(data);
-      return data;
+      console.log('AuthContext: Profile update successful:', result.data);
+      setProfile(result.data);
+      return result.data;
     } catch (error) {
       console.error('Update profile error:', error);
+      setError(error.message || 'Failed to update profile');
       throw error;
     }
   };

@@ -5,6 +5,7 @@ import { campaigns } from '../mock/campaigns.js';
 import { milestones } from '../mock/milestones.js';
 import { users } from '../mock/users.js';
 import { investments } from '../mock/investments.js';
+import { supabase } from './supabase.js';
 
 // Simulate network delay for more realistic behavior
 const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
@@ -140,10 +141,24 @@ export const userApi = {
       // Clean the profile data - remove empty strings and null values where appropriate
       const cleanedData = {};
       
+      // List of columns that actually exist in your users table
+      const allowedColumns = [
+        'full_name', 'username', 'email', 'avatar_url', 'bio', 'location', 
+        'phone', 'date_of_birth', 'role', 'social_links', 'preferences',
+        'verification_level', 'trust_score', 'is_verified', 'is_accredited_investor',
+        'total_invested', 'total_campaigns_backed', 'followers_count', 'following_count',
+        'last_active_at', 'updated_at', 'linkedin_url', 'twitter_url', 'instagram_url',
+        'referral_code'
+      ];
+      
       Object.keys(profileData).forEach(key => {
         const value = profileData[key];
-        if (value !== undefined && value !== '') {
+        // Only include allowed columns and non-empty values
+        if (allowedColumns.includes(key) && value !== undefined && value !== '') {
           cleanedData[key] = value;
+        } else if (allowedColumns.includes(key) && value === null) {
+          // Allow explicit null values to clear fields
+          cleanedData[key] = null;
         }
       });
       
