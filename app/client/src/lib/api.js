@@ -257,15 +257,21 @@ export const selectRole = async (role) => {
 
     console.log('Attempting to select role for user:', user.id, 'role:', role);
 
+    try {
+      await createUserRecord(user.id);
+    } catch (recordError) {
+      console.warn('selectRole: createUserRecord failed (continuing):', recordError);
+    }
+
     // Method 1: Try using the existing db helper first
     try {
       const updateResult = await db.users.updateProfile(user.id, { role });
-      
+
       if (!updateResult.error) {
         console.log('Role updated via db.users.updateProfile');
-        return { success: true, data: updateResult.data };
+        return { success: true, data: updateResult.data, role };
       }
-      
+
       if (updateResult.error.code === 'PGRST116') {
         // Profile doesn't exist, create it
         console.log('Creating new user profile via db.users.createProfile...');
@@ -278,12 +284,12 @@ export const selectRole = async (role) => {
         };
         
         const createResult = await db.users.createProfile(profileData);
-        
+
         if (!createResult.error) {
           console.log('Profile created successfully');
-          return { success: true, data: createResult.data };
+          return { success: true, data: createResult.data, role };
         }
-        
+
         console.log('Create failed, trying direct upsert...', createResult.error);
       } else {
         console.log('Update failed, trying direct upsert...', updateResult.error);
@@ -312,10 +318,10 @@ export const selectRole = async (role) => {
       console.error('Direct upsert failed:', error);
       throw error;
     }
-    
+
     console.log('Direct upsert successful');
-    return { success: true, data };
-    
+    return { success: true, data, role };
+
   } catch (error) {
     console.error('Error selecting role:', error);
     return { success: false, error: error.message || 'Failed to select role' };
@@ -332,7 +338,8 @@ export const getUserRoleStatus = async (userId = null) => {
     role: null,
     isKYCVerified: false,
     companyData: null,
-    success: true
+    success: true,
+    kycStatus: 'not_started'
   };
 
   try {
@@ -357,7 +364,7 @@ export const getUserRoleStatus = async (userId = null) => {
       .from('users')
       .select('role, full_name, email')
       .eq('id', targetUserId)
-      .single();
+      .maybeSingle();
 
     console.log('getUserRoleStatus: Query result - userData:', userData, 'error:', userError);
 
@@ -392,7 +399,8 @@ export const getUserRoleStatus = async (userId = null) => {
     if (status.role === 'investor') {
       const finalStatus = {
         ...status,
-        isKYCVerified: true
+        isKYCVerified: true,
+        kycStatus: 'not_required'
       };
       console.log('getUserRoleStatus: Returning investor status:', finalStatus);
       return finalStatus;
@@ -403,9 +411,9 @@ export const getUserRoleStatus = async (userId = null) => {
       console.log('getUserRoleStatus: Creator role, checking company data');
       const { data: company, error: companyError } = await supabaseClient
         .from('companies')
-        .select('*')
+        .select('id, owner_id, name, registration_number, country, website, verified, verification_notes, created_at, updated_at')
         .eq('owner_id', targetUserId)
-        .single();
+        .maybeSingle();
 
       console.log('getUserRoleStatus: Company query result - data:', company, 'error:', companyError);
 
@@ -415,10 +423,27 @@ export const getUserRoleStatus = async (userId = null) => {
         throw companyError;
       }
 
+      let companyNotes = null;
+      if (company?.verification_notes) {
+        try {
+          companyNotes = JSON.parse(company.verification_notes);
+        } catch (parseError) {
+          console.warn('getUserRoleStatus: Failed to parse verification notes JSON:', parseError);
+        }
+      }
+
+      const companyData = company
+        ? {
+            ...company,
+            metadata: companyNotes || null
+          }
+        : null;
+
       const finalStatus = {
         ...status,
-        companyData: company ?? null,
-        isKYCVerified: company?.verified ?? false
+        companyData,
+        isKYCVerified: company?.verified ?? false,
+        kycStatus: company ? (company.verified ? 'approved' : 'pending') : 'not_started'
       };
       console.log('getUserRoleStatus: Returning creator status:', finalStatus);
       return finalStatus;
@@ -576,25 +601,49 @@ export const submitKYC = async (formData) => {
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    // Create company record with comprehensive data
-    const { data, error } = await supabaseClient
-      .from('companies')
-      .insert({
-        owner_id: user.id,
-        name: formData.companyName,
-        registration_number: formData.registrationNumber,
-        country: formData.country,
-        website: formData.website,
-        business_description: formData.businessDescription,
-        owner_info: formData.ownerInfo,
-        team_info: formData.teamInfo,
-        verified: false,
-        kyc_status: 'pending'
+    const basePayload = {
+      owner_id: user.id,
+      name: formData.companyName,
+      registration_number: formData.registrationNumber || null,
+      country: formData.country,
+      website: formData.website || null,
+      verified: false,
+      verification_notes: JSON.stringify({
+        businessDescription: formData.businessDescription,
+        owner: formData.ownerInfo,
+        team: formData.teamInfo
       })
-      .select()
-      .single();
+    };
 
+    const { data: existingCompany, error: existingError } = await supabaseClient
+      .from('companies')
+      .select('id')
+      .eq('owner_id', user.id)
+      .maybeSingle();
+
+    if (existingError && existingError.code !== 'PGRST116') {
+      throw existingError;
+    }
+
+    let response;
+    if (existingCompany) {
+      response = await supabaseClient
+        .from('companies')
+        .update(basePayload)
+        .eq('id', existingCompany.id)
+        .select()
+        .single();
+    } else {
+      response = await supabaseClient
+        .from('companies')
+        .insert(basePayload)
+        .select()
+        .single();
+    }
+
+    const { data, error } = response;
     if (error) throw error;
+
     return { success: true, data };
   } catch (error) {
     console.error('Error submitting KYC:', error);

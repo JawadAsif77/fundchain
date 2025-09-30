@@ -1,23 +1,54 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 
 const Login = () => {
+  const location = useLocation();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login, error, user } = useAuth();
+  const [infoMessage, setInfoMessage] = useState(location?.state?.message || '');
+  const { login, error, user, roleStatus, profile } = useAuth();
   const navigate = useNavigate();
-  
+
   // Effect to handle navigation after user is set
   useEffect(() => {
     if (user && isSubmitting) {
-      console.log('User is now authenticated, navigating to dashboard...');
-      navigate('/dashboard');
+      console.log('User is now authenticated:', user.id);
+      
+      // Give some time for roleStatus to load, but don't wait indefinitely
+      const navigationTimeout = setTimeout(() => {
+        if (roleStatus && roleStatus.role) {
+          // Check if profile is complete enough
+          if (!roleStatus.hasRole || !profile?.full_name || !profile?.username) {
+            console.log('Profile incomplete, redirecting to profile page...');
+            navigate('/profile');
+          } else {
+            // Route based on user role
+            const targetRoute = roleStatus.role === 'creator' ? '/explore' : '/dashboard';
+            console.log(`Navigating ${roleStatus.role} to ${targetRoute}...`);
+            navigate(targetRoute);
+          }
+        } else {
+          // Fallback: if roleStatus isn't available, go to profile
+          console.log('Role status not available, redirecting to profile...');
+          navigate('/profile');
+        }
+      }, 2000); // Wait 2 seconds for roleStatus to load
+
+      // Clean up timeout if component unmounts
+      return () => clearTimeout(navigationTimeout);
     }
-  }, [user, isSubmitting, navigate]);
+  }, [user, isSubmitting, navigate, roleStatus, profile]);
+
+  useEffect(() => {
+    if (location?.state?.message) {
+      setInfoMessage(location.state.message);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location, navigate]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -83,16 +114,16 @@ const Login = () => {
           Sign in to your account
         </p>
 
-        {error && (
-          <div style={{ 
-            backgroundColor: '#fee', 
-            color: '#c33', 
-            padding: '12px', 
-            borderRadius: '6px', 
+        {(infoMessage || error) && (
+          <div style={{
+            backgroundColor: error ? '#fee' : '#f0fdf4',
+            color: error ? '#c33' : '#047857',
+            padding: '12px',
+            borderRadius: '6px',
             marginBottom: '20px',
-            border: '1px solid #fcc'
+            border: error ? '1px solid #fcc' : '1px solid #bbf7d0'
           }}>
-            {error}
+            {error || infoMessage}
           </div>
         )}
 
