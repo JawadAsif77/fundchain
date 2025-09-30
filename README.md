@@ -5,7 +5,7 @@
 [![React](https://img.shields.io/badge/React-18.2.0-blue.svg)](https://reactjs.org/)
 [![Vite](https://img.shields.io/badge/Vite-4.4.5-646CFF.svg)](https://vitejs.dev/)
 [![Supabase](https://img.shields.io/badge/Supabase-2.38.0-3ECF8E.svg)](https://supabase.com/)
-[![Version](https://img.shields.io/badge/Version-3.0.0_Phase_3-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/Version-3.1.0_Profile_System-brightgreen.svg)]()
 
 ## 📋 Table of Contents
 
@@ -16,7 +16,8 @@
 - [🔧 Installation & Setup](#-installation--setup)
 - [🚀 Development Journey](#-development-journey)
 - [🔐 Authentication System](#-authentication-system)
-- [📱 Component Architecture](#-component-architecture)
+- [� Profile Management System](#-profile-management-system)
+- [�📱 Component Architecture](#-component-architecture)
 - [🛠️ Recent Fixes & Improvements](#️-recent-fixes--improvements)
 - [🐛 Debugging Guide](#-debugging-guide)
 - [📦 Deployment](#-deployment)
@@ -33,16 +34,27 @@ FundChain is a modern investment crowdfunding platform that connects entrepreneu
 - ✅ **Phase 1**: Authentication and basic UI components
 - ✅ **Phase 2**: Database integration with Supabase
 - ✅ **Phase 3**: Role-based features, project creation, KYC verification
-- 🔄 **Current**: Authentication flow fixes and error handling improvements
+- ✅ **Profile System**: Complete profile display and editing functionality
+- 🔄 **Current**: Enhanced error handling and authentication flow optimization
 
 ## 🎯 Features Implemented
 
 ### ✅ **Authentication & User Management**
 - **Multi-role Authentication**: Investor/Creator role selection
 - **Secure Session Management**: Supabase Auth integration
+- **Enhanced Logout Functionality**: Complete cache and storage clearing
 - **Automatic User Creation**: Creates user records in database automatically
 - **Role-based Routing**: Different dashboards for different user types
+- **Smart Redirection**: Post-login routing based on user role
 - **Onboarding Flow**: Guided setup for new users
+
+### ✅ **Profile Management System**
+- **Profile Display Page**: Beautiful read-only profile showcase
+- **Profile Edit Page**: Comprehensive profile editing form
+- **Two-Page Flow**: Display → Edit → Save → Back to Display
+- **Social Media Integration**: LinkedIn, Twitter, Instagram links
+- **Enhanced User Information**: Bio, location, preferences, statistics
+- **Auto-redirect Logic**: Smart navigation after profile updates
 
 ### ✅ **Project Management (Phase 3)**
 - **Project Creation**: Full project creation workflow with milestones
@@ -89,15 +101,39 @@ src/
 │   └── Header.jsx            # Navigation component
 ├── pages/               # Page components
 │   ├── Dashboard.jsx         # Role-based dashboard
+│   ├── ProfileDisplay.jsx    # Read-only profile showcase
+│   ├── ProfileEdit.jsx       # Profile editing form
 │   ├── SelectRole.jsx        # Role selection page
 │   ├── CreateProject.jsx     # Project creation form
+│   ├── Login_simple.jsx      # Enhanced login with smart routing
+│   ├── Register_simple.jsx   # Registration with role selection
 │   └── KYCForm.jsx          # Creator verification
 ├── store/               # State management
-│   └── AuthContext.jsx      # Authentication state
+│   └── AuthContext.jsx      # Enhanced authentication state
 ├── lib/                 # Utilities and API
-│   ├── api.js               # API functions
+│   ├── api.js               # Enhanced API with robust error handling
 │   └── supabase.js          # Supabase configuration
+├── styles/              # CSS styling
+│   ├── profile-display.css  # Modern profile page styling
+│   ├── globals.css          # Global styles
+│   └── ...                  # Other component styles
 └── mock/                # Mock data for development
+```
+
+### 🎨 **New Profile System Structure**
+```
+Profile Management Flow:
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Header Link   │───▶│ ProfileDisplay   │───▶│  ProfileEdit    │
+│   "/profile"    │    │  (read-only)     │    │   (editing)     │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                ▲                        │
+                                │          Save          │
+                                └────────────────────────┘
+
+Routes:
+- /profile      → ProfileDisplay.jsx (Beautiful showcase)
+- /profile-edit → ProfileEdit.jsx    (Comprehensive form)
 ```
 
 ## 📊 Database Schema
@@ -274,8 +310,53 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 2. Run the SQL schema files:
    - Execute `supabase/schema.sql` for base tables
    - Execute `supabase/phase3_schema.sql` for Phase 3 features
+   - **NEW**: Execute profile system migration for enhanced user features
 3. Enable Row Level Security policies
 4. Set up authentication providers
+
+#### Profile System Database Migration
+**Required for profile editing functionality**:
+```sql
+-- Run in Supabase SQL Editor
+-- Essential columns for profile system
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS bio TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS location TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+
+-- Enhanced features
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS social_links JSONB DEFAULT '{}';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS verification_level INTEGER DEFAULT 0;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS trust_score DECIMAL(3,2) DEFAULT 0;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS followers_count INTEGER DEFAULT 0;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS following_count INTEGER DEFAULT 0;
+
+-- Investment tracking
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_accredited_investor BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS total_invested DECIMAL(15,2) DEFAULT 0;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS total_campaigns_backed INTEGER DEFAULT 0;
+
+-- References and metadata
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP WITH TIME ZONE;
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_users_username ON public.users(username);
+CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
+CREATE INDEX IF NOT EXISTS idx_users_updated_at ON public.users(updated_at);
+```
+
+**Verification Query**:
+```sql
+-- Check if migration was successful
+SELECT column_name, data_type, is_nullable, column_default
+FROM information_schema.columns 
+WHERE table_schema = 'public' AND table_name = 'users'
+AND column_name IN ('bio', 'location', 'social_links', 'preferences')
+ORDER BY column_name;
+```
 
 ### 5. Start Development Server
 ```bash
@@ -418,6 +499,112 @@ Specific Components (CreateProject, KYCForm, etc.)
 
 ## 🛠️ Recent Fixes & Improvements
 
+### 🔄 **Latest Updates (Profile System & Authentication)**
+
+#### 1. Profile Management Overhaul
+**New Feature**: Complete profile system with separate display and edit pages
+
+**Components Created**:
+- `ProfileDisplay.jsx` - Beautiful read-only profile showcase
+- `ProfileEdit.jsx` - Comprehensive editing form (renamed from Profile.jsx)
+- `profile-display.css` - Modern gradient-based styling
+
+**User Flow**:
+```
+Profile Display (Read-only) → Edit Profile → Save → Back to Display
+```
+
+**Features**:
+- Professional header with avatar and role badges
+- Social media links integration
+- Statistics dashboard (followers, investments, etc.)
+- Account information display
+- Responsive design with hover effects
+
+#### 2. Enhanced Logout Functionality
+**Problem**: Logout wasn't clearing all authentication data properly.
+
+**Solution**: Multi-layer storage clearing:
+```javascript
+const clearAllAuthData = async () => {
+  // Clear localStorage
+  Object.keys(localStorage).forEach(key => {
+    if (key.includes('supabase') || key.includes('auth')) {
+      localStorage.removeItem(key);
+    }
+  });
+  
+  // Clear sessionStorage  
+  Object.keys(sessionStorage).forEach(key => {
+    if (key.includes('supabase') || key.includes('auth')) {
+      sessionStorage.removeItem(key);
+    }
+  });
+  
+  // Clear cookies
+  document.cookie.split(";").forEach(cookie => {
+    const eqPos = cookie.indexOf("=");
+    const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+  });
+};
+```
+
+#### 3. Smart Post-Login Routing
+**Problem**: Users redirected to profile page instead of role-appropriate pages.
+
+**Solution**: Role-based redirection logic:
+```javascript
+// In Login_simple.jsx
+if (userData.role === 'investor') {
+  navigate('/explore');
+} else if (userData.role === 'creator') {
+  navigate('/dashboard');
+} else {
+  navigate('/select-role');
+}
+```
+
+#### 4. Database Schema Enhancement
+**Problem**: Profile saving failed due to missing database columns.
+
+**Solution**: 
+- Created comprehensive SQL migration scripts
+- Added progressive column addition approach
+- Enhanced error handling with fallback strategies
+
+**New Database Columns**:
+```sql
+-- Basic profile fields
+bio TEXT
+location TEXT  
+phone TEXT
+date_of_birth DATE
+avatar_url TEXT
+
+-- Enhanced fields
+social_links JSONB DEFAULT '{}'
+preferences JSONB DEFAULT '{}'
+verification_level INTEGER DEFAULT 0
+trust_score DECIMAL(3,2) DEFAULT 0
+followers_count INTEGER DEFAULT 0
+following_count INTEGER DEFAULT 0
+
+-- Investment tracking
+is_accredited_investor BOOLEAN DEFAULT FALSE
+total_invested DECIMAL(15,2) DEFAULT 0
+total_campaigns_backed INTEGER DEFAULT 0
+```
+
+#### 5. Robust Error Handling & Debugging
+**Enhancement**: Added comprehensive error handling throughout the application.
+
+**Features**:
+- Detailed console logging with emoji indicators (🚀, ✅, ❌)
+- User-friendly error messages
+- Fallback update strategies for database operations
+- Progressive column addition for compatibility
+
 ### Critical Bug Fixes
 
 #### 1. React Hooks Violation Fix
@@ -518,11 +705,56 @@ if (!dashboardLoading && !authLoading && user) {
 
 ### Common Issues and Solutions
 
-#### 1. "Rendered more hooks than during the previous render"
+#### 1. Profile Saving Stuck on "Saving..." 
+**Cause**: Database columns missing or incorrect data types
+**Symptoms**: Profile edit form shows "Saving..." indefinitely
+
+**Solution Steps**:
+1. **Check Database Schema**: Run the column check query
+   ```sql
+   SELECT column_name, data_type, is_nullable, column_default
+   FROM information_schema.columns 
+   WHERE table_schema = 'public' AND table_name = 'users'
+   ORDER BY ordinal_position;
+   ```
+
+2. **Add Missing Columns**: Run the migration script
+   ```sql
+   -- Minimal required columns
+   ALTER TABLE public.users ADD COLUMN IF NOT EXISTS bio TEXT;
+   ALTER TABLE public.users ADD COLUMN IF NOT EXISTS location TEXT;
+   ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone TEXT;
+   ALTER TABLE public.users ADD COLUMN IF NOT EXISTS social_links JSONB DEFAULT '{}';
+   ```
+
+3. **Check Console Logs**: Look for detailed error logs with emoji indicators:
+   - 🚀 Starting update
+   - ✅ Success indicators  
+   - ❌ Error indicators
+   - ⚠️ Warning messages
+
+4. **Database Error Handling**: The app now includes fallback strategies that try basic columns first, then enhanced features.
+
+#### 2. "Rendered more hooks than during the previous render"
 **Cause**: Hooks called after conditional returns
 **Solution**: Move all hooks to the top of component, before any returns
 
-#### 2. Infinite redirect loops
+#### 3. Logout Not Clearing Data Properly
+**Cause**: Multiple storage types not being cleared
+**Solution**: Enhanced logout now clears:
+- localStorage (Supabase auth tokens)
+- sessionStorage (temporary data)  
+- Cookies (persistent auth data)
+- Supabase auth state
+
+#### 4. Post-Login Routing Issues
+**Cause**: Users redirected to profile instead of role-appropriate pages
+**Solution**: Smart routing logic now implemented:
+- Investors → `/explore`
+- Creators → `/dashboard`  
+- No role → `/select-role`
+
+#### 5. Infinite redirect loops
 **Cause**: Loading states not properly synchronized
 **Solution**: Check both auth loading and component loading states
 

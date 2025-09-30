@@ -13,7 +13,8 @@ import Campaign from './pages/Campaign';
 import Login from './pages/Login_simple';
 import Register from './pages/Register_simple';
 import Dashboard from './pages/Dashboard';
-import Profile from './pages/Profile';
+import Profile from './pages/ProfileDisplay';
+import ProfileEdit from './pages/ProfileEdit';
 import NotFound from './pages/NotFound';
 import KYCForm from './pages/KYCForm';
 import CreateProject from './pages/CreateProject';
@@ -51,12 +52,20 @@ function App() {
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
                   
-                  {/* Profile route */}
+                  {/* Profile routes */}
                   <Route 
                     path="/profile" 
                     element={
                       <ProtectedRoute requireEmailConfirmed>
                         <Profile />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/profile-edit" 
+                    element={
+                      <ProtectedRoute requireEmailConfirmed>
+                        <ProfileEdit />
                       </ProtectedRoute>
                     } 
                   />

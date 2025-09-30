@@ -2,18 +2,32 @@
 -- FUNDCHAIN INVESTMENT PLATFORM DATABASE SCHEMA
 -- =============================================================================
 -- Complete schema for the investment/crowdfunding platform
--- Version: Phase 3 Complete (September 2025)
+-- Version: Phase 3 Complete + Profile System Enhancement (September 2025)
 -- 
 -- This schema includes:
 -- - Phase 1: Core investment platform functionality
 -- - Phase 2: GoFundMe-like social features, media management, verification
 -- - Phase 3: Role-based authentication, project creation, KYC verification
+-- - Profile System: Enhanced user profiles with display/edit functionality
+--   • Two-page profile flow (ProfileDisplay → ProfileEdit)
+--   • Enhanced user verification with verified_status enum
+--   • Social media integration (LinkedIn, Twitter, Instagram)
+--   • Username support for profile identification
+--   • Comprehensive profile data management
 -- - Enhanced user management with role selection (investor/creator)
 -- - Project and company management for creators
 -- - Comprehensive error handling and debugging support
 -- - Performance optimization with indexes and triggers
 -- - Comprehensive RLS security policies
 -- - Automatic user record creation triggers
+-- 
+-- RECENT PROFILE SYSTEM UPDATES:
+-- - Added verified_status enum ('no', 'pending', 'yes')
+-- - Added username field with unique constraint
+-- - Added individual social media URL fields
+-- - Modified role field to have default value and NOT NULL constraint
+-- - Added profile-specific database indexes
+-- - Enhanced user table structure for profile display functionality
 -- 
 -- =============================================================================
 
@@ -90,6 +104,9 @@ CREATE TYPE funding_model AS ENUM ('all_or_nothing', 'keep_it_all', 'flexible');
 -- User roles for platform access control
 CREATE TYPE user_role AS ENUM ('investor', 'creator');
 
+-- User verification status for enhanced verification system
+CREATE TYPE verified_status AS ENUM ('no', 'pending', 'yes');
+
 -- Company verification status for creators
 CREATE TYPE company_status AS ENUM ('pending', 'verified', 'rejected', 'incomplete');
 
@@ -108,20 +125,25 @@ CREATE TYPE project_status AS ENUM (
 -- =============================================================================
 
 -- Users table (extends Supabase auth.users)
--- Enhanced with Phase 2 social features and Phase 3 role management
+-- Enhanced with Phase 2 social features, Phase 3 role management, and Profile System
 CREATE TABLE public.users (
     id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     full_name TEXT,
+    username TEXT UNIQUE, -- Added for profile system
     avatar_url TEXT,
     bio TEXT,
     location TEXT,
     phone TEXT,
     date_of_birth DATE,
-    is_verified BOOLEAN DEFAULT FALSE,
+    
+    -- Core verification and investment tracking
+    is_verified verified_status DEFAULT 'no', -- Changed from BOOLEAN to enum
     is_accredited_investor BOOLEAN DEFAULT FALSE,
     total_invested DECIMAL(15,2) DEFAULT 0,
     total_campaigns_backed INTEGER DEFAULT 0,
+    
+    -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
@@ -136,7 +158,12 @@ CREATE TABLE public.users (
     following_count INTEGER DEFAULT 0,
     
     -- Phase 3 Role Management
-    role user_role NULL -- NULL until role is selected during onboarding
+    role user_role NOT NULL DEFAULT 'investor', -- Changed from NULL to have default
+    
+    -- Social Media Links (separate columns for easier access)
+    linkedin_url TEXT,
+    twitter_url TEXT,
+    instagram_url TEXT
 );
 
 -- Categories table
@@ -701,6 +728,14 @@ CREATE INDEX idx_campaigns_likes_count ON public.campaigns(likes_count);
 -- User role and verification indexes
 CREATE INDEX idx_users_role ON public.users(role);
 CREATE INDEX idx_users_role_verification ON public.users(role, verification_level) WHERE role IS NOT NULL;
+
+-- Profile System indexes (added for enhanced profile functionality)
+CREATE INDEX idx_users_username ON public.users(username);
+CREATE INDEX idx_users_email ON public.users(email);
+CREATE INDEX idx_users_updated_at ON public.users(updated_at);
+CREATE INDEX idx_users_bio ON public.users(bio) WHERE bio IS NOT NULL;
+CREATE INDEX idx_users_location ON public.users(location) WHERE location IS NOT NULL;
+CREATE INDEX idx_users_is_verified ON public.users(is_verified);
 
 -- Companies indexes
 CREATE INDEX idx_companies_owner ON public.companies(owner_id);

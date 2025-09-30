@@ -136,55 +136,119 @@ export const userApi = {
   // Update user profile
   async updateProfile(userId, profileData) {
     try {
-      console.log('Updating profile for user:', userId, 'with data:', profileData);
+      console.log('🔄 Starting profile update for user:', userId);
+      console.log('📝 Raw profile data received:', profileData);
       
       // Clean the profile data - remove empty strings and null values where appropriate
       const cleanedData = {};
       
-      // List of columns that actually exist in your users table
-      const allowedColumns = [
-        'full_name', 'username', 'email', 'avatar_url', 'bio', 'location', 
-        'phone', 'date_of_birth', 'role', 'social_links', 'preferences',
+      // List of columns that should exist in your users table (basic columns first)
+      const basicColumns = ['full_name', 'username', 'email', 'role', 'updated_at'];
+      const enhancedColumns = [
+        'avatar_url', 'bio', 'location', 'phone', 'date_of_birth', 
+        'social_links', 'preferences', 'linkedin_url', 'twitter_url', 'instagram_url'
+      ];
+      const advancedColumns = [
         'verification_level', 'trust_score', 'is_verified', 'is_accredited_investor',
         'total_invested', 'total_campaigns_backed', 'followers_count', 'following_count',
-        'last_active_at', 'updated_at', 'linkedin_url', 'twitter_url', 'instagram_url',
-        'referral_code'
+        'last_active_at', 'referral_code'
       ];
+      
+      const allAllowedColumns = [...basicColumns, ...enhancedColumns, ...advancedColumns];
       
       Object.keys(profileData).forEach(key => {
         const value = profileData[key];
         // Only include allowed columns and non-empty values
-        if (allowedColumns.includes(key) && value !== undefined && value !== '') {
+        if (allAllowedColumns.includes(key) && value !== undefined && value !== '') {
           cleanedData[key] = value;
-        } else if (allowedColumns.includes(key) && value === null) {
+        } else if (allAllowedColumns.includes(key) && value === null) {
           // Allow explicit null values to clear fields
           cleanedData[key] = null;
+        } else if (!allAllowedColumns.includes(key)) {
+          console.warn('⚠️ Skipping unknown column:', key);
         }
       });
       
       // Ensure updated_at is set
       cleanedData.updated_at = new Date().toISOString();
       
-      console.log('Cleaned profile data:', cleanedData);
+      console.log('✅ Cleaned profile data to send:', cleanedData);
       
-      // Update the users table
-      const { data, error } = await supabase
+      // Try the update with different approaches
+      console.log('🚀 Attempting database update...');
+      
+      // First try: Update with all cleaned data
+      let { data, error } = await supabase
         .from('users')
         .update(cleanedData)
         .eq('id', userId)
         .select()
         .single();
 
+      // If error, try with only basic columns
       if (error) {
-        console.error('Supabase profile update error:', error);
+        console.warn('❌ Full update failed:', error.message);
+        console.log('🔄 Trying with basic columns only...');
+        
+        const basicOnlyData = {};
+        basicColumns.forEach(col => {
+          if (cleanedData[col] !== undefined) {
+            basicOnlyData[col] = cleanedData[col];
+          }
+        });
+        
+        console.log('📦 Basic columns data:', basicOnlyData);
+        
+        const basicResult = await supabase
+          .from('users')
+          .update(basicOnlyData)
+          .eq('id', userId)
+          .select()
+          .single();
+          
+        if (basicResult.error) {
+          console.error('❌ Even basic update failed:', basicResult.error);
+          throw new Error(`Database update failed: ${basicResult.error.message}`);
+        } else {
+          console.log('✅ Basic update succeeded, trying enhanced columns...');
+          
+          // Try enhanced columns one by one
+          for (const col of enhancedColumns) {
+            if (cleanedData[col] !== undefined) {
+              try {
+                await supabase
+                  .from('users')
+                  .update({ [col]: cleanedData[col] })
+                  .eq('id', userId);
+                console.log(`✅ Updated ${col}`);
+              } catch (colError) {
+                console.warn(`⚠️ Failed to update ${col}:`, colError.message);
+              }
+            }
+          }
+          
+          // Get final result
+          const finalResult = await supabase
+            .from('users')
+            .select()
+            .eq('id', userId)
+            .single();
+            
+          data = finalResult.data;
+          error = finalResult.error;
+        }
+      }
+
+      if (error) {
+        console.error('❌ Final database error:', error);
         throw new Error(`Failed to update profile: ${error.message}`);
       }
 
-      console.log('Profile updated successfully:', data);
+      console.log('🎉 Profile updated successfully:', data);
       return { data, error: null };
       
     } catch (error) {
-      console.error('Profile update error:', error);
+      console.error('💥 Profile update error:', error);
       return { data: null, error: error };
     }
   }

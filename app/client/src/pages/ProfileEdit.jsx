@@ -213,33 +213,46 @@ const Profile = () => {
     }
 
     try {
-      console.log('Submitting profile updates...');
+      console.log('🚀 Submitting profile updates...', updates);
+      setError(''); // Clear previous errors
+      
       const updatedProfile = await updateProfile(updates);
+      
       if (updatedProfile) {
+        console.log('✅ Profile update successful:', updatedProfile);
         applyProfileToState(updatedProfile);
+        setMessage('Profile updated successfully!');
+        
+        // Auto-redirect to profile display page after successful save
+        setTimeout(() => {
+          console.log('Profile saved, redirecting to profile display...');
+          navigate('/profile');
+        }, 1500); // Show success message for 1.5 seconds then redirect
+      } else {
+        throw new Error('No data returned from profile update');
       }
       
-      setMessage('Profile updated successfully!');
-      setError(''); // Clear any previous errors
-      
-      // Auto-redirect after successful save (after a short delay to show success message)
-      setTimeout(() => {
-        const userRole = roleStatus?.role || formData.role;
-        if (userRole === 'investor') {
-          console.log('Profile saved, redirecting investor to explore...');
-          navigate('/explore');
-        } else if (userRole === 'creator') {
-          console.log('Profile saved, redirecting creator to dashboard...');
-          navigate('/dashboard');
-        } else {
-          console.log('Profile saved, redirecting to explore...');
-          navigate('/explore');
-        }
-      }, 1500); // Show success message for 1.5 seconds then redirect
-      
     } catch (submitError) {
-      console.error('Error updating profile:', submitError);
-      setError(submitError.message || 'Failed to update profile');
+      console.error('❌ Error updating profile:', submitError);
+      
+      // Set a user-friendly error message
+      let errorMessage = 'Failed to update profile. ';
+      
+      if (submitError.message) {
+        if (submitError.message.includes('bio')) {
+          errorMessage += 'The bio field is not available yet. Please run the database migration first.';
+        } else if (submitError.message.includes('social_links')) {
+          errorMessage += 'Social links are not available yet. Please run the database migration first.';
+        } else if (submitError.message.includes('column')) {
+          errorMessage += 'Some profile fields are not available yet. Please run the database migration first.';
+        } else {
+          errorMessage += submitError.message;
+        }
+      } else {
+        errorMessage += 'Please check your internet connection and try again.';
+      }
+      
+      setError(errorMessage);
       setMessage(''); // Clear any success message
     } finally {
       setIsSubmitting(false);
@@ -743,6 +756,23 @@ const Profile = () => {
                     }}
                   >
                     {isSubmitting ? 'Saving...' : 'Save Profile'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/profile')}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#6b7280',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '0.5rem',
+                      fontSize: '1rem',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    Back to Profile
                   </button>
                   <button
                     type="button"

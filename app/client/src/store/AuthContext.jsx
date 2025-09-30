@@ -83,6 +83,7 @@ const clearSupabaseAuthStorage = () => {
 const clearAllAuthData = async () => {
   if (typeof window === 'undefined') return;
 
+  localStorage.clear();
   // Clear all localStorage
   try {
     const keysToRemove = [];
