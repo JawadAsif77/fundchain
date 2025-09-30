@@ -2,19 +2,18 @@
 -- FUNDCHAIN INVESTMENT PLATFORM DATABASE SCHEMA
 -- =============================================================================
 -- Complete schema for the investment/crowdfunding platform
--- Version: Phase 2 Enhanced (September 2025)
+-- Version: Phase 3 Complete (September 2025)
 -- 
 -- This schema includes:
--- - Core investment platform functionality
--- - GoFundMe-like social features 
--- - Media management system
--- - User verification and trust system
--- - Social interactions (likes, shares, follows)
--- - Advanced campaign management
--- - Email campaigns and notifications
--- - Referral tracking system
+-- - Phase 1: Core investment platform functionality
+-- - Phase 2: GoFundMe-like social features, media management, verification
+-- - Phase 3: Role-based authentication, project creation, KYC verification
+-- - Enhanced user management with role selection (investor/creator)
+-- - Project and company management for creators
+-- - Comprehensive error handling and debugging support
 -- - Performance optimization with indexes and triggers
 -- - Comprehensive RLS security policies
+-- - Automatic user record creation triggers
 -- 
 -- =============================================================================
 
@@ -85,11 +84,31 @@ CREATE TYPE campaign_type AS ENUM ('donation', 'equity', 'reward', 'debt');
 CREATE TYPE funding_model AS ENUM ('all_or_nothing', 'keep_it_all', 'flexible');
 
 -- =============================================================================
+-- PHASE 3 ENUMS (Role-based Authentication)
+-- =============================================================================
+
+-- User roles for platform access control
+CREATE TYPE user_role AS ENUM ('investor', 'creator');
+
+-- Company verification status for creators
+CREATE TYPE company_status AS ENUM ('pending', 'verified', 'rejected', 'incomplete');
+
+-- Project status enumeration (similar to campaigns but for Phase 3)
+CREATE TYPE project_status AS ENUM (
+    'draft',
+    'under_review',
+    'active',
+    'funded',
+    'completed',
+    'cancelled'
+);
+
+-- =============================================================================
 -- CORE TABLES (Phase 1)
 -- =============================================================================
 
 -- Users table (extends Supabase auth.users)
--- Enhanced with Phase 2 social and verification features
+-- Enhanced with Phase 2 social features and Phase 3 role management
 CREATE TABLE public.users (
     id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
@@ -114,7 +133,10 @@ CREATE TABLE public.users (
     preferences JSONB DEFAULT '{}',
     last_active_at TIMESTAMP WITH TIME ZONE,
     followers_count INTEGER DEFAULT 0,
-    following_count INTEGER DEFAULT 0
+    following_count INTEGER DEFAULT 0,
+    
+    -- Phase 3 Role Management
+    role user_role NULL -- NULL until role is selected during onboarding
 );
 
 -- Categories table
@@ -419,6 +441,187 @@ CREATE TABLE public.campaign_views (
 );
 
 -- =============================================================================
+-- PHASE 3 SPECIFIC TABLES (Role-based Features)
+-- =============================================================================
+
+-- Companies table for creator KYC and verification
+CREATE TABLE public.companies (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    owner_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+    company_name TEXT NOT NULL,
+    company_type TEXT, -- 'LLC', 'Corporation', 'Partnership', etc.
+    registration_number TEXT,
+    tax_id TEXT,
+    website TEXT,
+    description TEXT,
+    industry TEXT,
+    founded_date DATE,
+    headquarters_location TEXT,
+    employees_count INTEGER,
+    annual_revenue DECIMAL(15,2),
+    
+    -- Contact Information
+    contact_email TEXT,
+    contact_phone TEXT,
+    contact_address JSONB, -- {street, city, state, zip, country}
+    
+    -- Legal Documentation
+    incorporation_documents JSONB DEFAULT '[]', -- Array of document URLs
+    tax_documents JSONB DEFAULT '[]',
+    financial_statements JSONB DEFAULT '[]',
+    
+    -- Verification Status
+    verified BOOLEAN DEFAULT FALSE,
+    verification_status company_status DEFAULT 'pending',
+    verification_notes TEXT,
+    verified_at TIMESTAMP WITH TIME ZONE,
+    verified_by UUID REFERENCES public.users(id),
+    
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure one company per user for now
+    UNIQUE(owner_id)
+);
+
+-- Projects table (Phase 3 evolution of campaigns)
+CREATE TABLE public.projects (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    creator_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+    company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE,
+    category_id UUID REFERENCES public.categories(id) ON DELETE SET NULL,
+    
+    -- Basic Project Information
+    title TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    description TEXT NOT NULL,
+    short_description TEXT,
+    
+    -- Media
+    featured_image TEXT,
+    gallery_images TEXT[],
+    video_url TEXT,
+    pitch_deck_url TEXT,
+    
+    -- Funding Details
+    funding_goal DECIMAL(15,2) NOT NULL CHECK (funding_goal > 0),
+    current_funding DECIMAL(15,2) DEFAULT 0,
+    min_investment DECIMAL(10,2) DEFAULT 1000 CHECK (min_investment > 0),
+    max_investment DECIMAL(15,2),
+    
+    -- Investment Terms
+    equity_percentage DECIMAL(5,2), -- Percentage of equity offered
+    pre_money_valuation DECIMAL(15,2),
+    investment_type TEXT DEFAULT 'equity', -- 'equity', 'convertible_note', 'safe'
+    use_of_funds JSONB, -- Breakdown of how funds will be used
+    
+    -- Timeline
+    funding_deadline TIMESTAMP WITH TIME ZONE,
+    estimated_completion DATE,
+    
+    -- Status and Tracking
+    status project_status DEFAULT 'draft',
+    investor_count INTEGER DEFAULT 0,
+    view_count INTEGER DEFAULT 0,
+    
+    -- Team and Documents
+    team_members JSONB DEFAULT '[]',
+    business_plan_url TEXT,
+    financial_projections JSONB,
+    legal_documents JSONB DEFAULT '[]',
+    
+    -- Metadata
+    featured BOOLEAN DEFAULT FALSE,
+    tags TEXT[],
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Constraints
+    CONSTRAINT valid_funding CHECK (current_funding <= funding_goal),
+    CONSTRAINT valid_investment_range CHECK (max_investment IS NULL OR max_investment >= min_investment),
+    CONSTRAINT valid_equity CHECK (equity_percentage IS NULL OR equity_percentage BETWEEN 0 AND 100)
+);
+
+-- Project milestones (enhanced version of milestones table)
+CREATE TABLE public.project_milestones (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    funding_percentage DECIMAL(5,2) NOT NULL CHECK (funding_percentage BETWEEN 0 AND 100),
+    target_amount DECIMAL(15,2) NOT NULL CHECK (target_amount > 0),
+    target_date DATE,
+    deliverables JSONB DEFAULT '[]', -- Array of deliverable objects
+    
+    -- Progress Tracking
+    is_completed BOOLEAN DEFAULT FALSE,
+    completion_date TIMESTAMP WITH TIME ZONE,
+    completion_evidence JSONB DEFAULT '[]', -- Proof of completion
+    investor_approval_required BOOLEAN DEFAULT TRUE,
+    investor_approval_percentage DECIMAL(5,2) DEFAULT 0,
+    
+    -- Funding Release
+    funds_released BOOLEAN DEFAULT FALSE,
+    funds_released_amount DECIMAL(15,2) DEFAULT 0,
+    funds_released_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Ordering and Metadata
+    milestone_order INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure milestone percentages add up correctly (handled by trigger)
+    CONSTRAINT valid_funding_percentage CHECK (funding_percentage > 0)
+);
+
+-- Project investments (enhanced version of investments table)
+CREATE TABLE public.project_investments (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    investor_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+    project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE NOT NULL,
+    amount DECIMAL(15,2) NOT NULL CHECK (amount > 0),
+    
+    -- Investment Terms
+    equity_shares DECIMAL(10,6), -- Precise equity percentage acquired
+    share_price DECIMAL(10,2),
+    investment_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Status and Processing
+    status investment_status DEFAULT 'pending',
+    payment_method TEXT,
+    payment_reference TEXT,
+    stripe_payment_intent_id TEXT,
+    confirmed_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Legal and Documentation
+    investment_agreement_url TEXT,
+    shareholder_certificate_url TEXT,
+    
+    -- Refund Information
+    refunded_at TIMESTAMP WITH TIME ZONE,
+    refund_amount DECIMAL(15,2),
+    refund_reason TEXT,
+    
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Business Rules
+    UNIQUE(investor_id, project_id) -- One investment per investor per project
+);
+
+-- User authentication trigger table to create users automatically
+CREATE TABLE public.auth_user_creation_log (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID NOT NULL,
+    email TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    success BOOLEAN DEFAULT FALSE,
+    error_message TEXT
+);
+
+-- =============================================================================
 -- INDEXES FOR PERFORMANCE OPTIMIZATION
 -- =============================================================================
 
@@ -493,6 +696,42 @@ CREATE INDEX idx_campaigns_type ON public.campaigns(campaign_type);
 CREATE INDEX idx_campaigns_funding_model ON public.campaigns(funding_model);
 CREATE INDEX idx_campaigns_view_count ON public.campaigns(view_count);
 CREATE INDEX idx_campaigns_likes_count ON public.campaigns(likes_count);
+
+-- Phase 3 Enhanced indexes for role-based features
+-- User role and verification indexes
+CREATE INDEX idx_users_role ON public.users(role);
+CREATE INDEX idx_users_role_verification ON public.users(role, verification_level) WHERE role IS NOT NULL;
+
+-- Companies indexes
+CREATE INDEX idx_companies_owner ON public.companies(owner_id);
+CREATE INDEX idx_companies_verified ON public.companies(verified) WHERE verified = true;
+CREATE INDEX idx_companies_status ON public.companies(verification_status);
+CREATE INDEX idx_companies_industry ON public.companies(industry);
+
+-- Projects indexes
+CREATE INDEX idx_projects_creator ON public.projects(creator_id);
+CREATE INDEX idx_projects_company ON public.projects(company_id);
+CREATE INDEX idx_projects_status ON public.projects(status);
+CREATE INDEX idx_projects_featured ON public.projects(featured) WHERE featured = true;
+CREATE INDEX idx_projects_deadline ON public.projects(funding_deadline);
+CREATE INDEX idx_projects_category ON public.projects(category_id);
+CREATE INDEX idx_projects_current_funding ON public.projects(current_funding);
+
+-- Project milestones indexes
+CREATE INDEX idx_project_milestones_project ON public.project_milestones(project_id);
+CREATE INDEX idx_project_milestones_order ON public.project_milestones(project_id, milestone_order);
+CREATE INDEX idx_project_milestones_completed ON public.project_milestones(is_completed);
+
+-- Project investments indexes
+CREATE INDEX idx_project_investments_investor ON public.project_investments(investor_id);
+CREATE INDEX idx_project_investments_project ON public.project_investments(project_id);
+CREATE INDEX idx_project_investments_status ON public.project_investments(status);
+CREATE INDEX idx_project_investments_date ON public.project_investments(investment_date);
+
+-- Auth creation log indexes
+CREATE INDEX idx_auth_creation_log_user ON public.auth_user_creation_log(user_id);
+CREATE INDEX idx_auth_creation_log_date ON public.auth_user_creation_log(created_at);
+CREATE INDEX idx_auth_creation_log_success ON public.auth_user_creation_log(success);
 
 -- =============================================================================
 -- FUNCTIONS AND TRIGGERS
@@ -686,6 +925,106 @@ CREATE TRIGGER update_user_follow_stats_trigger
     FOR EACH ROW EXECUTE FUNCTION update_user_follow_stats();
 
 -- =============================================================================
+-- PHASE 3 FUNCTIONS AND TRIGGERS
+-- =============================================================================
+
+-- Function to automatically create user records when auth user is created
+CREATE OR REPLACE FUNCTION handle_new_user() 
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.users (id, email, full_name)
+    VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email));
+    
+    -- Log the creation
+    INSERT INTO public.auth_user_creation_log (user_id, email, success)
+    VALUES (NEW.id, NEW.email, TRUE);
+    
+    RETURN NEW;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Log the error
+        INSERT INTO public.auth_user_creation_log (user_id, email, success, error_message)
+        VALUES (NEW.id, NEW.email, FALSE, SQLERRM);
+        RETURN NEW; -- Don't fail the auth process
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to update project funding when investment is confirmed
+CREATE OR REPLACE FUNCTION update_project_funding()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status = 'confirmed' AND (OLD IS NULL OR OLD.status != 'confirmed') THEN
+        -- Add to project funding
+        UPDATE public.projects 
+        SET 
+            current_funding = current_funding + NEW.amount,
+            investor_count = investor_count + 1,
+            updated_at = NOW()
+        WHERE id = NEW.project_id;
+        
+    ELSIF OLD.status = 'confirmed' AND NEW.status != 'confirmed' THEN
+        -- Remove from project funding (refund case)
+        UPDATE public.projects 
+        SET 
+            current_funding = current_funding - OLD.amount,
+            investor_count = investor_count - 1,
+            updated_at = NOW()
+        WHERE id = OLD.project_id;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to validate milestone percentages add up to 100%
+CREATE OR REPLACE FUNCTION validate_milestone_percentages()
+RETURNS TRIGGER AS $$
+DECLARE
+    total_percentage DECIMAL(5,2);
+BEGIN
+    -- Calculate total percentage for the project
+    SELECT COALESCE(SUM(funding_percentage), 0)
+    INTO total_percentage
+    FROM public.project_milestones
+    WHERE project_id = NEW.project_id AND id != COALESCE(OLD.id, uuid_nil());
+    
+    -- Add the new/updated milestone percentage
+    total_percentage := total_percentage + NEW.funding_percentage;
+    
+    -- Check if total exceeds 100%
+    IF total_percentage > 100 THEN
+        RAISE EXCEPTION 'Total milestone funding percentages cannot exceed 100%%. Current total would be: %', total_percentage;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to automatically create user records
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- Trigger for project funding updates
+CREATE TRIGGER update_project_funding_trigger
+    AFTER INSERT OR UPDATE ON public.project_investments
+    FOR EACH ROW EXECUTE FUNCTION update_project_funding();
+
+-- Trigger for milestone percentage validation
+CREATE TRIGGER validate_milestone_percentages_trigger
+    BEFORE INSERT OR UPDATE ON public.project_milestones
+    FOR EACH ROW EXECUTE FUNCTION validate_milestone_percentages();
+
+-- Phase 3 updated_at triggers
+CREATE TRIGGER update_companies_updated_at 
+    BEFORE UPDATE ON public.companies 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_projects_updated_at 
+    BEFORE UPDATE ON public.projects 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- =============================================================================
 
@@ -713,6 +1052,13 @@ ALTER TABLE public.search_filters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.email_campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_follows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.campaign_views ENABLE ROW LEVEL SECURITY;
+
+-- Enable RLS on Phase 3 tables
+ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.project_milestones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.project_investments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.auth_user_creation_log ENABLE ROW LEVEL SECURITY;
 
 -- =============================================================================
 -- CORE TABLE POLICIES (Phase 1)
@@ -936,6 +1282,84 @@ CREATE POLICY "System can track campaign views" ON public.campaign_views
     FOR INSERT WITH CHECK (true);
 
 -- =============================================================================
+-- PHASE 3 RLS POLICIES (Role-based Features)
+-- =============================================================================
+
+-- Companies policies
+CREATE POLICY "Users can view their own company" ON public.companies
+    FOR SELECT USING (auth.uid() = owner_id);
+
+CREATE POLICY "Users can create their own company" ON public.companies
+    FOR INSERT WITH CHECK (auth.uid() = owner_id);
+
+CREATE POLICY "Users can update their own company" ON public.companies
+    FOR UPDATE USING (auth.uid() = owner_id);
+
+CREATE POLICY "Verified companies are publicly viewable" ON public.companies
+    FOR SELECT USING (verified = true);
+
+-- Projects policies
+CREATE POLICY "Anyone can view active projects" ON public.projects
+    FOR SELECT USING (status IN ('active', 'funded', 'completed'));
+
+CREATE POLICY "Project creators can view their own projects" ON public.projects
+    FOR SELECT USING (auth.uid() = creator_id);
+
+CREATE POLICY "Project creators can manage their own projects" ON public.projects
+    FOR ALL USING (auth.uid() = creator_id);
+
+CREATE POLICY "Authenticated users can create projects" ON public.projects
+    FOR INSERT WITH CHECK (auth.uid() = creator_id);
+
+-- Project milestones policies
+CREATE POLICY "Anyone can view milestones of visible projects" ON public.project_milestones
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.projects 
+            WHERE id = project_id 
+            AND (status IN ('active', 'funded', 'completed') OR creator_id = auth.uid())
+        )
+    );
+
+CREATE POLICY "Project creators can manage their milestones" ON public.project_milestones
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.projects 
+            WHERE id = project_id AND creator_id = auth.uid()
+        )
+    );
+
+-- Project investments policies
+CREATE POLICY "Users can view their own project investments" ON public.project_investments
+    FOR SELECT USING (auth.uid() = investor_id);
+
+CREATE POLICY "Project creators can view investments in their projects" ON public.project_investments
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.projects 
+            WHERE id = project_id AND creator_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Authenticated users can create project investments" ON public.project_investments
+    FOR INSERT WITH CHECK (auth.uid() = investor_id);
+
+CREATE POLICY "Users can update their own project investments" ON public.project_investments
+    FOR UPDATE USING (auth.uid() = investor_id);
+
+-- Auth user creation log policies (admin/system only)
+CREATE POLICY "System can log user creation" ON public.auth_user_creation_log
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Admins can view user creation logs" ON public.auth_user_creation_log
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.users 
+            WHERE id = auth.uid() AND verification_level >= 5
+        )
+    );
+
+-- =============================================================================
 -- INITIAL DATA
 -- =============================================================================
 
@@ -1151,4 +1575,188 @@ FEATURES SUPPORTED:
 ✅ Analytics and reporting
 ✅ Performance optimization
 ✅ Comprehensive security (RLS)
+
+PHASE 3 ENHANCEMENTS (September 2025):
+✅ Role-based authentication (investor/creator)
+✅ Automatic user record creation
+✅ Company registration and KYC verification
+✅ Project creation with milestone management
+✅ Enhanced investment tracking
+✅ Creator dashboard and tools
+✅ Error boundary and debugging support
+✅ Authentication flow improvements
+✅ Database triggers for user creation
+*/
+
+-- =============================================================================
+-- PHASE 3 VIEWS AND ADDITIONAL HELPERS
+-- =============================================================================
+
+-- Project statistics view
+CREATE VIEW project_stats AS
+SELECT 
+    p.*,
+    u.full_name as creator_name,
+    u.avatar_url as creator_avatar,
+    u.verification_level as creator_verification_level,
+    c.company_name,
+    c.verified as company_verified,
+    cat.name as category_name,
+    cat.color as category_color,
+    ROUND((p.current_funding / p.funding_goal) * 100, 2) as funding_percentage,
+    EXTRACT(DAYS FROM (p.funding_deadline - NOW())) as days_remaining,
+    -- Milestone progress
+    (SELECT COUNT(*) FROM public.project_milestones WHERE project_id = p.id) as total_milestones,
+    (SELECT COUNT(*) FROM public.project_milestones WHERE project_id = p.id AND is_completed = true) as completed_milestones
+FROM public.projects p
+LEFT JOIN public.users u ON p.creator_id = u.id
+LEFT JOIN public.companies c ON p.company_id = c.id
+LEFT JOIN public.categories cat ON p.category_id = cat.id;
+
+-- User role and onboarding status view
+CREATE VIEW user_onboarding_status AS
+SELECT 
+    u.id,
+    u.email,
+    u.full_name,
+    u.role,
+    u.verification_level,
+    CASE 
+        WHEN u.role IS NULL THEN 'needs_role_selection'
+        WHEN u.role = 'creator' AND NOT EXISTS (SELECT 1 FROM public.companies WHERE owner_id = u.id AND verified = true) THEN 'needs_kyc'
+        WHEN u.role = 'investor' THEN 'fully_onboarded'
+        WHEN u.role = 'creator' AND EXISTS (SELECT 1 FROM public.companies WHERE owner_id = u.id AND verified = true) THEN 'fully_onboarded'
+        ELSE 'unknown'
+    END as onboarding_status,
+    -- Company info for creators
+    c.id as company_id,
+    c.company_name,
+    c.verified as company_verified,
+    c.verification_status as company_verification_status
+FROM public.users u
+LEFT JOIN public.companies c ON u.id = c.owner_id AND u.role = 'creator';
+
+-- =============================================================================
+-- UTILITY FUNCTIONS FOR PHASE 3
+-- =============================================================================
+
+-- Function to check if user needs role selection
+CREATE OR REPLACE FUNCTION user_needs_role_selection(user_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM public.users 
+        WHERE id = user_id AND role IS NULL
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to check if creator needs KYC
+CREATE OR REPLACE FUNCTION creator_needs_kyc(user_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM public.users u
+        WHERE u.id = user_id 
+        AND u.role = 'creator'
+        AND NOT EXISTS (
+            SELECT 1 FROM public.companies c 
+            WHERE c.owner_id = u.id AND c.verified = true
+        )
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to get user's complete role status
+CREATE OR REPLACE FUNCTION get_user_role_status(user_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+    result JSONB;
+    user_record RECORD;
+    company_record RECORD;
+BEGIN
+    -- Get user info
+    SELECT * INTO user_record FROM public.users WHERE id = user_id;
+    
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object(
+            'hasRole', false,
+            'role', null,
+            'isKYCVerified', false,
+            'companyData', null,
+            'success', false,
+            'error', 'User not found'
+        );
+    END IF;
+    
+    -- Base result
+    result := jsonb_build_object(
+        'hasRole', user_record.role IS NOT NULL,
+        'role', user_record.role,
+        'success', true
+    );
+    
+    -- Handle different roles
+    IF user_record.role = 'investor' THEN
+        result := result || jsonb_build_object('isKYCVerified', true, 'companyData', null);
+    ELSIF user_record.role = 'creator' THEN
+        -- Get company info
+        SELECT * INTO company_record FROM public.companies WHERE owner_id = user_id;
+        
+        result := result || jsonb_build_object(
+            'isKYCVerified', COALESCE(company_record.verified, false),
+            'companyData', CASE 
+                WHEN company_record.id IS NOT NULL THEN
+                    jsonb_build_object(
+                        'id', company_record.id,
+                        'company_name', company_record.company_name,
+                        'verified', company_record.verified,
+                        'verification_status', company_record.verification_status
+                    )
+                ELSE null
+            END
+        );
+    ELSE
+        result := result || jsonb_build_object('isKYCVerified', false, 'companyData', null);
+    END IF;
+    
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =============================================================================
+-- SCHEMA COMPLETION NOTES
+-- =============================================================================
+
+/*
+SCHEMA DEPLOYMENT CHECKLIST:
+
+1. Run this entire schema.sql file in Supabase SQL editor
+2. Verify all tables, indexes, and triggers are created
+3. Test RLS policies are working correctly
+4. Confirm the handle_new_user() trigger is active
+5. Insert test data if needed
+6. Update application .env.local with Supabase credentials
+
+PHASE 3 SPECIFIC FEATURES:
+✅ Automatic user record creation on auth signup
+✅ Role-based authentication with investor/creator roles
+✅ Company registration and KYC verification system
+✅ Project creation with milestone management
+✅ Enhanced investment tracking with equity calculations
+✅ Comprehensive error handling and debugging support
+✅ Performance optimized with proper indexes
+✅ Secure with comprehensive RLS policies
+
+FOR DEBUGGING:
+- Check auth_user_creation_log table for user creation issues
+- Use the utility functions for role status checking
+- Monitor the project_stats and user_onboarding_status views
+- All tables have proper created_at/updated_at timestamps
+
+NEXT STEPS:
+- Test authentication flow end-to-end
+- Verify role selection and KYC processes
+- Test project creation and investment workflows
+- Add any additional business logic as needed
 */
