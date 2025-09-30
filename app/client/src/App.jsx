@@ -17,6 +17,8 @@ import ProfileEdit from './pages/ProfileEdit';
 import NotFound from './pages/NotFound';
 import KYCForm from './pages/KYCForm';
 import CreateProject from './pages/CreateProject';
+import AdminPanel from './pages/AdminPanel';
+import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Temporary simple components - all real components are now imported
@@ -39,71 +41,89 @@ function App() {
     <ErrorBoundary>
       <AuthProvider>
         <Router>
-            <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-              <Header />
-              <main style={{ flex: 1 }}>
-                <Routes>
-                  {/* Public routes */}
-                  <Route path="/" element={<Home />} />
-                  <Route path="/explore" element={<Explore />} />
-                  <Route path="/campaign/:slug" element={<Campaign />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
-                  
-                  {/* Profile routes */}
-                  <Route 
-                    path="/profile" 
-                    element={
-                      <ProtectedRoute requireEmailConfirmed>
-                        <Profile />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="/profile-edit" 
-                    element={
-                      <ProtectedRoute requireEmailConfirmed>
-                        <ProfileEdit />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  
-                  {/* Onboarding routes */}
-                  <Route 
-                    path="/kyc" 
-                    element={
-                      <ProtectedRoute requireEmailConfirmed requireRole>
-                        <KYCForm />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  
-                  {/* Protected routes */}
-                  <Route 
-                    path="/dashboard" 
-                    element={
-                      <ProtectedRoute>
-                        <Dashboard />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="/create-project" 
-                    element={
-                      <ProtectedRoute requireRole="creator" requireKYC>
-                        <CreateProject />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  
-                  {/* 404 catch-all */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </main>
-              <Footer />
-            </div>
-          </Router>
-        </AuthProvider>
+          <Routes>
+            {/* Admin route - completely separate layout */}
+            <Route 
+              path="/admin" 
+              element={
+                <ProtectedRoute requireRole="admin">
+                  <AdminLayout />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* All other routes use the normal layout */}
+            <Route 
+              path="/*" 
+              element={
+                <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+                  <Header />
+                  <main style={{ flex: 1 }}>
+                    <Routes>
+                      {/* Public routes */}
+                      <Route path="/" element={<Home />} />
+                      <Route path="/explore" element={<Explore />} />
+                      <Route path="/campaign/:slug" element={<Campaign />} />
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/register" element={<Register />} />
+                      
+                      {/* Profile routes */}
+                      <Route 
+                        path="/profile" 
+                        element={
+                          <ProtectedRoute requireEmailConfirmed>
+                            <Profile />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/profile-edit" 
+                        element={
+                          <ProtectedRoute requireEmailConfirmed>
+                            <ProfileEdit />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      
+                      {/* Onboarding routes */}
+                      <Route 
+                        path="/kyc" 
+                        element={
+                          <ProtectedRoute requireEmailConfirmed requireRole>
+                            <KYCForm />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      
+                      {/* Protected routes */}
+                      <Route 
+                        path="/dashboard" 
+                        element={
+                          <ProtectedRoute>
+                            <Dashboard />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/create-project" 
+                        element={
+                          <ProtectedRoute requireRole="creator" requireKYC>
+                            <CreateProject />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      
+                      {/* 404 catch-all */}
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </main>
+                  <Footer />
+                </div>
+              }
+            />
+          </Routes>
+        </Router>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }

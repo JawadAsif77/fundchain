@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, logout, validateSession } = useAuth();
+  const { user, profile, logout, validateSession } = useAuth();
   const location = useLocation();
 
   // Session health monitor

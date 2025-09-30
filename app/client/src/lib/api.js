@@ -497,6 +497,19 @@ export const getUserRoleStatus = async (userId = null) => {
       console.log('getUserRoleStatus: Returning creator status:', finalStatus);
       return finalStatus;
     }
+
+    // Admins don't need KYC verification - they have full access
+    if (status.role === 'admin') {
+      console.log('getUserRoleStatus: Admin role detected');
+      const finalStatus = {
+        ...status,
+        isKYCVerified: true, // Admins are automatically verified
+        kycStatus: 'not_required',
+        companyData: null // Admins don't need company data
+      };
+      console.log('getUserRoleStatus: Returning admin status:', finalStatus);
+      return finalStatus;
+    }
     
     console.log('getUserRoleStatus: Returning default status (no specific role):', status);
     return status;

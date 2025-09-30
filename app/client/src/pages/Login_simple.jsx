@@ -35,6 +35,9 @@ const Login = () => {
             } else if (roleStatus.role === 'investor') {
               console.log('Redirecting investor to explore (default page)...');
               navigate('/explore');  // Investors go to explore by default
+            } else if (roleStatus.role === 'admin') {
+              console.log('Redirecting admin to admin panel...');
+              navigate('/admin');
             } else {
               console.log('Unknown role, redirecting to explore...');
               navigate('/explore');
