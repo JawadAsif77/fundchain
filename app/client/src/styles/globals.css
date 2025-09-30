@@ -36,11 +36,11 @@ p, h1, h2, h3, h4, h5, h6 {
 /* CSS Variables */
 :root {
   /* Colors */
-  --color-primary: #2563eb;
-  --color-primary-dark: #1d4ed8;
-  --color-primary-light: #3b82f6;
-  --color-secondary: #059669;
-  --color-secondary-dark: #047857;
+  --color-primary: #29C7AC;
+  --color-primary-dark: #22A897;
+  --color-primary-light: #34D4B8;
+  --color-secondary: #0B132B;
+  --color-secondary-dark: #1E293B;
   
   --color-danger: #dc2626;
   --color-warning: #d97706;

@@ -739,6 +739,31 @@ export const AuthProvider = ({ children }) => {
         ...(prev || defaultRoleStatus),
         ...updates
       }));
+    },
+    // Refresh user data (profile and role status)
+    refreshUserData: async () => {
+      try {
+        console.log('Refreshing user data...');
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          console.log('Current user found, refreshing data for:', currentUser.id);
+          
+          // Refresh profile
+          await loadUserProfile(currentUser.id, currentUser);
+          
+          // Refresh role status
+          await loadUserRoleStatus(currentUser.id);
+          
+          console.log('User data refreshed successfully');
+          return true;
+        }
+
+        console.warn('No current user found during refresh');
+        return false;
+      } catch (error) {
+        console.error('Error refreshing user data:', error);
+        throw error;
+      }
     }
   };
 

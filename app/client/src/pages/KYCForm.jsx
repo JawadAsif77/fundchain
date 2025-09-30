@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { submitKYC } from '../lib/api.js';
 import { useAuth } from '../store/AuthContext.jsx';
+import { supabase } from '../lib/supabase.js';
 
 const KYCForm = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -9,56 +9,46 @@ const KYCForm = () => {
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const navigate = useNavigate();
-  const { roleStatus, refreshRoleStatus, updateRoleStatus } = useAuth();
+  const { user, refreshUserData } = useAuth();
 
   useEffect(() => {
-    if (!roleStatus) return;
-
-    if (roleStatus.role !== 'creator') {
-      navigate('/dashboard', { replace: true });
+    if (!user) {
+      navigate('/login', { replace: true });
       return;
     }
 
-    if (roleStatus.companyData) {
-      const onboardingState = roleStatus.companyData.verified ? 'kyc-approved' : 'kyc-pending';
-      setStatusMessage(
-        roleStatus.companyData.verified
-          ? 'Your business profile is verified. Redirecting to your dashboard...'
-          : 'We already have your verification on file. Redirecting to your dashboard...'
-      );
-      navigate('/dashboard', { replace: true, state: { onboarding: onboardingState } });
+    // Check if user already has pending or approved verification
+    if (user.is_verified === 'yes') {
+      setStatusMessage('Your verification is already approved. Redirecting to dashboard...');
+      navigate('/dashboard', { replace: true });
+    } else if (user.is_verified === 'pending') {
+      setStatusMessage('Your verification is pending review. Redirecting to dashboard...');
+      navigate('/dashboard', { replace: true });
     }
-  }, [roleStatus, navigate]);
+  }, [user, navigate]);
 
-  // Form data state
+  // Form data state - matching user_verifications table
   const [formData, setFormData] = useState({
-    // Business Information
-    companyName: '',
-    registrationNumber: '',
+    // Personal Information
+    legal_name: '',
+    phone: '',
+    legal_email: user?.email || '',
+    business_email: '',
+    
+    // Address Information
+    address_line1: '',
+    address_line2: '',
+    city: '',
+    state: '',
+    postal_code: '',
     country: '',
-    website: '',
-    businessDescription: '',
     
-    // Owner Information
-    ownerName: '',
-    ownerPosition: '',
-    ownerEmail: '',
-    ownerPhone: '',
-    ownerExperience: '',
+    // Document uploads
+    id_document: null,
+    selfie_image: null,
     
-    // Team Information
-    teamSize: '',
-    keyMembers: [
-      { name: '', role: '', experience: '' }
-    ],
-    
-    // Documents (will be handled later)
-    documents: {
-      businessRegistration: null,
-      idDocument: null,
-      businessPlan: null,
-      financialProjections: null
-    }
+    // Verification type
+    verification_type: 'individual'
   });
 
   const handleInputChange = (field, value) => {
@@ -68,43 +58,22 @@ const KYCForm = () => {
     }));
   };
 
-  const handleTeamMemberChange = (index, field, value) => {
+  const handleFileChange = (field, file) => {
     setFormData(prev => ({
       ...prev,
-      keyMembers: prev.keyMembers.map((member, i) => 
-        i === index ? { ...member, [field]: value } : member
-      )
+      [field]: file
     }));
-  };
-
-  const addTeamMember = () => {
-    if (formData.keyMembers.length < 5) {
-      setFormData(prev => ({
-        ...prev,
-        keyMembers: [...prev.keyMembers, { name: '', role: '', experience: '' }]
-      }));
-    }
-  };
-
-  const removeTeamMember = (index) => {
-    if (formData.keyMembers.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        keyMembers: prev.keyMembers.filter((_, i) => i !== index)
-      }));
-    }
   };
 
   const validateCurrentStep = () => {
     switch (currentStep) {
-      case 1: // Business Information
-        return formData.companyName && formData.country && formData.businessDescription;
-      case 2: // Owner Information
-        return formData.ownerName && formData.ownerPosition && formData.ownerEmail;
-      case 3: // Team Information
-        return formData.teamSize && formData.keyMembers.every(m => m.name && m.role);
-      case 4: // Documents (optional for now)
-        return true;
+      case 1: // Personal Information
+        return formData.legal_name && formData.phone && formData.legal_email;
+      case 2: // Address Information
+        return formData.address_line1 && formData.city && formData.state && 
+               formData.postal_code && formData.country;
+      case 3: // Document Upload - now optional
+        return true; // Documents are optional for now
       default:
         return false;
     }
@@ -112,7 +81,7 @@ const KYCForm = () => {
 
   const nextStep = () => {
     if (validateCurrentStep()) {
-      setCurrentStep(prev => Math.min(prev + 1, 4));
+      setCurrentStep(prev => Math.min(prev + 1, 3));
       setError('');
     } else {
       setError('Please fill in all required fields');
@@ -124,6 +93,56 @@ const KYCForm = () => {
     setError('');
   };
 
+  const uploadFile = async (file, folder) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}/${folder}/${Date.now()}.${fileExt}`;
+    
+    const { data, error } = await supabase.storage
+      .from('kyc-documents')
+      .upload(fileName, file);
+    
+    if (error) {
+      console.error('Upload error:', error);
+      throw new Error(`Failed to upload ${folder}: ${error.message}`);
+    }
+    
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('kyc-documents')
+      .getPublicUrl(fileName);
+    
+    return publicUrl;
+  };
+
+  const submitKYC = async (kycData) => {
+    try {
+      console.log('Submitting KYC data:', kycData);
+      
+      const { data, error } = await supabase
+        .from('user_verifications')
+        .insert([kycData])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Supabase error details:', {
+          error,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        throw new Error(`Database error: ${error.message}${error.hint ? ` (${error.hint})` : ''}`);
+      }
+      
+      console.log('KYC data inserted successfully:', data);
+      return { success: true, data };
+    } catch (err) {
+      console.error('KYC submission error:', err);
+      return { success: false, error: err.message };
+    }
+  };
+
   const handleSubmit = async () => {
     if (!validateCurrentStep()) {
       setError('Please complete all required fields');
@@ -132,50 +151,65 @@ const KYCForm = () => {
 
     setLoading(true);
     setError('');
-    setStatusMessage('Submitting your verification...');
+    setStatusMessage('Submitting verification...');
 
     try {
-      console.log('Submitting KYC form:', formData);
-
-      const result = await submitKYC({
-        companyName: formData.companyName,
-        registrationNumber: formData.registrationNumber,
-        country: formData.country,
-        website: formData.website,
-        businessDescription: formData.businessDescription,
-        ownerInfo: {
-          name: formData.ownerName,
-          position: formData.ownerPosition,
-          email: formData.ownerEmail,
-          phone: formData.ownerPhone,
-          experience: formData.ownerExperience
-        },
-        teamInfo: {
-          size: formData.teamSize,
-          keyMembers: formData.keyMembers
+      // Upload documents to Supabase Storage (optional)
+      let id_document_url = null;
+      let selfie_image_url = null;
+      
+      // Only attempt upload if files are provided
+      try {
+        if (formData.id_document) {
+          setStatusMessage('Uploading ID document...');
+          id_document_url = await uploadFile(formData.id_document, 'id-documents');
         }
-      });
+        if (formData.selfie_image) {
+          setStatusMessage('Uploading selfie...');
+          selfie_image_url = await uploadFile(formData.selfie_image, 'selfies');
+        }
+      } catch (uploadError) {
+        console.warn('File upload failed (storage bucket not configured):', uploadError);
+        // Continue without uploaded files since storage bucket may not be configured
+        setStatusMessage('Proceeding without file uploads (storage not configured)...');
+      }
+
+      // Prepare data for user_verifications table
+      const kycData = {
+        user_id: user.id,
+        legal_name: formData.legal_name,
+        legal_address: {
+          line1: formData.address_line1,
+          line2: formData.address_line2,
+          city: formData.city,
+          state: formData.state,
+          postal_code: formData.postal_code,
+          country: formData.country
+        },
+        phone: formData.phone,
+        legal_email: formData.legal_email,
+        business_email: formData.business_email || null,
+        id_document_url,
+        selfie_image_url,
+        verification_type: formData.verification_type
+      };
+
+      const result = await submitKYC(kycData);
 
       if (result.success) {
         console.log('KYC submitted successfully');
-        const status = await refreshRoleStatus();
-        if (status?.role === 'creator') {
-          updateRoleStatus(status);
-        } else {
-          updateRoleStatus({
-            hasRole: true,
-            role: 'creator',
-            companyData: result.data,
-            isKYCVerified: !!result.data?.verified,
-            success: true,
-            kycStatus: result.data?.verified ? 'approved' : 'pending'
-          });
-        }
-
-        setStatusMessage('Verification submitted! Redirecting to your dashboard...');
-        navigate('/dashboard', { replace: true, state: { onboarding: 'kyc-submitted' } });
+        
+        // Refresh user data to get updated verification status
+        await refreshUserData();
+        
+        setStatusMessage('Verification submitted successfully! Your status is now pending review. Redirecting to dashboard...');
+        
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true, state: { onboarding: 'kyc-submitted' } });
+        }, 2000);
       } else {
         setError(result.error || 'Failed to submit KYC form');
+        setStatusMessage('');
       }
     } catch (err) {
       console.error('KYC submission error:', err);
@@ -193,14 +227,14 @@ const KYCForm = () => {
       marginBottom: '40px',
       gap: '16px'
     }}>
-      {[1, 2, 3, 4].map(step => (
+      {[1, 2, 3].map(step => (
         <div
           key={step}
           style={{
             width: '40px',
             height: '40px',
             borderRadius: '50%',
-            backgroundColor: step <= currentStep ? '#3b82f6' : '#e5e7eb',
+            backgroundColor: step <= currentStep ? '#29C7AC' : '#e5e7eb',
             color: step <= currentStep ? 'white' : '#9ca3af',
             display: 'flex',
             alignItems: 'center',
@@ -215,198 +249,45 @@ const KYCForm = () => {
     </div>
   );
 
-  const renderBusinessInfo = () => (
+  const renderPersonalInfo = () => (
     <div>
       <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '24px' }}>
-        Business Information
+        Personal Information
       </h3>
       
       <div style={{ display: 'grid', gap: '16px' }}>
         <div>
           <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-            Company Name *
+            Legal Full Name *
           </label>
           <input
             type="text"
-            value={formData.companyName}
-            onChange={(e) => handleInputChange('companyName', e.target.value)}
+            value={formData.legal_name}
+            onChange={(e) => handleInputChange('legal_name', e.target.value)}
             style={{
               width: '100%',
-              padding: '8px 12px',
+              padding: '12px',
               border: '1px solid #d1d5db',
-              borderRadius: '6px',
+              borderRadius: '8px',
               fontSize: '14px'
             }}
-            placeholder="Your company name"
+            placeholder="Your full legal name as on government ID"
           />
         </div>
 
         <div>
           <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-            Registration Number
-          </label>
-          <input
-            type="text"
-            value={formData.registrationNumber}
-            onChange={(e) => handleInputChange('registrationNumber', e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-            placeholder="Company registration number (optional)"
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-            Country *
-          </label>
-          <select
-            value={formData.country}
-            onChange={(e) => handleInputChange('country', e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-          >
-            <option value="">Select country</option>
-            <option value="US">United States</option>
-            <option value="UK">United Kingdom</option>
-            <option value="CA">Canada</option>
-            <option value="AU">Australia</option>
-            <option value="DE">Germany</option>
-            <option value="FR">France</option>
-            <option value="PK">Pakistan</option>
-            <option value="IN">India</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-            Website
-          </label>
-          <input
-            type="url"
-            value={formData.website}
-            onChange={(e) => handleInputChange('website', e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-            placeholder="https://yourcompany.com"
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-            Business Description *
-          </label>
-          <textarea
-            value={formData.businessDescription}
-            onChange={(e) => handleInputChange('businessDescription', e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px',
-              minHeight: '100px',
-              resize: 'vertical'
-            }}
-            placeholder="Describe your business and what you do..."
-          />
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderOwnerInfo = () => (
-    <div>
-      <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '24px' }}>
-        Owner Information
-      </h3>
-      
-      <div style={{ display: 'grid', gap: '16px' }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-            Full Name *
-          </label>
-          <input
-            type="text"
-            value={formData.ownerName}
-            onChange={(e) => handleInputChange('ownerName', e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-            placeholder="Your full name"
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-            Position/Title *
-          </label>
-          <input
-            type="text"
-            value={formData.ownerPosition}
-            onChange={(e) => handleInputChange('ownerPosition', e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-            placeholder="CEO, Founder, etc."
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-            Email Address *
-          </label>
-          <input
-            type="email"
-            value={formData.ownerEmail}
-            onChange={(e) => handleInputChange('ownerEmail', e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
-            placeholder="your@email.com"
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-            Phone Number
+            Phone Number *
           </label>
           <input
             type="tel"
-            value={formData.ownerPhone}
-            onChange={(e) => handleInputChange('ownerPhone', e.target.value)}
+            value={formData.phone}
+            onChange={(e) => handleInputChange('phone', e.target.value)}
             style={{
               width: '100%',
-              padding: '8px 12px',
+              padding: '12px',
               border: '1px solid #d1d5db',
-              borderRadius: '6px',
+              borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="+1 (555) 123-4567"
@@ -415,181 +296,288 @@ const KYCForm = () => {
 
         <div>
           <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-            Experience & Background
+            Legal Email Address *
           </label>
-          <textarea
-            value={formData.ownerExperience}
-            onChange={(e) => handleInputChange('ownerExperience', e.target.value)}
+          <input
+            type="email"
+            value={formData.legal_email}
+            onChange={(e) => handleInputChange('legal_email', e.target.value)}
             style={{
               width: '100%',
-              padding: '8px 12px',
+              padding: '12px',
               border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px',
-              minHeight: '80px',
-              resize: 'vertical'
+              borderRadius: '8px',
+              fontSize: '14px'
             }}
-            placeholder="Describe your relevant experience and background..."
+            placeholder="your@email.com"
           />
         </div>
-      </div>
-    </div>
-  );
 
-  const renderTeamInfo = () => (
-    <div>
-      <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '24px' }}>
-        Team Information
-      </h3>
-      
-      <div style={{ display: 'grid', gap: '24px' }}>
         <div>
           <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-            Team Size *
+            Business Email (Optional)
           </label>
-          <select
-            value={formData.teamSize}
-            onChange={(e) => handleInputChange('teamSize', e.target.value)}
+          <input
+            type="email"
+            value={formData.business_email}
+            onChange={(e) => handleInputChange('business_email', e.target.value)}
             style={{
               width: '100%',
-              padding: '8px 12px',
+              padding: '12px',
               border: '1px solid #d1d5db',
-              borderRadius: '6px',
+              borderRadius: '8px',
+              fontSize: '14px'
+            }}
+            placeholder="business@company.com"
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+            Verification Type
+          </label>
+          <select
+            value={formData.verification_type}
+            onChange={(e) => handleInputChange('verification_type', e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
               fontSize: '14px'
             }}
           >
-            <option value="">Select team size</option>
-            <option value="1">Just me (1 person)</option>
-            <option value="2-5">Small team (2-5 people)</option>
-            <option value="6-10">Medium team (6-10 people)</option>
-            <option value="11-25">Large team (11-25 people)</option>
-            <option value="25+">Enterprise (25+ people)</option>
+            <option value="individual">Individual</option>
+            <option value="business">Business</option>
           </select>
-        </div>
-
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h4 style={{ fontSize: '16px', fontWeight: '500' }}>Key Team Members</h4>
-            {formData.keyMembers.length < 5 && (
-              <button
-                type="button"
-                onClick={addTeamMember}
-                style={{
-                  padding: '4px 8px',
-                  backgroundColor: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  cursor: 'pointer'
-                }}
-              >
-                Add Member
-              </button>
-            )}
-          </div>
-
-          {formData.keyMembers.map((member, index) => (
-            <div key={index} style={{ 
-              border: '1px solid #e5e7eb', 
-              borderRadius: '8px', 
-              padding: '16px',
-              marginBottom: '12px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <span style={{ fontSize: '14px', fontWeight: '500' }}>Member {index + 1}</span>
-                {formData.keyMembers.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeTeamMember(index)}
-                    style={{
-                      padding: '2px 6px',
-                      backgroundColor: '#ef4444',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      fontSize: '10px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-              
-              <div style={{ display: 'grid', gap: '12px' }}>
-                <input
-                  type="text"
-                  value={member.name}
-                  onChange={(e) => handleTeamMemberChange(index, 'name', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '6px 8px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
-                    fontSize: '13px'
-                  }}
-                  placeholder="Full name *"
-                />
-                
-                <input
-                  type="text"
-                  value={member.role}
-                  onChange={(e) => handleTeamMemberChange(index, 'role', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '6px 8px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
-                    fontSize: '13px'
-                  }}
-                  placeholder="Role/Position *"
-                />
-                
-                <input
-                  type="text"
-                  value={member.experience}
-                  onChange={(e) => handleTeamMemberChange(index, 'experience', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '6px 8px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
-                    fontSize: '13px'
-                  }}
-                  placeholder="Experience/Background"
-                />
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
   );
 
-  const renderDocuments = () => (
+  const renderAddressInfo = () => (
     <div>
       <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '24px' }}>
-        Documents (Optional)
+        Address Information
       </h3>
       
-      <div style={{ 
-        padding: '32px', 
-        textAlign: 'center', 
-        border: '2px dashed #d1d5db', 
+      <div style={{ display: 'grid', gap: '16px' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+            Address Line 1 *
+          </label>
+          <input
+            type="text"
+            value={formData.address_line1}
+            onChange={(e) => handleInputChange('address_line1', e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
+              fontSize: '14px'
+            }}
+            placeholder="Street address"
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+            Address Line 2 (Optional)
+          </label>
+          <input
+            type="text"
+            value={formData.address_line2}
+            onChange={(e) => handleInputChange('address_line2', e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
+              fontSize: '14px'
+            }}
+            placeholder="Apartment, suite, etc."
+          />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+              City *
+            </label>
+            <input
+              type="text"
+              value={formData.city}
+              onChange={(e) => handleInputChange('city', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+              placeholder="City"
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+              State/Province *
+            </label>
+            <input
+              type="text"
+              value={formData.state}
+              onChange={(e) => handleInputChange('state', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+              placeholder="State/Province"
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+              Postal Code *
+            </label>
+            <input
+              type="text"
+              value={formData.postal_code}
+              onChange={(e) => handleInputChange('postal_code', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+              placeholder="Postal/ZIP code"
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+              Country *
+            </label>
+            <select
+              value={formData.country}
+              onChange={(e) => handleInputChange('country', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            >
+              <option value="">Select country</option>
+              <option value="US">United States</option>
+              <option value="UK">United Kingdom</option>
+              <option value="CA">Canada</option>
+              <option value="AU">Australia</option>
+              <option value="DE">Germany</option>
+              <option value="FR">France</option>
+              <option value="PK">Pakistan</option>
+              <option value="IN">India</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderDocumentUpload = () => (
+    <div>
+      <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
+        Document Upload (Optional)
+      </h3>
+      
+      <div style={{
+        backgroundColor: '#fef3c7',
+        border: '1px solid #f59e0b',
         borderRadius: '8px',
-        backgroundColor: '#f9fafb'
+        padding: '12px',
+        marginBottom: '24px'
       }}>
-        <div style={{ fontSize: '48px', marginBottom: '16px' }}>📄</div>
-        <h4 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '8px' }}>
-          Document Upload Coming Soon
-        </h4>
-        <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '16px' }}>
-          Document upload functionality will be available in the next update.
+        <p style={{ fontSize: '14px', color: '#92400e', margin: 0 }}>
+          📋 <strong>Note:</strong> Document uploads are optional for now. You can submit your verification and upload documents later when the storage system is configured.
         </p>
-        <p style={{ fontSize: '12px', color: '#9ca3af' }}>
-          For now, you can proceed to submit your KYC application without documents.
-        </p>
+      </div>
+      
+      <div style={{ display: 'grid', gap: '24px' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
+            Government ID Document (Optional)
+          </label>
+          <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+            Upload a clear photo of your government-issued ID (passport, driver's license, or national ID)
+          </p>
+          <input
+            type="file"
+            accept="image/*,.pdf"
+            onChange={(e) => handleFileChange('id_document', e.target.files[0])}
+            style={{
+              width: '100%',
+              padding: '12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
+              fontSize: '14px'
+            }}
+          />
+          {formData.id_document && (
+            <p style={{ fontSize: '12px', color: '#059669', marginTop: '4px' }}>
+              ✓ {formData.id_document.name}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
+            Selfie Photo (Optional)
+          </label>
+          <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+            Upload a clear selfie photo for identity verification
+          </p>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleFileChange('selfie_image', e.target.files[0])}
+            style={{
+              width: '100%',
+              padding: '12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
+              fontSize: '14px'
+            }}
+          />
+          {formData.selfie_image && (
+            <p style={{ fontSize: '12px', color: '#059669', marginTop: '4px' }}>
+              ✓ {formData.selfie_image.name}
+            </p>
+          )}
+        </div>
+
+        <div style={{
+          backgroundColor: '#f3f4f6',
+          padding: '16px',
+          borderRadius: '8px',
+          fontSize: '12px',
+          color: '#4b5563'
+        }}>
+          <h4 style={{ fontWeight: '600', marginBottom: '8px' }}>📋 Document Requirements:</h4>
+          <ul style={{ margin: 0, paddingLeft: '16px' }}>
+            <li>Images must be clear and readable</li>
+            <li>Maximum file size: 5MB per document</li>
+            <li>Accepted formats: JPG, PNG, PDF</li>
+            <li>Documents must be valid and not expired</li>
+          </ul>
+        </div>
       </div>
     </div>
   );
@@ -597,13 +585,11 @@ const KYCForm = () => {
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
-        return renderBusinessInfo();
+        return renderPersonalInfo();
       case 2:
-        return renderOwnerInfo();
+        return renderAddressInfo();
       case 3:
-        return renderTeamInfo();
-      case 4:
-        return renderDocuments();
+        return renderDocumentUpload();
       default:
         return null;
     }
@@ -623,68 +609,64 @@ const KYCForm = () => {
         padding: '40px',
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
       }}>
-        {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}>
-            Creator Verification (KYC)
+          <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px' }}>
+            KYC Verification
           </h1>
           <p style={{ fontSize: '14px', color: '#6b7280' }}>
-            Complete your business verification to start creating projects
+            Complete your identity verification to access creator features
           </p>
         </div>
 
         {renderStepIndicator()}
 
-        {/* Error Message */}
-        {error && (
+        {statusMessage && (
           <div style={{
-            backgroundColor: '#fef2f2',
-            border: '1px solid #fecaca',
-            borderRadius: '8px',
+            backgroundColor: '#dbeafe',
+            border: '1px solid #3b82f6',
+            color: '#1e40af',
             padding: '12px',
-            marginBottom: '24px',
-            color: '#dc2626',
-            fontSize: '14px'
-          }}>
-            {error}
-          </div>
-        )}
-
-        {statusMessage && !error && (
-          <div style={{
-            backgroundColor: '#ecfdf5',
-            border: '1px solid #bbf7d0',
             borderRadius: '8px',
-            padding: '12px',
-            marginBottom: '24px',
-            color: '#047857',
-            fontSize: '14px'
+            marginBottom: '20px',
+            textAlign: 'center'
           }}>
             {statusMessage}
           </div>
         )}
 
-        {/* Step Content */}
+        {error && (
+          <div style={{
+            backgroundColor: '#fee2e2',
+            border: '1px solid #ef4444',
+            color: '#dc2626',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            {error}
+          </div>
+        )}
+
         <div style={{ marginBottom: '32px' }}>
           {renderStepContent()}
         </div>
 
-        {/* Navigation Buttons */}
-        <div style={{ 
-          display: 'flex', 
+        <div style={{
+          display: 'flex',
           justifyContent: 'space-between',
-          gap: '16px'
+          alignItems: 'center',
+          paddingTop: '24px',
+          borderTop: '1px solid #e5e7eb'
         }}>
           <button
-            type="button"
             onClick={prevStep}
             disabled={currentStep === 1}
             style={{
               padding: '12px 24px',
-              backgroundColor: currentStep === 1 ? '#f3f4f6' : '#e5e7eb',
-              color: currentStep === 1 ? '#9ca3af' : '#374151',
+              backgroundColor: currentStep === 1 ? '#f3f4f6' : '#6b7280',
+              color: currentStep === 1 ? '#9ca3af' : 'white',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: '8px',
               fontSize: '14px',
               fontWeight: '500',
               cursor: currentStep === 1 ? 'not-allowed' : 'pointer'
@@ -693,80 +675,46 @@ const KYCForm = () => {
             Previous
           </button>
 
-          {currentStep < 4 ? (
+          <div style={{ fontSize: '14px', color: '#6b7280' }}>
+            Step {currentStep} of 3
+          </div>
+
+          {currentStep < 3 ? (
             <button
-              type="button"
               onClick={nextStep}
-              disabled={loading}
               style={{
                 padding: '12px 24px',
-                backgroundColor: '#3b82f6',
+                backgroundColor: '#29C7AC',
                 color: 'white',
                 border: 'none',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 fontSize: '14px',
                 fontWeight: '500',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1
+                cursor: 'pointer'
               }}
             >
-              Next Step
+              Next
             </button>
           ) : (
             <button
-              type="button"
               onClick={handleSubmit}
               disabled={loading}
               style={{
                 padding: '12px 24px',
-                backgroundColor: '#10b981',
+                backgroundColor: loading ? '#9ca3af' : '#29C7AC',
                 color: 'white',
                 border: 'none',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 fontSize: '14px',
                 fontWeight: '500',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
+                cursor: loading ? 'not-allowed' : 'pointer'
               }}
             >
-              {loading && (
-                <div style={{
-                  width: '16px',
-                  height: '16px',
-                  border: '2px solid #ffffff',
-                  borderTop: '2px solid transparent',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }}></div>
-              )}
-              {loading ? 'Submitting...' : 'Submit KYC Application'}
+              {loading ? 'Submitting...' : 'Submit Verification'}
             </button>
           )}
         </div>
-
-        {/* Progress Text */}
-        <div style={{ 
-          textAlign: 'center', 
-          marginTop: '16px',
-          fontSize: '12px',
-          color: '#9ca3af'
-        }}>
-          Step {currentStep} of 4
-        </div>
       </div>
-
-      {/* Add CSS for spinner animation */}
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}
-      </style>
     </div>
   );
 };

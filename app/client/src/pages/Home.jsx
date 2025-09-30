@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import CampaignCard from '../components/CampaignCard';
@@ -6,143 +6,604 @@ import { campaigns } from '../mock/campaigns';
 
 const Home = () => {
   const { user } = useAuth();
+  const [showChatbot, setShowChatbot] = useState(false);
   
   // Get featured campaigns (top 3)
   const featuredCampaigns = campaigns.slice(0, 3);
+
+  // Features data
+  const features = [
+    {
+      icon: '📊',
+      title: 'Investment Risk Assessment',
+      description: 'AI-powered risk analysis provides comprehensive due diligence and investment scoring for informed decision-making.',
+      benefits: ['Real-time risk evaluation', '95% accuracy rate', 'Market sentiment analysis'],
+      color: '#10B981'
+    },
+    {
+      icon: '🔒',
+      title: 'Milestone-based Capital Release',
+      description: 'Investments are released only when predefined business milestones are achieved, protecting investor capital.',
+      benefits: ['Automatic milestone tracking', 'Performance-based releases', 'Investor protection'],
+      color: '#3B82F6'
+    },
+    {
+      icon: '👥',
+      title: 'Investment Governance',
+      description: 'Token holders participate in key investment decisions through decentralized voting on milestone approvals.',
+      benefits: ['Democratic milestone voting', 'Token-weighted governance', 'Transparent decisions'],
+      color: '#8B5CF6'
+    },
+    {
+      icon: '⚡',
+      title: 'Solana-Powered Trading',
+      description: 'Lightning-fast investment transactions with minimal fees on the high-performance Solana blockchain.',
+      benefits: ['Sub-second settlements', 'Ultra-low fees', 'High liquidity'],
+      color: '#F59E0B'
+    },
+    {
+      icon: '🤖',
+      title: 'AI Investment Assistant',
+      description: 'Get personalized investment recommendations and portfolio insights from our AI-powered investment advisor.',
+      benefits: ['24/7 portfolio monitoring', 'Investment recommendations', 'Risk optimization'],
+      color: '#6366F1'
+    },
+    {
+      icon: '📈',
+      title: 'Portfolio Analytics',
+      description: 'Comprehensive dashboards with real-time analytics help track investment performance and optimize returns.',
+      benefits: ['Real-time portfolio tracking', 'ROI calculations', 'Performance benchmarks'],
+      color: '#059669'
+    }
+  ];
+
+  // How it works steps
+  const steps = [
+    {
+      icon: '�',
+      title: 'Connect & Verify',
+      description: 'Connect your Solana wallet and complete investor accreditation to access premium investment opportunities.',
+      details: [
+        'Connect Solana wallet (Phantom, Solflare, etc.)',
+        'Complete accredited investor verification',
+        'Set up your investment profile and preferences'
+      ],
+      color: '#3B82F6'
+    },
+    {
+      icon: '🔍',
+      title: 'Discover & Analyze',
+      description: 'Browse vetted investment opportunities with AI-powered risk assessments and comprehensive due diligence.',
+      details: [
+        'Access curated investment opportunities',
+        'Review AI-powered risk assessments',
+        'Analyze financial projections and business models'
+      ],
+      color: '#10B981'
+    },
+    {
+      icon: '📈',
+      title: 'Invest & Govern',
+      description: 'Make strategic investments using PlatformTokens and participate in milestone governance voting.',
+      details: [
+        'Invest with PT tokens and secure equity',
+        'Participate in milestone approval voting',
+        'Monitor capital release schedules'
+      ],
+      color: '#8B5CF6'
+    },
+    {
+      icon: '�',
+      title: 'Track & Profit',
+      description: 'Monitor portfolio performance, receive capital releases, and track ROI through comprehensive analytics.',
+      details: [
+        'Real-time portfolio performance tracking',
+        'Automated milestone-based capital releases',
+        'Comprehensive ROI and exit analytics'
+      ],
+      color: '#F59E0B'
+    }
+  ];
 
   return (
     <div>
       {/* Hero Section */}
       <section style={{ 
-        background: 'linear-gradient(135deg, #29C7AC, #0B132B)', 
-        color: 'white',
-        padding: '80px 20px'
+        backgroundColor: 'white',
+        padding: '80px 20px 120px 20px',
+        position: 'relative'
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', textAlign: 'center' }}>
-          <h1 style={{ 
-            fontSize: '3.5rem', 
-            fontWeight: 'bold', 
-            marginBottom: '24px',
-            lineHeight: '1.2'
-          }}>
-            Invest in the Future
-          </h1>
-          <p style={{ 
-            fontSize: '1.25rem', 
-            marginBottom: '40px', 
-            maxWidth: '600px', 
-            margin: '0 auto 40px auto',
-            lineHeight: '1.6',
-            opacity: '0.9'
-          }}>
-            Discover and invest in innovative startups and projects. Join thousands of investors building the next generation of companies.
-          </p>
-          
-          {/* Stats Row */}
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <div style={{ 
             display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-            gap: '30px',
-            marginBottom: '40px',
-            maxWidth: '800px',
-            margin: '0 auto 40px auto'
+            gridTemplateColumns: window.innerWidth >= 1024 ? '1fr 1fr' : '1fr',
+            gap: '60px',
+            alignItems: 'center'
           }}>
+            {/* Left Column - Content */}
             <div>
-              <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#29C7AC' }}>$2.4M+</div>
-              <div style={{ fontSize: '1rem', opacity: '0.8' }}>Total Invested</div>
+              {/* Badge */}
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                backgroundColor: '#29C7AC',
+                color: 'white',
+                padding: '8px 16px',
+                borderRadius: '20px',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                marginBottom: '32px'
+              }}>
+                <span style={{ marginRight: '8px' }}>⚡</span>
+                Powered by Solana Blockchain
+              </div>
+
+              {/* Headline */}
+              <div style={{ marginBottom: '32px' }}>
+                <h1 style={{ 
+                  fontSize: window.innerWidth >= 1024 ? '3.5rem' : '2.5rem',
+                  fontWeight: 'bold', 
+                  lineHeight: '1.1',
+                  color: '#1a202c',
+                  marginBottom: '16px'
+                }}>
+                  Smart Investment
+                  <br />
+                  <span style={{ 
+                    background: 'linear-gradient(135deg, #29C7AC, #0B132B)', 
+                    WebkitBackgroundClip: 'text', 
+                    WebkitTextFillColor: 'transparent' 
+                  }}>
+                    Platform
+                  </span>
+                </h1>
+                <p style={{ 
+                  fontSize: '1.125rem', 
+                  color: '#4a5568',
+                  lineHeight: '1.6',
+                  maxWidth: '500px'
+                }}>
+                  Discover high-growth investment opportunities with milestone-based capital release, 
+                  AI-powered risk assessment, and transparent portfolio management on Solana.
+                </p>
+              </div>
+
+              {/* Stats */}
+              <div style={{ 
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '24px',
+                paddingTop: '16px',
+                marginBottom: '32px'
+              }}>
+                <div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#29C7AC' }}>$2.5M+</div>
+                  <div style={{ fontSize: '0.875rem', color: '#4a5568' }}>Total Invested</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#29C7AC' }}>150+</div>
+                  <div style={{ fontSize: '0.875rem', color: '#4a5568' }}>Active Deals</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#29C7AC' }}>24%</div>
+                  <div style={{ fontSize: '0.875rem', color: '#4a5568' }}>Avg. ROI</div>
+                </div>
+              </div>
+
+              {/* CTA Buttons */}
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: window.innerWidth >= 640 ? 'row' : 'column',
+                gap: '16px',
+                marginBottom: '32px'
+              }}>
+                {user ? (
+                  <>
+                    <Link 
+                      to="/dashboard" 
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        backgroundColor: '#29C7AC',
+                        color: 'white',
+                        padding: '16px 32px',
+                        borderRadius: '8px',
+                        fontWeight: '600',
+                        textDecoration: 'none',
+                        fontSize: '1rem',
+                        transition: 'all 0.3s ease'
+                      }}
+                    >
+                      <span style={{ marginRight: '8px' }}>💼</span>
+                      View Dashboard
+                    </Link>
+                    <Link 
+                      to="/explore" 
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        backgroundColor: 'transparent',
+                        color: '#29C7AC',
+                        padding: '16px 32px',
+                        borderRadius: '8px',
+                        fontWeight: '600',
+                        textDecoration: 'none',
+                        fontSize: '1rem',
+                        border: '2px solid #29C7AC',
+                        transition: 'all 0.3s ease'
+                      }}
+                    >
+                      Explore Opportunities
+                      <span style={{ marginLeft: '8px' }}>→</span>
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link 
+                      to="/register" 
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        backgroundColor: '#29C7AC',
+                        color: 'white',
+                        padding: '16px 32px',
+                        borderRadius: '8px',
+                        fontWeight: '600',
+                        textDecoration: 'none',
+                        fontSize: '1rem',
+                        transition: 'all 0.3s ease'
+                      }}
+                    >
+                      <span style={{ marginRight: '8px' }}>🔗</span>
+                      Connect Wallet
+                    </Link>
+                    <Link 
+                      to="/explore" 
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        backgroundColor: 'transparent',
+                        color: '#29C7AC',
+                        padding: '16px 32px',
+                        borderRadius: '8px',
+                        fontWeight: '600',
+                        textDecoration: 'none',
+                        fontSize: '1rem',
+                        border: '2px solid #29C7AC',
+                        transition: 'all 0.3s ease'
+                      }}
+                    >
+                      Explore Opportunities
+                      <span style={{ marginLeft: '8px' }}>→</span>
+                    </Link>
+                  </>
+                )}
+              </div>
+
+              {/* Trust Indicators */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '24px',
+                fontSize: '0.875rem', 
+                color: '#4a5568',
+                flexWrap: 'wrap'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: '#10B981' }}>📊</span>
+                  <span>Risk Assessment</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: '#3B82F6' }}>👥</span>
+                  <span>Verified Deals</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: '#8B5CF6' }}>📈</span>
+                  <span>Growth Tracking</span>
+                </div>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#29C7AC' }}>150+</div>
-              <div style={{ fontSize: '1rem', opacity: '0.8' }}>Active Campaigns</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#29C7AC' }}>5,000+</div>
-              <div style={{ fontSize: '1rem', opacity: '0.8' }}>Investors</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#29C7AC' }}>98%</div>
-              <div style={{ fontSize: '1rem', opacity: '0.8' }}>Success Rate</div>
+
+            {/* Right Column - Investment Dashboard Preview */}
+            <div style={{ position: 'relative' }}>
+              {/* Main Dashboard */}
+              <div style={{
+                position: 'relative',
+                zIndex: '10',
+                backgroundColor: 'white',
+                borderRadius: '16px',
+                padding: '32px',
+                boxShadow: '0 25px 50px rgba(0, 0, 0, 0.1)',
+                border: '1px solid #e2e8f0'
+              }}>
+                <div style={{ marginBottom: '24px' }}>
+                  {/* Header */}
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    marginBottom: '24px'
+                  }}>
+                    <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1a202c' }}>
+                      GreenTech Solutions
+                    </h3>
+                    <div style={{
+                      backgroundColor: '#dcfce7',
+                      color: '#166534',
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '0.75rem',
+                      fontWeight: '600'
+                    }}>
+                      Active Investment
+                    </div>
+                  </div>
+
+                  {/* Investment Progress */}
+                  <div style={{ marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: '8px' }}>
+                      <span style={{ color: '#4a5568' }}>Capital Raised</span>
+                      <span style={{ fontWeight: '600' }}>75%</span>
+                    </div>
+                    <div style={{ 
+                      width: '100%', 
+                      backgroundColor: '#f1f5f9', 
+                      borderRadius: '8px', 
+                      height: '12px',
+                      marginBottom: '8px'
+                    }}>
+                      <div style={{
+                        background: 'linear-gradient(135deg, #29C7AC, #0B132B)',
+                        height: '12px',
+                        borderRadius: '8px',
+                        width: '75%'
+                      }}></div>
+                    </div>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      fontSize: '0.75rem', 
+                      color: '#64748b' 
+                    }}>
+                      <span>75,000 PT raised</span>
+                      <span>100,000 PT target</span>
+                    </div>
+                  </div>
+
+                  {/* Investment Metrics */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '16px',
+                    padding: '16px',
+                    backgroundColor: '#f8fafc',
+                    borderRadius: '8px',
+                    marginBottom: '24px'
+                  }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#10B981', fontSize: '1.25rem', marginBottom: '4px' }}>💲</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Expected ROI</div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#10B981' }}>28%</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#3B82F6', fontSize: '1.25rem', marginBottom: '4px' }}>📊</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Equity</div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>12%</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#8B5CF6', fontSize: '1.25rem', marginBottom: '4px' }}>📈</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Risk</div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#F59E0B' }}>Medium</div>
+                    </div>
+                  </div>
+
+                  {/* Milestones */}
+                  <div>
+                    <h4 style={{ fontWeight: '600', marginBottom: '12px', color: '#1a202c' }}>
+                      Capital Release Schedule
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {[
+                        { title: 'Product Development', amount: '25,000 PT', status: 'released' },
+                        { title: 'Market Validation', amount: '30,000 PT', status: 'active' },
+                        { title: 'Scale & Growth', amount: '45,000 PT', status: 'pending' },
+                      ].map((milestone, index) => (
+                        <div key={index} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '12px',
+                          borderRadius: '8px',
+                          backgroundColor: '#f8fafc'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{
+                              height: '12px',
+                              width: '12px',
+                              borderRadius: '50%',
+                              backgroundColor: 
+                                milestone.status === 'released' ? '#10B981' :
+                                milestone.status === 'active' ? '#29C7AC' :
+                                '#cbd5e1'
+                            }}></div>
+                            <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>{milestone.title}</span>
+                          </div>
+                          <span style={{ fontSize: '0.875rem', color: '#64748b' }}>{milestone.amount}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Floating Elements */}
+              <div style={{
+                position: 'absolute',
+                top: '-16px',
+                right: '-16px',
+                backgroundColor: '#29C7AC',
+                color: 'white',
+                borderRadius: '8px',
+                padding: '12px',
+                boxShadow: '0 10px 15px rgba(0, 0, 0, 0.1)'
+              }}>
+                <span style={{ fontSize: '1.5rem' }}>📈</span>
+              </div>
+              
+              <div style={{
+                position: 'absolute',
+                bottom: '-16px',
+                left: '-16px',
+                backgroundColor: 'white',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '12px',
+                boxShadow: '0 10px 15px rgba(0, 0, 0, 0.1)'
+              }}>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Portfolio Growth</div>
+                <div style={{ fontSize: '1.125rem', fontWeight: 'bold', color: '#10B981' }}>+24%</div>
+              </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section style={{ padding: '80px 20px', backgroundColor: '#f8fafc' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '60px' }}>
+            <div style={{
+              display: 'inline-block',
+              backgroundColor: '#29C7AC',
+              color: 'white',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              marginBottom: '20px'
+            }}>
+              Investment Platform
+            </div>
+            <h2 style={{ 
+              fontSize: '2.5rem', 
+              fontWeight: 'bold', 
+              color: '#1a202c',
+              marginBottom: '16px'
+            }}>
+              Built for <span style={{ background: 'linear-gradient(135deg, #29C7AC, #0B132B)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Smart Investing</span>
+            </h2>
+            <p style={{ 
+              fontSize: '1.1rem', 
+              color: '#4a5568',
+              maxWidth: '800px',
+              margin: '0 auto',
+              lineHeight: '1.6'
+            }}>
+              FundChain combines cutting-edge blockchain technology with AI-powered analytics 
+              to create the most sophisticated investment platform for growth businesses and institutional investors.
+            </p>
+          </div>
           
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            {user ? (
-              <>
-                <Link 
-                  to="/dashboard" 
-                  style={{
-                    backgroundColor: '#29C7AC',
-                    color: 'white',
-                    padding: '16px 32px',
-                    borderRadius: '8px',
-                    fontWeight: '600',
-                    textDecoration: 'none',
-                    fontSize: '1.1rem',
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  View Dashboard
-                </Link>
-                <Link 
-                  to="/explore" 
-                  style={{
-                    backgroundColor: 'transparent',
-                    color: 'white',
-                    padding: '16px 32px',
-                    borderRadius: '8px',
-                    fontWeight: '600',
-                    textDecoration: 'none',
-                    fontSize: '1.1rem',
-                    border: '2px solid white',
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  Explore Opportunities
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link 
-                  to="/register" 
-                  style={{
-                    backgroundColor: '#29C7AC',
-                    color: 'white',
-                    padding: '16px 32px',
-                    borderRadius: '8px',
-                    fontWeight: '600',
-                    textDecoration: 'none',
-                    fontSize: '1.1rem',
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  Get Started Today
-                </Link>
-                <Link 
-                  to="/explore" 
-                  style={{
-                    backgroundColor: 'transparent',
-                    color: 'white',
-                    padding: '16px 32px',
-                    borderRadius: '8px',
-                    fontWeight: '600',
-                    textDecoration: 'none',
-                    fontSize: '1.1rem',
-                    border: '2px solid white',
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  Browse Investments
-                </Link>
-              </>
-            )}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', 
+            gap: '30px',
+            marginBottom: '40px'
+          }}>
+            {features.map((feature, index) => (
+              <div key={index} style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '32px',
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
+                border: '1px solid #e2e8f0',
+                transition: 'all 0.3s ease',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-8px)';
+                e.currentTarget.style.boxShadow = '0 20px 25px rgba(0, 0, 0, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.05)';
+              }}>
+                <div style={{
+                  display: 'inline-flex',
+                  padding: '12px',
+                  backgroundColor: feature.color + '20',
+                  borderRadius: '12px',
+                  marginBottom: '24px',
+                  fontSize: '1.5rem'
+                }}>
+                  {feature.icon}
+                </div>
+                <h3 style={{ 
+                  fontSize: '1.25rem', 
+                  fontWeight: '600', 
+                  marginBottom: '12px', 
+                  color: '#1a202c' 
+                }}>
+                  {feature.title}
+                </h3>
+                <p style={{ 
+                  color: '#4a5568', 
+                  lineHeight: '1.6',
+                  marginBottom: '20px'
+                }}>
+                  {feature.description}
+                </p>
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+                  {feature.benefits.map((benefit, benefitIndex) => (
+                    <div key={benefitIndex} style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      fontSize: '0.875rem', 
+                      color: '#4a5568',
+                      marginBottom: '8px'
+                    }}>
+                      <span style={{ color: feature.color, marginRight: '8px' }}>→</span>
+                      {benefit}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              backgroundColor: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '25px',
+              padding: '12px 24px',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
+            }}>
+              <span style={{ color: '#29C7AC', marginRight: '8px' }}>📈</span>
+              <span style={{ fontSize: '0.875rem' }}>Join 10,000+ investors building their portfolios</span>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Featured Campaigns Section */}
-      <section style={{ padding: '80px 20px', backgroundColor: '#f8fafc' }}>
+      <section style={{ padding: '80px 20px', backgroundColor: 'white' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '60px' }}>
+            <div style={{
+              display: 'inline-block',
+              backgroundColor: '#29C7AC',
+              color: 'white',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              marginBottom: '20px'
+            }}>
+              Top Investment Opportunities
+            </div>
             <h2 style={{ 
               fontSize: '2.5rem', 
               fontWeight: 'bold', 
@@ -165,7 +626,7 @@ const Home = () => {
             display: 'grid', 
             gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', 
             gap: '30px',
-            marginBottom: '40px'
+            marginBottom: '60px'
           }}>
             {featuredCampaigns.map(campaign => (
               <CampaignCard key={campaign.id} campaign={campaign} />
@@ -192,95 +653,325 @@ const Home = () => {
       </section>
 
       {/* How It Works Section */}
-      <section style={{ padding: '80px 20px', backgroundColor: 'white' }}>
+      <section style={{ padding: '80px 20px', backgroundColor: '#f8fafc' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '60px' }}>
+            <div style={{
+              display: 'inline-block',
+              backgroundColor: '#29C7AC',
+              color: 'white',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              marginBottom: '20px'
+            }}>
+              Investment Process
+            </div>
             <h2 style={{ 
               fontSize: '2.5rem', 
               fontWeight: 'bold', 
               color: '#1a202c',
               marginBottom: '16px'
             }}>
-              How InvestHub Works
+              How <span style={{ background: 'linear-gradient(135deg, #29C7AC, #0B132B)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>FundChain</span> Works
             </h2>
             <p style={{ 
               fontSize: '1.1rem', 
-              color: '#4a5568'
+              color: '#4a5568',
+              maxWidth: '800px',
+              margin: '0 auto'
             }}>
-              Start investing in 3 simple steps
+              From discovery to profit in four simple steps. Our platform makes it easy for 
+              investors to find vetted opportunities and for businesses to access growth capital.
             </p>
           </div>
           
+          {/* Steps Grid */}
           <div style={{ 
             display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
-            gap: '40px' 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+            gap: '30px',
+            marginBottom: '60px'
           }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ 
-                backgroundColor: '#E8F8F5', 
-                borderRadius: '50%', 
-                width: '80px', 
-                height: '80px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                margin: '0 auto 20px auto',
-                fontSize: '2rem'
-              }}>
-                �
+            {steps.map((step, index) => (
+              <div key={index} style={{ position: 'relative' }}>
+                {/* Connection Arrow - Only on large screens */}
+                {index < steps.length - 1 && window.innerWidth >= 1024 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '64px',
+                    left: '100%',
+                    width: '30px',
+                    height: '2px',
+                    background: 'linear-gradient(to right, #29C7AC, #29C7AC50)',
+                    zIndex: '1',
+                    transform: 'translateX(15px)'
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      right: '-4px',
+                      top: '-3px',
+                      width: '0',
+                      height: '0',
+                      borderLeft: '8px solid #29C7AC',
+                      borderTop: '4px solid transparent',
+                      borderBottom: '4px solid transparent'
+                    }}></div>
+                  </div>
+                )}
+                
+                <div style={{
+                  backgroundColor: 'white',
+                  borderRadius: '12px',
+                  padding: '32px',
+                  textAlign: 'center',
+                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
+                  border: '1px solid #e2e8f0',
+                  position: 'relative',
+                  zIndex: '2',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-8px)';
+                  e.currentTarget.style.boxShadow = '0 20px 25px rgba(0, 0, 0, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.05)';
+                }}>
+                  {/* Step Icon with Number Badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <div style={{
+                        display: 'inline-flex',
+                        padding: '16px',
+                        backgroundColor: step.color + '20',
+                        borderRadius: '12px',
+                        fontSize: '2rem'
+                      }}>
+                        {step.icon}
+                      </div>
+                      <div style={{
+                        position: 'absolute',
+                        top: '-8px',
+                        right: '-8px',
+                        backgroundColor: '#29C7AC',
+                        color: 'white',
+                        borderRadius: '50%',
+                        width: '24px',
+                        height: '24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                      }}>
+                        {index + 1}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <h3 style={{ 
+                    fontSize: '1.25rem', 
+                    fontWeight: '600', 
+                    marginBottom: '12px', 
+                    color: '#1a202c' 
+                  }}>
+                    {step.title}
+                  </h3>
+                  <p style={{ 
+                    color: '#4a5568', 
+                    lineHeight: '1.6',
+                    marginBottom: '20px'
+                  }}>
+                    {step.description}
+                  </p>
+                  
+                  {/* Details List */}
+                  <div style={{ textAlign: 'left' }}>
+                    {step.details.map((detail, detailIndex) => (
+                      <div key={detailIndex} style={{ 
+                        display: 'flex', 
+                        alignItems: 'flex-start', 
+                        fontSize: '0.875rem', 
+                        color: '#4a5568',
+                        marginBottom: '8px'
+                      }}>
+                        <span style={{ color: '#29C7AC', marginRight: '8px', marginTop: '2px' }}>✓</span>
+                        <span>{detail}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <h3 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '12px', color: '#1a202c' }}>
-                1. Discover
-              </h3>
-              <p style={{ color: '#4a5568', lineHeight: '1.6' }}>
-                Browse through vetted investment opportunities across various industries and risk levels.
-              </p>
-            </div>
-            
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ 
-                backgroundColor: '#E8F8F5', 
-                borderRadius: '50%', 
-                width: '80px', 
-                height: '80px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                margin: '0 auto 20px auto',
-                fontSize: '2rem'
-              }}>
-                �
+            ))}
+          </div>
+
+          {/* User Types Section */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: window.innerWidth >= 768 ? '1fr 1fr' : '1fr',
+            gap: '32px',
+            marginBottom: '60px'
+          }}>
+            {/* For Businesses */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '32px',
+              border: '2px solid #dbeafe',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
+            }}>
+              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                <div style={{
+                  display: 'inline-flex',
+                  padding: '12px',
+                  backgroundColor: '#dbeafe',
+                  borderRadius: '12px',
+                  marginBottom: '16px'
+                }}>
+                  <span style={{ fontSize: '2rem', color: '#3B82F6' }}>📈</span>
+                </div>
+                <h3 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '8px', color: '#1a202c' }}>
+                  For Businesses
+                </h3>
+                <p style={{ color: '#4a5568', fontSize: '0.95rem' }}>
+                  Raise growth capital for your startup with milestone-based investment releases
+                </p>
               </div>
-              <h3 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '12px', color: '#1a202c' }}>
-                2. Analyze
-              </h3>
-              <p style={{ color: '#4a5568', lineHeight: '1.6' }}>
-                Review detailed business plans, financial projections, and risk assessments for each opportunity.
-              </p>
-            </div>
-            
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ 
-                backgroundColor: '#E8F8F5', 
-                borderRadius: '50%', 
-                width: '80px', 
-                height: '80px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                margin: '0 auto 20px auto',
-                fontSize: '2rem'
-              }}>
-                �
+
+              <div style={{ marginBottom: '32px' }}>
+                {[
+                  'Access accredited investor network',
+                  'Milestone-based capital releases', 
+                  'Transparent investor relations',
+                  'Competitive equity terms',
+                  'Global market reach'
+                ].map((feature, index) => (
+                  <div key={index} style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    marginBottom: '12px'
+                  }}>
+                    <span style={{ color: '#3B82F6', marginRight: '12px' }}>✓</span>
+                    <span style={{ fontSize: '0.875rem', color: '#4a5568' }}>{feature}</span>
+                  </div>
+                ))}
               </div>
-              <h3 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '12px', color: '#1a202c' }}>
-                3. Invest
-              </h3>
-              <p style={{ color: '#4a5568', lineHeight: '1.6' }}>
-                Make secure investments and track your portfolio performance with real-time updates.
-              </p>
+
+              <Link 
+                to="/create-project"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  padding: '12px 24px',
+                  background: 'linear-gradient(135deg, #29C7AC, #0B132B)',
+                  color: 'white',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  textDecoration: 'none'
+                }}
+              >
+                Raise Capital
+                <span style={{ marginLeft: '8px' }}>→</span>
+              </Link>
             </div>
+
+            {/* For Investors */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '32px',
+              border: '2px solid #dcfce7',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
+            }}>
+              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                <div style={{
+                  display: 'inline-flex',
+                  padding: '12px',
+                  backgroundColor: '#dcfce7',
+                  borderRadius: '12px',
+                  marginBottom: '16px'
+                }}>
+                  <span style={{ fontSize: '2rem', color: '#10B981' }}>💼</span>
+                </div>
+                <h3 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '8px', color: '#1a202c' }}>
+                  For Investors
+                </h3>
+                <p style={{ color: '#4a5568', fontSize: '0.95rem' }}>
+                  Build a diversified portfolio with vetted high-growth investment opportunities
+                </p>
+              </div>
+
+              <div style={{ marginBottom: '32px' }}>
+                {[
+                  'Curated investment opportunities',
+                  'AI-powered risk assessment',
+                  'Milestone-based capital protection',
+                  'Portfolio analytics dashboard',
+                  'Governance token rewards'
+                ].map((feature, index) => (
+                  <div key={index} style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    marginBottom: '12px'
+                  }}>
+                    <span style={{ color: '#10B981', marginRight: '12px' }}>✓</span>
+                    <span style={{ fontSize: '0.875rem', color: '#4a5568' }}>{feature}</span>
+                  </div>
+                ))}
+              </div>
+
+              <Link 
+                to="/explore"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  padding: '12px 24px',
+                  backgroundColor: 'transparent',
+                  color: '#29C7AC',
+                  border: '2px solid #29C7AC',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  textDecoration: 'none'
+                }}
+              >
+                Start Investing
+                <span style={{ marginLeft: '8px' }}>→</span>
+              </Link>
+            </div>
+          </div>
+          
+          {/* Final CTA */}
+          <div style={{ textAlign: 'center' }}>
+            <Link 
+              to={user ? "/dashboard" : "/register"}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                backgroundColor: '#29C7AC',
+                color: 'white',
+                padding: '16px 32px',
+                borderRadius: '8px',
+                textDecoration: 'none',
+                fontSize: '1.1rem',
+                fontWeight: '600',
+                marginBottom: '16px'
+              }}
+            >
+              <span style={{ marginRight: '8px' }}>💼</span>
+              {user ? "Go to Dashboard" : "Start Investing Today"}
+            </Link>
+            <p style={{ fontSize: '0.875rem', color: '#4a5568' }}>
+              Join the future of investment management. No setup fees required.
+            </p>
           </div>
         </div>
       </section>
@@ -322,6 +1013,124 @@ const Home = () => {
           </Link>
         </div>
       </section>
+
+      {/* Floating AI Investment Assistant */}
+      <div style={{
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
+        zIndex: '50'
+      }}>
+        <button
+          onClick={() => setShowChatbot(!showChatbot)}
+          style={{
+            height: '56px',
+            width: '56px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #29C7AC, #0B132B)',
+            color: 'white',
+            border: 'none',
+            boxShadow: '0 10px 15px rgba(0, 0, 0, 0.1)',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.5rem'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.boxShadow = '0 20px 25px rgba(0, 0, 0, 0.15)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 10px 15px rgba(0, 0, 0, 0.1)';
+          }}
+        >
+          💬
+        </button>
+        
+        {showChatbot && (
+          <div style={{
+            position: 'absolute',
+            bottom: '64px',
+            right: '0',
+            width: '320px',
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            boxShadow: '0 20px 25px rgba(0, 0, 0, 0.15)',
+            border: '2px solid #e2e8f0',
+            overflow: 'hidden'
+          }}>
+            <div style={{ padding: '16px' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between', 
+                marginBottom: '12px' 
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    height: '32px',
+                    width: '32px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #29C7AC, #0B132B)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontSize: '0.875rem',
+                    fontWeight: 'bold'
+                  }}>
+                    AI
+                  </div>
+                  <span style={{ fontWeight: '600' }}>Investment Assistant</span>
+                </div>
+                <button 
+                  onClick={() => setShowChatbot(false)}
+                  style={{
+                    height: '24px',
+                    width: '24px',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    fontSize: '1.2rem',
+                    color: '#666'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <p style={{ 
+                fontSize: '0.875rem', 
+                color: '#4a5568', 
+                marginBottom: '12px' 
+              }}>
+                Hi! I'm your AI investment advisor. I can help you with:
+              </p>
+              <div style={{ fontSize: '0.875rem', color: '#4a5568', marginBottom: '16px' }}>
+                <div style={{ marginBottom: '4px' }}>• Investment opportunity analysis</div>
+                <div style={{ marginBottom: '4px' }}>• Portfolio optimization</div>
+                <div style={{ marginBottom: '4px' }}>• Risk assessment guidance</div>
+                <div>• Platform navigation</div>
+              </div>
+              <button style={{
+                width: '100%',
+                padding: '12px',
+                background: 'linear-gradient(135deg, #29C7AC, #0B132B)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}>
+                Start Investment Analysis
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

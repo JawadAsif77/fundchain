@@ -1,7 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './store/AuthContext';
-import { ThemeProvider } from './contexts/ThemeContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -38,9 +37,8 @@ function App() {
   
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <AuthProvider>
-          <Router>
+      <AuthProvider>
+        <Router>
             <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
               <Header />
               <main style={{ flex: 1 }}>
@@ -106,7 +104,6 @@ function App() {
             </div>
           </Router>
         </AuthProvider>
-      </ThemeProvider>
     </ErrorBoundary>
   );
 }
