@@ -39,6 +39,13 @@ const Dashboard = () => {
   useEffect(() => {
     console.log('Dashboard useEffect - loading:', loading, 'authLoading:', authLoading, 'user:', !!user);
     if (!loading && !authLoading && user && roleStatus) {
+      // If user is admin, redirect to admin panel
+      if (profile?.role === 'admin') {
+        console.log('Admin user detected, redirecting to admin panel...');
+        navigate('/admin', { replace: true });
+        return;
+      }
+
       if (!roleStatus?.hasRole) {
         console.log('User has no role, redirecting to profile for role selection...');
         navigate('/profile', { replace: true });
