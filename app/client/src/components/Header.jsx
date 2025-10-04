@@ -194,6 +194,34 @@ const Header = () => {
             )}
             {user && (
               <Link
+                to="/wallet"
+                style={{
+                  color: isActiveLink('/wallet') ? 'var(--color-primary)' : 'var(--color-text)',
+                  fontWeight: 'var(--font-semibold)',
+                  padding: 'var(--space-2) 0',
+                  textDecoration: 'none',
+                  transition: 'var(--transition-default)'
+                }}
+              >
+                Wallet
+              </Link>
+            )}
+            {user && profile?.role === 'admin' && (
+              <Link
+                to="/admin"
+                style={{
+                  color: isActiveLink('/admin') ? 'var(--color-primary)' : 'var(--color-text)',
+                  fontWeight: 'var(--font-semibold)',
+                  padding: 'var(--space-2) 0',
+                  textDecoration: 'none',
+                  transition: 'var(--transition-default)'
+                }}
+              >
+                Admin
+              </Link>
+            )}
+            {user && (
+              <Link
                 to="/profile"
                 style={{
                   color: isActiveLink('/profile') ? 'var(--color-primary)' : 'var(--color-text)',
@@ -229,6 +257,13 @@ const Header = () => {
                   onClick={closeMobileMenu}
                 >
                   👤 Profile
+                </Link>
+                <Link
+                  to="/wallet"
+                  className="btn btn--ghost btn--sm"
+                  onClick={closeMobileMenu}
+                >
+                  💼 Wallet
                 </Link>
                 <button
                   onClick={handleLogout}
@@ -378,6 +413,40 @@ const Header = () => {
                   }}
                 >
                   Dashboard
+                </Link>
+              )}
+              {user && (
+                <Link
+                  to="/wallet"
+                  onClick={closeMobileMenu}
+                  style={{
+                    padding: 'var(--space-3) 0',
+                    borderBottom: '1px solid var(--color-border-light)',
+                    color: 'var(--color-text)',
+                    textDecoration: 'none',
+                    fontSize: 'var(--text-md)',
+                    fontWeight: 'var(--font-semibold)',
+                    transition: 'var(--transition-default)'
+                  }}
+                >
+                  💼 Wallet
+                </Link>
+              )}
+              {user && profile?.role === 'admin' && (
+                <Link
+                  to="/admin"
+                  onClick={closeMobileMenu}
+                  style={{
+                    padding: 'var(--space-3) 0',
+                    borderBottom: '1px solid var(--color-border-light)',
+                    color: 'var(--color-text)',
+                    textDecoration: 'none',
+                    fontSize: 'var(--text-md)',
+                    fontWeight: 'var(--font-semibold)',
+                    transition: 'var(--transition-default)'
+                  }}
+                >
+                  Admin
                 </Link>
               )}
               {user && (

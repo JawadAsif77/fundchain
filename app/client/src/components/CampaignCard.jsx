@@ -33,9 +33,7 @@ const CampaignCard = ({ campaign }) => {
     return 'High Risk';
   };
 
-  const getStatusBadgeClass = (status) => {
-    return `status status--${status}`;
-  };
+  const getStatusBadgeClass = (status) => `status status--${String(status || '').toLowerCase()}`;
 
   const formatDeadline = (deadlineISO) => {
     const deadline = new Date(deadlineISO);
@@ -87,9 +85,11 @@ const CampaignCard = ({ campaign }) => {
         <span className={getRiskBadgeClass(campaign.riskScore)}>
           {getRiskLabel(campaign.riskScore)}
         </span>
-        <span className={getStatusBadgeClass(campaign.status)}>
-          {campaign.status}
-        </span>
+        {campaign.status && (
+          <span className={getStatusBadgeClass(campaign.status)}>
+            {campaign.status}
+          </span>
+        )}
       </div>
 
       {/* Campaign Content */}

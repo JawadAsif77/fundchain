@@ -30,20 +30,41 @@ const KYCForm = () => {
 
     // Only check verification status if not already redirecting
     if (!isRedirecting) {
-      // Check if user already has verification status
-      if (user.is_verified === true || user.is_verified === 'approved') {
-        console.log('User verification approved, redirecting to dashboard');
-        setStatusMessage('Your verification is already approved. Redirecting to dashboard...');
-        setIsRedirecting(true);
-        // Immediate redirect for approved users
-        navigate('/dashboard', { replace: true });
-      } else if (user.is_verified === 'pending') {
-        console.log('User verification pending, redirecting to dashboard');
-        setStatusMessage('Your verification is pending review. Redirecting to dashboard...');
-        setIsRedirecting(true);
-        // Immediate redirect for pending users too
-        navigate('/dashboard', { replace: true });
-      }
+      const checkStatus = async () => {
+        try {
+          // users.is_verified uses enum: 'no' | 'pending' | 'yes'
+          if (user.is_verified === 'yes') {
+            setStatusMessage('Your verification is approved. Redirecting to dashboard...');
+            setIsRedirecting(true);
+            navigate('/dashboard', { replace: true });
+            return;
+          }
+
+          // Check user_verifications table for latest status
+          const { data, error } = await supabase
+            .from('user_verifications')
+            .select('verification_status')
+            .eq('user_id', user.id)
+            .single();
+          if (!error && data?.verification_status) {
+            if (data.verification_status === 'approved') {
+              setStatusMessage('Your verification is approved. Redirecting to dashboard...');
+              setIsRedirecting(true);
+              navigate('/dashboard', { replace: true });
+              return;
+            }
+            if (data.verification_status === 'pending') {
+              setStatusMessage('Your verification is pending review. Redirecting to dashboard...');
+              setIsRedirecting(true);
+              navigate('/dashboard', { replace: true });
+              return;
+            }
+          }
+        } catch (_) {
+          // Ignore and allow form to render
+        }
+      };
+      checkStatus();
     }
 
     // Cleanup timeout on unmount

@@ -1,10 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../store/AuthContext';
+import { walletApi } from '../lib/api.js';
 
-const InvestPanel = ({ campaign }) => {
+const InvestPanel = ({ campaign, onInvestSuccess }) => {
   const { user } = useAuth();
   const [amount, setAmount] = useState(campaign.minInvest || 1000);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [balance, setBalance] = useState(0);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!user) return;
+      const res = await walletApi.getBalance();
+      if (!cancelled && res.success) setBalance(res.balance);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user]);
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
@@ -24,24 +38,33 @@ const InvestPanel = ({ campaign }) => {
     e.preventDefault();
     if (!user) return;
 
+    setError('');
     setIsSubmitting(true);
-    
-    // PHASE 2: Replace with actual investment API call to Supabase
-    setTimeout(() => {
-      setIsSubmitting(false);
-      alert('Investment functionality will be connected to database in Phase 2!');
-    }, 1000);
+    const res = await walletApi.invest(campaign.id, amount);
+    setIsSubmitting(false);
+    if (!res.success) {
+      setError(res.error || 'Investment failed');
+      return;
+    }
+    setBalance(res.balance);
+    try {
+      // Optionally notify parent to refresh campaign stats (raisedAmount, investor_count)
+      if (typeof onInvestSuccess === 'function') {
+        onInvestSuccess({ amount, investment: res.investment });
+      }
+    } catch (_) {}
   };
 
   const isValidAmount = amount >= campaign.minInvest && amount <= campaign.maxInvest;
-  const isDisabled = !user || !isValidAmount || campaign.status !== 'live';
+  const isDisabled = !user || !isValidAmount || campaign.status !== 'active' || amount > balance;
 
   const getDisabledReason = () => {
-    if (!user) return 'Please log in to invest';
-    if (campaign.status !== 'live') return 'Campaign is not accepting investments';
+  if (!user) return 'Please log in to invest';
+  if (campaign.status !== 'active') return 'Campaign is not accepting investments';
     if (amount < campaign.minInvest) return `Minimum investment is ${formatCurrency(campaign.minInvest)}`;
     if (amount > campaign.maxInvest) return `Maximum investment is ${formatCurrency(campaign.maxInvest)}`;
-    return 'DB connection coming in Phase 2';
+    if (amount > balance) return 'Insufficient wallet balance';
+    return '';
   };
 
   return (
@@ -64,7 +87,7 @@ const InvestPanel = ({ campaign }) => {
               min={campaign.minInvest}
               max={campaign.maxInvest}
               step="100"
-              disabled={!user || campaign.status !== 'live'}
+              disabled={!user || campaign.status !== 'active'}
             />
           </div>
           <div className="investment-limits">
@@ -91,6 +114,10 @@ const InvestPanel = ({ campaign }) => {
             <div className="stat-item">
               <span className="stat-label">Campaign Goal:</span>
               <span className="stat-value">{formatCurrency(campaign.goalAmount)}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Wallet Balance:</span>
+              <span className="stat-value">{formatCurrency(balance)}</span>
             </div>
             <div className="stat-item">
               <span className="stat-label">Current Progress:</span>
@@ -128,10 +155,11 @@ const InvestPanel = ({ campaign }) => {
         </div>
       </form>
 
-      <div className="mt-lg p-md bg-info text-white rounded text-sm">
-        <strong>Phase 2 Note:</strong> Investment processing will be connected to Supabase database 
-        in the next phase. This is currently a frontend-only demo.
-      </div>
+      {error && (
+        <div className="mt-lg p-md bg-red-50 text-red-700 rounded text-sm">
+          {error}
+        </div>
+      )}
     </div>
   );
 };

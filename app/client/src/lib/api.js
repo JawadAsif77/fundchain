@@ -386,6 +386,86 @@ export const projectApi = {
 // CAMPAIGN API - Based on your campaigns table
 // =============================================================================
 export const campaignApi = {
+  // Ensure a category exists and return its id
+  async ensureCategoryByName(name) {
+    if (!name) return null;
+    try {
+      const { data: existing, error: selErr } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('name', name)
+        .single();
+      if (!selErr && existing) return existing.id;
+    } catch (_) {}
+    // Insert if not found
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .insert({ name, created_at: new Date().toISOString() })
+        .select('id')
+        .single();
+      if (error) return null;
+      return data?.id || null;
+    } catch (_) {
+      return null;
+    }
+  },
+
+  // Read-only helper to fetch a category id by name without creating it
+  async getCategoryIdByName(name) {
+    if (!name) return null;
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('name', name)
+        .single();
+      if (error) return null;
+      return data?.id || null;
+    } catch (_) {
+      return null;
+    }
+  },
+
+  // Create a campaign draft/pending review
+  async createCampaign(form, creatorId) {
+    try {
+      // Resolve creator_id from current session if not provided
+      let finalCreatorId = creatorId;
+      if (!finalCreatorId) {
+        const { data: authData } = await supabase.auth.getUser();
+        finalCreatorId = authData?.user?.id || null;
+      }
+
+      const category_id = await this.ensureCategoryByName(form.category);
+      const payload = {
+        creator_id: finalCreatorId,
+        category_id,
+        title: form.title,
+        slug: form.slug,
+        description: form.description,
+        short_description: form.summary || null,
+        image_url: form.imageUrl || null,
+        funding_goal: form.goalAmount,
+        min_investment: Math.max(10, Math.min(1000, Math.floor((form.goalAmount || 1000) / 100))),
+        end_date: form.deadline ? new Date(form.deadline).toISOString() : null,
+        status: 'pending_review',
+        verified: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const { data, error } = await supabase
+        .from('campaigns')
+        .insert(payload)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('💥 Create campaign error:', error);
+      return { success: false, error: error.message };
+    }
+  },
   // Get all campaigns with filters
   async getCampaigns(filters = {}) {
     try {
@@ -393,35 +473,71 @@ export const campaignApi = {
         .from('campaigns')
         .select(`
           *,
-          categories(name, icon),
-          users!campaigns_creator_id_fkey(full_name, avatar_url, is_verified)
+          categories(name, icon)
         `)
         .eq('status', 'active'); // Only show active campaigns
-      
+
       // Apply filters
       if (filters.category) {
-        query = query.eq('categories.name', filters.category);
+        const catId = await this.getCategoryIdByName(filters.category);
+        if (catId) query = query.eq('category_id', catId);
       }
-      
+
       if (filters.search) {
         query = query.or(`title.ilike.%${filters.search}%, description.ilike.%${filters.search}%`);
       }
-      
+
       query = query.order('created_at', { ascending: false });
-      
+
       const { data, error } = await query;
-      
+
       if (error) {
         console.error('❌ Failed to fetch campaigns:', error);
         // Fallback to mock data
         return { data: campaigns, count: campaigns.length };
       }
-      
+
       return { data: data || [], count: data?.length || 0 };
     } catch (error) {
       console.error('💥 Get campaigns error:', error);
       // Fallback to mock data
       return { data: campaigns, count: campaigns.length };
+    }
+  },
+
+  // Get campaigns created by a specific user (any status)
+  async getUserCampaigns(userId) {
+    try {
+      // Fallback: infer current user if not provided
+      let uid = userId;
+      if (!uid) {
+        const { data: authData } = await supabase.auth.getUser();
+        uid = authData?.user?.id || null;
+      }
+
+      console.log('🔍 API: getUserCampaigns called for userId:', uid);
+
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select(`
+          *,
+          categories(name, icon)
+        `)
+        .eq('creator_id', uid)
+        .order('created_at', { ascending: false });
+      
+      console.log('📊 API: getUserCampaigns query result. Error:', error, 'Data count:', data?.length);
+      
+      if (error) {
+        console.error('❌ API: getUserCampaigns error:', error);
+        throw error;
+      }
+      
+      console.log('✅ API: getUserCampaigns success. Returning', data?.length || 0, 'campaigns');
+      return { success: true, data: data || [] };
+    } catch (error) {
+      console.error('💥 Get user campaigns error:', error);
+      return { success: false, data: [], error: error.message };
     }
   },
 
@@ -432,8 +548,7 @@ export const campaignApi = {
         .from('campaigns')
         .select(`
           *,
-          categories(name, icon, color),
-          users!campaigns_creator_id_fkey(full_name, avatar_url, is_verified, bio)
+          categories(name, icon, color)
         `)
         .eq('slug', slug)
         .single();
@@ -450,6 +565,22 @@ export const campaignApi = {
     } catch (error) {
       console.error('💥 Get campaign error:', error);
       throw error;
+    }
+  },
+
+  // Get milestones for a campaign
+  async getMilestones(campaignId) {
+    try {
+      const { data, error } = await supabase
+        .from('milestones')
+        .select('id, title, description, target_amount, order_index, is_completed, created_at')
+        .eq('campaign_id', campaignId)
+        .order('order_index', { ascending: true });
+      if (error) throw error;
+      return { success: true, data: data || [] };
+    } catch (error) {
+      console.error('💥 Get milestones error:', error);
+      return { success: false, data: [], error: error.message };
     }
   }
 };
@@ -480,6 +611,144 @@ export const investmentApi = {
       console.error('💥 Get investments error:', error);
       return { data: [], count: 0 };
     }
+  }
+};
+
+// =============================================================================
+// WALLET API - Dummy wallet stored in users.preferences.wallet_balance
+// =============================================================================
+export const walletApi = {
+  async getBalance() {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return { success: false, balance: 0, error: 'Not authenticated' };
+    const { data, error } = await supabase
+      .from('users')
+      .select('preferences')
+      .eq('id', uid)
+      .single();
+    if (error) return { success: false, balance: 0, error: error.message };
+    const balance = Number(data?.preferences?.wallet_balance || 0);
+    return { success: true, balance };
+  },
+
+  async topUp(amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Invalid amount' };
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return { success: false, error: 'Not authenticated' };
+    // Read current preferences
+    const { data: current, error: readErr } = await supabase
+      .from('users')
+      .select('preferences')
+      .eq('id', uid)
+      .single();
+    if (readErr) return { success: false, error: readErr.message };
+    const prefs = current?.preferences || {};
+    const nextBalance = Number(prefs.wallet_balance || 0) + Number(amount);
+    const nextPrefs = { ...prefs, wallet_balance: nextBalance };
+    const { error: updErr } = await supabase
+      .from('users')
+      .update({ preferences: nextPrefs, updated_at: new Date().toISOString() })
+      .eq('id', uid);
+    if (updErr) return { success: false, error: updErr.message };
+    return { success: true, balance: nextBalance };
+  },
+
+  async invest(campaignId, amount) {
+    if (!campaignId) return { success: false, error: 'Missing campaign' };
+    if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Invalid amount' };
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return { success: false, error: 'Not authenticated' };
+    // Check balance
+    const bal = await this.getBalance();
+    if (!bal.success) return bal;
+    if (bal.balance < amount) return { success: false, error: 'Insufficient balance' };
+
+    // Try to insert a new confirmed investment
+    const insertPayload = {
+      investor_id: uid,
+      campaign_id: campaignId,
+      amount: Number(amount),
+      status: 'confirmed',
+      investment_date: new Date().toISOString(),
+      confirmed_at: new Date().toISOString()
+    };
+
+    let inv = null;
+    let invErr = null;
+    try {
+      const res = await supabase
+        .from('investments')
+        .insert(insertPayload)
+        .select('*')
+        .single();
+      inv = res.data;
+      invErr = res.error || null;
+    } catch (e) {
+      invErr = e;
+    }
+
+    // If duplicate (one investment per user per campaign), increment existing investment instead
+    if (invErr && (invErr.code === '23505' || String(invErr.message || '').includes('investments_investor_id_campaign_id_key'))) {
+      // Fetch existing investment
+      const { data: existing, error: fetchErr } = await supabase
+        .from('investments')
+        .select('*')
+        .eq('investor_id', uid)
+        .eq('campaign_id', campaignId)
+        .single();
+      if (fetchErr || !existing) {
+        return { success: false, error: (fetchErr?.message || 'Existing investment not found') };
+      }
+
+      const newTotalAmount = Number(existing.amount || 0) + Number(amount);
+
+      // If previously confirmed, temporarily set to pending to let trigger subtract old amount
+      if (existing.status === 'confirmed') {
+        const { error: toPendingErr } = await supabase
+          .from('investments')
+          .update({ status: 'pending' })
+          .eq('id', existing.id);
+        if (toPendingErr) {
+          return { success: false, error: toPendingErr.message };
+        }
+      }
+
+      // Now set new amount and confirm again so trigger re-adds with new total
+      const { data: upd, error: updErr } = await supabase
+        .from('investments')
+        .update({ amount: newTotalAmount, status: 'confirmed', confirmed_at: new Date().toISOString() })
+        .eq('id', existing.id)
+        .select('*')
+        .single();
+      if (updErr) {
+        return { success: false, error: updErr.message };
+      }
+      inv = upd;
+    } else if (invErr) {
+      // Other errors
+      return { success: false, error: invErr.message };
+    }
+
+    // Decrement balance
+    const { data: current, error: readErr } = await supabase
+      .from('users')
+      .select('preferences')
+      .eq('id', uid)
+      .single();
+    if (readErr) return { success: false, error: readErr.message };
+    const prefs = current?.preferences || {};
+    const nextBalance = Math.max(0, Number(prefs.wallet_balance || 0) - Number(amount));
+    const nextPrefs = { ...prefs, wallet_balance: nextBalance };
+    const { error: updErr } = await supabase
+      .from('users')
+      .update({ preferences: nextPrefs, updated_at: new Date().toISOString() })
+      .eq('id', uid);
+    if (updErr) return { success: false, error: updErr.message };
+
+    return { success: true, balance: nextBalance, investment: inv };
   }
 };
 
@@ -540,16 +809,18 @@ export const getUserRoleStatus = async (userId) => {
     const hasRole = !!(data?.role && validRoles.includes(data.role));
     
     // For creators, check if they have KYC verification or company data
-    let companyData = null;
-    let hasKycVerification = false;
+  let companyData = null;
+  let hasKycVerification = false;
+  let kycStatusValue = null; // 'pending' | 'approved' | null
     
     if (data?.role === 'creator') {
       try {
         // Check for KYC verification first
-        const kycStatus = await kycApi.getKycStatus(userId);
-        hasKycVerification = !!(kycStatus && (kycStatus.verification_status === 'pending' || kycStatus.verification_status === 'approved'));
-        
-        // Also check for company data
+        const kyc = await kycApi.getKycStatus(userId);
+        kycStatusValue = kyc?.verification_status || null;
+        hasKycVerification = !!(kyc && (kyc.verification_status === 'pending' || kyc.verification_status === 'approved'));
+
+        // Also check for company data (legacy gate; no longer required once verified)
         const companies = await companyApi.getUserCompanies(userId);
         companyData = companies?.length > 0 ? companies[0] : null;
       } catch (error) {
@@ -561,10 +832,13 @@ export const getUserRoleStatus = async (userId) => {
       hasRole,
       // Normalize to a valid role with investor as safe default
       role: validRoles.includes(data?.role) ? data.role : 'investor',
-      isVerified: data?.is_verified || false,
+      isVerified: data?.is_verified === 'yes',
       verificationLevel: data?.verification_level || 'basic',
       companyData,
-      hasKycVerification
+      hasKycVerification,
+      // New fields used by Dashboard
+      kycStatus: kycStatusValue,
+      isKYCVerified: (data?.is_verified === 'yes' || kycStatusValue === 'approved')
     };
   } catch (error) {
     console.error('Error getting user role status:', error);
@@ -581,46 +855,101 @@ export const getUserRoleStatus = async (userId) => {
 
 export const getPublicProjects = async () => {
   try {
-    return await projectApi.getUserProjects(); // Get all projects (public)
+    const data = await projectApi.getUserProjects(); // Get all projects (public)
+    return { success: true, data };
   } catch (error) {
     console.error('Error getting public projects:', error);
-    return { data: [] };
+    return { success: false, data: [], error: error.message };
   }
 };
 
 export const getUserProjects = async (userId) => {
   try {
     const data = await projectApi.getUserProjects(userId);
-    return { data };
+    return { success: true, data };
   } catch (error) {
     console.error('Error getting user projects:', error);
-    return { data: [] };
+    return { success: false, data: [], error: error.message };
   }
 };
 
 export const getUserInvestments = async (userId) => {
   try {
-    return await investmentApi.getUserInvestments(userId);
+    const { data } = await investmentApi.getUserInvestments(userId);
+    return { success: true, data };
   } catch (error) {
     console.error('Error getting user investments:', error);
-    return { data: [] };
+    return { success: false, data: [], error: error.message };
   }
 };
 
-export const createProjectWithMilestones = async (projectData) => {
+export const getUserCampaigns = async (userId) => {
   try {
-    return await projectApi.create(projectData);
+    const res = await campaignApi.getUserCampaigns(userId);
+    return res?.success ? res : { success: true, data: res?.data || [] };
   } catch (error) {
-    console.error('Error creating project with milestones:', error);
-    throw error;
+    console.error('Error getting user campaigns:', error);
+    return { success: false, data: [], error: error.message };
+  }
+};
+
+export const createProjectWithMilestones = async (projectData, milestones = []) => {
+  try {
+    // Create campaign first (pending review)
+    let creatorId = projectData.creator_id; // optional, we will infer from auth if not provided elsewhere
+    if (!creatorId) {
+      const { data: authData } = await supabase.auth.getUser();
+      creatorId = authData?.user?.id || null;
+    }
+    const result = await campaignApi.createCampaign({
+      title: projectData.title,
+      slug: projectData.slug,
+      description: projectData.description,
+      summary: projectData.summary,
+      category: projectData.category,
+      goalAmount: projectData.goalAmount,
+      deadline: projectData.deadline,
+      imageUrl: projectData.imageUrl,
+  }, creatorId || null);
+    if (!result.success) return result;
+
+    const campaign = result.data;
+
+    // Insert milestones mapped to campaigns.milestones
+    if (Array.isArray(milestones) && milestones.length > 0) {
+      const rows = milestones.map((m, idx) => ({
+        campaign_id: campaign.id,
+        title: m.name || `Milestone ${idx + 1}`,
+        description: m.description || '',
+        target_amount: projectData.goalAmount && m.payoutPercentage
+          ? (Number(projectData.goalAmount) * Number(m.payoutPercentage) / 100)
+          : null,
+        order_index: idx + 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+      const { error: mErr } = await supabase.from('milestones').insert(rows);
+      if (mErr) {
+        console.warn('Milestones insert warning:', mErr.message);
+      }
+    }
+
+    return { success: true, data: campaign };
+  } catch (error) {
+    console.error('Error creating campaign with milestones:', error);
+    return { success: false, error: error.message };
   }
 };
 
 export const generateSlug = (title) => {
-  return title
+  const baseSlug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
+  
+  // Add timestamp to ensure uniqueness
+  const timestamp = Date.now().toString(36);
+  return `${baseSlug}-${timestamp}`;
 };
 
 export const validateMilestones = (milestones) => {
@@ -628,20 +957,68 @@ export const validateMilestones = (milestones) => {
     return { isValid: false, error: 'At least one milestone is required' };
   }
 
+  let totalPct = 0;
   for (let i = 0; i < milestones.length; i++) {
-    const milestone = milestones[i];
-    if (!milestone.title?.trim()) {
-      return { isValid: false, error: `Milestone ${i + 1}: Title is required` };
+    const m = milestones[i];
+    if (!m.name?.trim()) {
+      return { isValid: false, error: `Milestone ${i + 1}: Name is required` };
     }
-    if (!milestone.description?.trim()) {
+    if (!m.description?.trim()) {
       return { isValid: false, error: `Milestone ${i + 1}: Description is required` };
     }
-    if (!milestone.amount || milestone.amount <= 0) {
-      return { isValid: false, error: `Milestone ${i + 1}: Valid amount is required` };
+    const pct = Number(m.payoutPercentage);
+    if (!Number.isFinite(pct) || pct <= 0) {
+      return { isValid: false, error: `Milestone ${i + 1}: Payout percentage must be > 0` };
     }
+    totalPct += pct;
+  }
+
+  if (Math.abs(totalPct - 100) > 0.01) {
+    return { isValid: false, error: 'Total payout percentages across milestones must equal 100%' };
   }
 
   return { isValid: true };
+};
+
+// =============================================================================
+// EXPORTS
+// =============================================================================
+// =============================================================================
+// ADMIN API - approvals
+// =============================================================================
+export const adminApi = {
+  async approveCampaign(campaignId) {
+    try {
+      const { data, error } = await supabase
+        .from('campaigns')
+        .update({ status: 'active', verified: true, updated_at: new Date().toISOString() })
+        .eq('id', campaignId)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('💥 Approve campaign error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+  async rejectCampaign(campaignId, reason = null) {
+    try {
+      const update = { status: 'cancelled', verified: false, updated_at: new Date().toISOString() };
+      if (reason) update.external_links = { review_reason: reason };
+      const { data, error } = await supabase
+        .from('campaigns')
+        .update(update)
+        .eq('id', campaignId)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('💥 Reject campaign error:', error);
+      return { success: false, error: error.message };
+    }
+  }
 };
 
 // =============================================================================
@@ -653,6 +1030,8 @@ export default {
   companyApi,
   projectApi,
   campaignApi,
+  adminApi,
   investmentApi,
+  walletApi,
   notificationApi
 };
