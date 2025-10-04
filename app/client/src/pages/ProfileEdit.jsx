@@ -27,6 +27,7 @@ const Profile = () => {
     full_name: '',
     username: '',
     email: '',
+    // role is immutable after first selection; keep for display only
     role: 'investor',
     avatar_url: '',
     bio: '',
@@ -136,7 +137,8 @@ const Profile = () => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      // prevent any changes to role from this page
+      ...(name === 'role' ? {} : { [name]: value })
     }));
   };
 
@@ -179,7 +181,7 @@ const Profile = () => {
     const updates = {
       full_name: formData.full_name || null,
       username: formData.username || null,
-      role: formData.role || 'investor',
+      // Do not allow changing role from profile page
       avatar_url: formData.avatar_url || null,
       bio: formData.bio || null,
       location: formData.location || null,
@@ -268,7 +270,7 @@ const Profile = () => {
   };
 
   const handleContinue = () => {
-    const userRole = roleStatus?.role || formData.role;
+    const userRole = roleStatus?.role || profile?.role || formData.role;
     if (userRole === 'creator') {
       console.log('Creator completing profile, redirecting to dashboard...');
       navigate('/dashboard');
@@ -283,13 +285,8 @@ const Profile = () => {
   };
 
   const handleSkip = () => {
-    const userRole = roleStatus?.role || formData.role;
+    const userRole = roleStatus?.role || profile?.role || formData.role;
     console.log('User skipping profile completion, role:', userRole);
-    
-    // Save minimal data (at least the role) before skipping
-    if (formData.role && formData.role !== (roleStatus?.role || '')) {
-      handleSubmit({ preventDefault: () => {} }); // Save role if it was changed
-    }
     
     // Redirect based on role
     if (userRole === 'investor') {
@@ -518,25 +515,24 @@ const Profile = () => {
 
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
-                      Role *
+                      Role
                     </label>
-                    <select
-                      name="role"
-                      value={formData.role}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '0.5rem',
-                        fontSize: '1rem',
-                        backgroundColor: '#fff'
-                      }}
-                    >
-                      <option value="investor">💰 Investor</option>
-                      <option value="creator">🚀 Creator</option>
-                    </select>
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.5rem 0.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '9999px',
+                      backgroundColor: '#f9fafb',
+                      color: '#374151',
+                      width: 'fit-content'
+                    }}>
+                      <span style={{ fontSize: '0.9rem' }}>
+                        {roleStatus?.role === 'creator' || formData.role === 'creator' ? '🚀 Creator' : '💰 Investor'}
+                      </span>
+                      <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>(locked)</span>
+                    </div>
                   </div>
 
                 </div>
@@ -789,7 +785,7 @@ const Profile = () => {
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    Go to {formData.role === 'creator' ? 'Dashboard' : 'Explore'}
+                    Go to {(roleStatus?.role || formData.role) === 'creator' ? 'Dashboard' : 'Explore'}
                   </button>
                 </div>
               </div>

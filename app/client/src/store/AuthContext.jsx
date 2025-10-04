@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { auth, db, supabase } from '../lib/supabase.js';
 import { getUserRoleStatus } from '../lib/api.js';
 
@@ -199,13 +199,13 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Add timeout to prevent infinite loading (increased from 8s to 30s)
+    // Add timeout to prevent infinite loading - reduce to 3 seconds for snappier UX
     const timeout = setTimeout(() => {
       if (mounted) {
         console.log('AuthContext: Loading timeout reached, forcing loading to false');
         setLoading(false);
       }
-    }, 30000); // Increased to 30 second timeout
+    }, 3000);
 
     getInitialSession();
 
@@ -276,39 +276,52 @@ export const AuthProvider = ({ children }) => {
   // Session validation helper
   const validateSession = async () => {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
+      // Apply a short timeout so we never block UI on session checks
+      const withTimeout = (p, ms = 12000) => new Promise((resolve, reject) => {
+        const id = setTimeout(() => reject(new Error('getSession timed out')), ms);
+        p.then((v) => { clearTimeout(id); resolve(v); })
+         .catch((e) => { clearTimeout(id); reject(e); });
+      });
+
+      const { data: { session }, error } = await withTimeout(supabase.auth.getSession());
+
       if (error) {
         console.warn('AuthContext: Session validation error:', error);
         return false;
       }
-      
+
       if (!session || !session.user) {
         console.warn('AuthContext: No valid session found');
         return false;
       }
-      
-      // Check if token is about to expire (within 5 minutes)
-      const expiresAt = session.expires_at * 1000; // Convert to milliseconds
+
+      // Only force a refresh if the token is actually expired.
+      const expiresAtMs = (session.expires_at || 0) * 1000;
       const now = Date.now();
-      const fiveMinutes = 5 * 60 * 1000;
-      
-      if (expiresAt - now < fiveMinutes) {
-        console.log('AuthContext: Token expiring soon, refreshing...');
-        const { error: refreshError } = await supabase.auth.refreshSession();
+      if (expiresAtMs && expiresAtMs <= now) {
+        console.log('AuthContext: Token expired, refreshing...');
+        const withRefreshTimeout = (p, ms = 12000) => new Promise((resolve) => {
+          const id = setTimeout(() => resolve({ data: null, error: new Error('refresh timed out') }), ms);
+          p.then((v) => { clearTimeout(id); resolve(v); })
+           .catch((e) => { clearTimeout(id); resolve({ data: null, error: e }); });
+        });
+        const { data, error: refreshError } = await withRefreshTimeout(supabase.auth.refreshSession());
         if (refreshError) {
           console.error('AuthContext: Token refresh failed:', refreshError);
           return false;
         }
-        console.log('✅ Token refreshed successfully');
+        return !!data?.session?.user;
       }
-      
+
       return true;
     } catch (error) {
       console.error('AuthContext: Session validation failed:', error);
       return false;
     }
   };
+
+  // Serialize profile updates to avoid concurrent state thrash
+  const saveQueueRef = useRef(Promise.resolve());
 
   const loadUserRoleStatus = async (userId) => {
     try {
@@ -526,26 +539,36 @@ export const AuthProvider = ({ children }) => {
         
         if (!user) throw new Error('No user logged in');
         
-        // Validate session before attempting update
-        const isSessionValid = await validateSession();
-        if (!isSessionValid) {
-          throw new Error('Session expired. Please log in again.');
-        }
+          // Don't block on pre-validation; supabase client auto-refreshes.
+          // We'll handle JWT/session failures in the retry block below.
         
         setError(null);
         console.log('AuthContext: Updating profile for user:', user.id, 'with updates:', updates);
         
-        // Use the correct API function
-        const result = await userApi.updateProfile(user.id, updates);
-        
-        if (result.error) {
-          setError(result.error.message);
-          throw result.error;
+        // Use the correct API function with a client-side timeout safeguard
+        const withTimeout = (p, ms = 15000) => {
+          let t;
+          const timeout = new Promise((_, rej) => {
+            t = setTimeout(() => rej(new Error('Profile update timed out')), ms);
+          });
+          return Promise.race([p.finally(() => clearTimeout(t)), timeout]);
+        };
+        const result = await withTimeout(userApi.updateProfile(user.id, updates));
+
+        // Accept both normalized shape { data } and raw row objects for backward compat
+        const updated = result && Object.prototype.hasOwnProperty.call(result, 'data')
+          ? result.data
+          : result;
+
+        if (!updated) {
+          const err = new Error('Profile update returned no data');
+          setError(err.message);
+          throw err;
         }
-        
-        console.log('✅ Profile update successful:', result.data);
-        setProfile(result.data);
-        return result.data;
+
+        console.log('✅ Profile update successful:', updated);
+        setProfile(updated);
+        return updated;
         
       } catch (error) {
         console.error(`❌ Profile update attempt ${attempt} failed:`, error);
@@ -558,6 +581,17 @@ export const AuthProvider = ({ children }) => {
           error.code === 'PGRST301'
         )) {
           console.log(`🔄 Retrying profile update in 2 seconds...`);
+          // Attempt an explicit token refresh before retrying
+          try {
+            const { error: refreshError } = await supabase.auth.refreshSession();
+            if (refreshError) {
+              console.warn('Token refresh before retry failed:', refreshError);
+            } else {
+              console.log('Token refreshed before retry');
+            }
+          } catch (e) {
+            console.warn('Token refresh threw before retry:', e);
+          }
           await new Promise(resolve => setTimeout(resolve, 2000));
           return updateWithRetry();
         }
@@ -567,7 +601,11 @@ export const AuthProvider = ({ children }) => {
       }
     };
     
-    return updateWithRetry();
+    // Chain updates so they execute sequentially
+    saveQueueRef.current = saveQueueRef.current
+      .catch(() => {})
+      .then(() => updateWithRetry());
+    return saveQueueRef.current;
   };
 
   const resetPassword = async (email) => {
@@ -599,7 +637,7 @@ export const AuthProvider = ({ children }) => {
     if (!profile) return user;
 
     // Merge auth user, profile data, and role status once all are available
-    return {
+    const merged = {
       ...user,
       ...profile,
       // Keep some auth-specific fields
@@ -610,70 +648,87 @@ export const AuthProvider = ({ children }) => {
       // Phase 3 role system
       roleStatus,
       // Legacy compatibility
-      displayName: profile.full_name,
-      role: profile.is_accredited_investor ? 'accredited_investor' : 'investor'
+      displayName: profile.full_name
     };
+
+    // Ensure we expose a normalized app role consistently across the app
+    const appRole = roleStatus?.role || profile?.role || 'investor';
+    merged.appRole = appRole;
+    // Backward-compat: many places use user.role; override Supabase's 'authenticated'
+    merged.role = appRole;
+
+    return merged;
   };
 
-  // Helper to determine if user needs role selection
-  const needsRoleSelection = () => {
+  // Helper to determine if user needs role selection - memoized to prevent infinite re-renders
+  const needsRoleSelection = useMemo(() => {
     if (!user) {
-      console.log('needsRoleSelection: No user');
       return false;
     }
     if (!roleStatus) {
-      console.log('needsRoleSelection: Role status not yet loaded');
       return false;
     }
-    const result = roleStatus.hasRole === false;
-    console.log('needsRoleSelection result:', result, 'roleStatus:', roleStatus);
-    return result;
-  };
+    // Both investor and creator are valid end-states; only require selection if role is missing/unknown
+    const validRoles = ['investor', 'creator', 'admin'];
+    return !(roleStatus.role && validRoles.includes(roleStatus.role));
+  }, [user, roleStatus]);
 
-  // Helper to determine if user needs KYC
-  const needsKYC = () => {
+  // Helper to determine if user needs KYC - memoized to prevent infinite re-renders
+  const needsKYC = useMemo(() => {
     if (!user) {
-      console.log('needsKYC: No user');
       return false;
     }
     if (!roleStatus) {
-      console.log('needsKYC: Role status not yet loaded');
       return false;
     }
     if (roleStatus.role !== 'creator') {
-      console.log('needsKYC: User is not a creator');
       return false;
     }
-    const result = !roleStatus.companyData;
-    console.log('needsKYC result:', result, 'roleStatus:', roleStatus);
+    // User doesn't need KYC if they have already submitted verification or have company data
+    const result = !roleStatus.companyData && !roleStatus.hasKycVerification;
     return result;
-  };
+  }, [user, roleStatus]);
 
-  // Helper to determine if user is fully onboarded
-  const isFullyOnboarded = () => {
+  // Helper to determine if user is fully onboarded - memoized to prevent infinite re-renders
+  const isFullyOnboarded = useMemo(() => {
     if (!user) {
-      console.log('isFullyOnboarded: No user');
       return false;
     }
     if (!roleStatus) {
-      console.log('isFullyOnboarded: Role status not yet loaded');
       return false;
     }
     if (!roleStatus.hasRole) {
-      console.log('isFullyOnboarded: User has no role');
       return false;
     }
 
     if (roleStatus.role === 'creator') {
       const result = !!roleStatus.companyData;
-      console.log('isFullyOnboarded (creator) result:', result, 'roleStatus:', roleStatus);
       return result;
     }
 
-    const result = true;
-    console.log('isFullyOnboarded result:', result, 'roleStatus:', roleStatus);
+    return true;
+  }, [user, roleStatus]);
+
+  // Helper to determine if user needs profile completion - memoized to prevent infinite re-renders
+  const needsProfileCompletion = useMemo(() => {
+    if (!user) {
+      return false;
+    }
+    if (!profile) {
+      // If profile is still loading, don't force redirect
+      return false;
+    }
+
+    const requiredFields = ['full_name', 'username'];
+    const result = requiredFields.some((field) => {
+      const value = profile?.[field];
+      if (typeof value === 'string') {
+        return value.trim() === '';
+      }
+      return !value;
+    });
     return result;
-  };
+  }, [user, profile]);
 
   const value = {
     user: getCurrentUser(),
@@ -690,19 +745,7 @@ export const AuthProvider = ({ children }) => {
     // Helper methods
     isAuthenticated: !!user,
     isEmailConfirmed: !!user?.email_confirmed_at,
-    needsProfileCompletion: () => {
-      if (!user) return false;
-      if (!profile) return true;
-
-      const requiredFields = ['full_name', 'username'];
-      return requiredFields.some((field) => {
-        const value = profile?.[field];
-        if (typeof value === 'string') {
-          return value.trim() === '';
-        }
-        return !value;
-      });
-    },
+    needsProfileCompletion,
     // Phase 3 onboarding helpers
     needsRoleSelection,
     needsKYC,

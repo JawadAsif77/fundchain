@@ -149,22 +149,18 @@ const Register = () => {
         // Route to profile page for role selection and basic profile completion
         console.log('Session available, redirecting to profile page for role selection...');
         setStatusMessage(prev => prev + ' Redirecting to profile setup...');
-        setTimeout(() => {
-          console.log('Executing navigation to profile...');
-          navigate('/profile', { replace: true });
-        }, 2000);
+        // Immediate redirect
+        navigate('/profile', { replace: true });
       } else {
         console.log('No session - email confirmation required, redirecting to login...');
         setStatusMessage('Please check your email to confirm your account.');
-        setTimeout(() => {
-          console.log('Executing navigation to login...');
-          navigate('/login', {
-            replace: true,
-            state: {
-              message: 'Please check your email and click the confirmation link to complete your registration.'
-            }
-          });
-        }, 2000);
+        // Immediate redirect
+        navigate('/login', {
+          replace: true,
+          state: {
+            message: 'Please check your email and click the confirmation link to complete your registration.'
+          }
+        });
       }
     } catch (err) {
       console.error('Registration error:', err);

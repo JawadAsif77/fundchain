@@ -8,8 +8,6 @@ import { investments } from '../mock/investments';
 import { getPublicProjects, getUserProjects, getUserInvestments } from '../lib/api.js';
 
 const Dashboard = () => {
-  console.log('Dashboard component rendering...');
-  
   // ALL HOOKS MUST BE DECLARED FIRST - BEFORE ANY RETURNS OR CONDITIONS
   const { user, profile, roleStatus, isFullyOnboarded, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
@@ -18,20 +16,22 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Debug logging
-  console.log('Dashboard - Auth State:', {
-    user: user ? { id: user.id, email: user.email } : null,
-    profile: profile ? { id: profile.id, role: profile.role, is_verified: profile.is_verified } : null,
-    roleStatus,
-    isFullyOnboarded,
-    authLoading
-  });
+  // Reduced debug logging for better performance
+  const debugLog = process.env.NODE_ENV === 'development';
+  
+  if (debugLog) {
+    console.log('Dashboard - Auth State:', {
+      user: user ? { id: user.id, email: user.email } : null,
+      profile: profile ? { id: profile.id, role: profile.role, is_verified: profile.is_verified } : null,
+      roleStatus,
+      isFullyOnboarded,
+      authLoading
+    });
+  }
 
-  console.log('Dashboard - user:', user);
-  console.log('Dashboard - roleStatus:', roleStatus);
-
-  const isCreator = roleStatus?.role === 'creator';
-  const isInvestor = roleStatus?.role === 'investor';
+  const role = roleStatus?.role || 'investor';
+  const isCreator = role === 'creator';
+  const isInvestor = role === 'investor';
   const kycStatus = roleStatus?.kycStatus;
   const showKYCPendingBanner = isCreator && (kycStatus === 'pending' || (roleStatus?.companyData && !roleStatus?.isKYCVerified));
 
@@ -41,98 +41,110 @@ const Dashboard = () => {
     if (!loading && !authLoading && user && roleStatus) {
       // If user is admin, redirect to admin panel
       if (profile?.role === 'admin') {
-        console.log('Admin user detected, redirecting to admin panel...');
+        if (debugLog) console.log('Admin user detected, redirecting to admin panel...');
         navigate('/admin', { replace: true });
         return;
       }
 
       if (!roleStatus?.hasRole) {
-        console.log('User has no role, redirecting to profile for role selection...');
+        if (debugLog) console.log('User has no role, redirecting to profile for role selection...');
         navigate('/profile', { replace: true });
         return;
       }
 
-      // For creators: always check verification status
-      if (roleStatus?.role === 'creator') {
+  // For creators: always check verification status
+  if (role === 'creator') {
         // Check user's verification status from the profile object
         const userVerificationStatus = profile?.is_verified || 'no';
         
-        console.log('Creator verification status:', userVerificationStatus);
+        if (debugLog) console.log('Creator verification status:', userVerificationStatus);
         
         // If verification status is 'no', redirect to KYC
         if (userVerificationStatus === 'no') {
-          console.log('Creator has no verification, redirecting to KYC...');
+          if (debugLog) console.log('Creator has no verification, redirecting to KYC...');
           navigate('/kyc', { replace: true });
           return;
         }
         
         // If no KYC submission exists yet (backward compatibility)
         if (!roleStatus?.companyData && userVerificationStatus !== 'pending' && userVerificationStatus !== 'yes') {
-          console.log('Creator needs to complete verification, redirecting to KYC...');
+          if (debugLog) console.log('Creator needs to complete verification, redirecting to KYC...');
           navigate('/kyc', { replace: true });
           return;
         }
       }
 
-      // Both investors and creators can access dashboard (if creators have submitted KYC)
-      // This is now the universal dashboard with role-specific content
+    // Both investors and creators can access dashboard (creators may see KYC prompts)
     }
-  }, [user, profile, roleStatus, loading, authLoading, navigate]);
+  }, [user, profile, roleStatus, loading, authLoading, navigate, debugLog]);
 
   // Load projects/campaigns based on user role
   useEffect(() => {
+    let mounted = true;
+    
     const loadData = async () => {
+      if (!mounted) return;
+      
       try {
-        console.log('Dashboard loadData started');
-        console.log('roleStatus:', roleStatus);
-        console.log('isFullyOnboarded():', isFullyOnboarded());
+        if (debugLog) {
+          console.log('Dashboard loadData started');
+          console.log('roleStatus:', roleStatus);
+          console.log('isFullyOnboarded():', isFullyOnboarded());
+        }
         
         const fullyOnboarded = isFullyOnboarded();
-        if (roleStatus?.role === 'creator' && fullyOnboarded) {
-          console.log('Loading creator projects...');
+      if (role === 'creator' && fullyOnboarded) {
+          if (debugLog) console.log('Loading creator projects...');
           // Load creator's projects from database
           const result = await getUserProjects();
-          console.log('getUserProjects result:', result);
-          if (result.success) {
+          if (debugLog) console.log('getUserProjects result:', result);
+          if (result.success && mounted) {
             setProjects(result.data || []);
           }
-        } else if (roleStatus?.role === 'investor' && fullyOnboarded) {
-          console.log('Loading investor investments...');
+      } else if (role === 'investor' && fullyOnboarded) {
+          if (debugLog) console.log('Loading investor investments...');
           // Load investor's investments from database
           const result = await getUserInvestments();
-          console.log('getUserInvestments result:', result);
-          if (result.success) {
+          if (debugLog) console.log('getUserInvestments result:', result);
+          if (result.success && mounted) {
             setInvestments(result.data || []);
           }
         } else {
-          console.log('User not fully onboarded or no role, skipping data loading');
+          if (debugLog) console.log('User not fully onboarded or no role, skipping data loading');
         }
       } catch (error) {
         console.error('Error loading dashboard data:', error);
       } finally {
-        console.log('Dashboard loadData finished, setting loading to false');
-        setLoading(false);
+        if (mounted) {
+          if (debugLog) console.log('Dashboard loadData finished, setting loading to false');
+          setLoading(false);
+        }
       }
     };
 
-    // Add timeout to prevent infinite loading
+    // Shorter timeout for better UX
     const timeout = setTimeout(() => {
-      console.log('Dashboard loading timeout reached, forcing loading to false');
-      setLoading(false);
-    }, 5000); // 5 second timeout
+      if (mounted) {
+        if (debugLog) console.log('Dashboard loading timeout reached, forcing loading to false');
+        setLoading(false);
+      }
+    }, 3000); // Reduced to 3 second timeout
 
-    if (roleStatus) {
-      console.log('roleStatus exists, calling loadData');
+    if (roleStatus && !authLoading) {
+      if (debugLog) console.log('roleStatus exists and auth not loading, calling loadData');
       loadData();
     } else if (!authLoading) {
-      console.log('No roleStatus and auth not loading, setting loading to false');
+      if (debugLog) console.log('No roleStatus and auth not loading, setting loading to false');
       setLoading(false);
     } else {
-      console.log('No roleStatus but auth still loading, waiting...');
+      if (debugLog) console.log('Auth still loading, waiting...');
     }
 
-    return () => clearTimeout(timeout);
-  }, [roleStatus, authLoading]); // Include authLoading in dependencies
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+    };
+  }, [roleStatus, authLoading, isFullyOnboarded]); // Optimized dependencies
 
   // Get user's investments (use state from database)
   const userInvestments = useMemo(() => {
@@ -226,14 +238,16 @@ const Dashboard = () => {
     );
   }
 
-  // Debug logging
-  console.log('Dashboard render - loading:', loading);
-  console.log('Dashboard render - user:', user);
-  console.log('Dashboard render - roleStatus:', roleStatus);
+  // Debug logging (only in development)
+  if (debugLog) {
+    console.log('Dashboard render - loading:', loading);
+    console.log('Dashboard render - user:', user);
+    console.log('Dashboard render - roleStatus:', roleStatus);
+  }
 
   // Safety check - show loading if no user
   if (!user) {
-    console.log('Dashboard - No user found, showing loading state');
+    if (debugLog) console.log('Dashboard - No user found, showing loading state');
     return (
       <div style={{ 
         minHeight: '80vh', 
@@ -601,7 +615,7 @@ const Dashboard = () => {
             color: '#1f2937',
             marginBottom: '8px'
           }}>
-            {roleStatus?.role === 'investor' ? 'Investor Dashboard' : 'Creator Dashboard'}
+        {role === 'investor' ? 'Investor Dashboard' : 'Creator Dashboard'}
           </h1>
           <p style={{ 
             fontSize: '16px', 

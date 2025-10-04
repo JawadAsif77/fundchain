@@ -14,8 +14,12 @@ const Campaign = () => {
   const [campaignMilestones, setCampaignMilestones] = useState([]);
 
   useEffect(() => {
-    // Simulate API call delay
+    let mounted = true;
+    
+    // Simulate API call delay (reduced for better UX)
     const timer = setTimeout(() => {
+      if (!mounted) return;
+      
       // PHASE 2: Replace with actual API call to Supabase
       const foundCampaign = campaigns.find(c => c.slug === slug);
       setCampaign(foundCampaign);
@@ -26,9 +30,12 @@ const Campaign = () => {
       }
       
       setLoading(false);
-    }, 500);
+    }, 200); // Reduced from 500ms to 200ms
 
-    return () => clearTimeout(timer);
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
   }, [slug]);
 
   const formatCurrency = (amount) => {

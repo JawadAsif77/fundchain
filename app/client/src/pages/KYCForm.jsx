@@ -1,15 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext.jsx';
+import { kycApi } from '../lib/api.js';
 import { supabase } from '../lib/supabase.js';
 
 const KYCForm = () => {
   const [currentStep, setCurrentStep] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const navigate = useNavigate();
   const { user, refreshUserData } = useAuth();
+
+  // Store timeout ref to clear it if needed
+  const redirectTimeoutRef = React.useRef(null);
 
   useEffect(() => {
     if (!user) {
@@ -17,25 +22,47 @@ const KYCForm = () => {
       return;
     }
 
-    // Check if user already has pending or approved verification
-    if (user.is_verified === 'yes') {
-      setStatusMessage('Your verification is already approved. Redirecting to dashboard...');
+    // Investors should never be on KYC page; redirect them to explore/dashboard
+    if (user?.role === 'investor') {
       navigate('/dashboard', { replace: true });
-    } else if (user.is_verified === 'pending') {
-      setStatusMessage('Your verification is pending review. Redirecting to dashboard...');
-      navigate('/dashboard', { replace: true });
+      return;
     }
-  }, [user, navigate]);
 
-  // Form data state - matching user_verifications table
+    // Only check verification status if not already redirecting
+    if (!isRedirecting) {
+      // Check if user already has verification status
+      if (user.is_verified === true || user.is_verified === 'approved') {
+        console.log('User verification approved, redirecting to dashboard');
+        setStatusMessage('Your verification is already approved. Redirecting to dashboard...');
+        setIsRedirecting(true);
+        // Immediate redirect for approved users
+        navigate('/dashboard', { replace: true });
+      } else if (user.is_verified === 'pending') {
+        console.log('User verification pending, redirecting to dashboard');
+        setStatusMessage('Your verification is pending review. Redirecting to dashboard...');
+        setIsRedirecting(true);
+        // Immediate redirect for pending users too
+        navigate('/dashboard', { replace: true });
+      }
+    }
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+      }
+    };
+  }, [user, navigate, isRedirecting]);
+
+  // Form data state - matching your user_verifications table exactly
   const [formData, setFormData] = useState({
-    // Personal Information
+    // Personal Information (required fields in your schema)
     legal_name: '',
     phone: '',
     legal_email: user?.email || '',
     business_email: '',
     
-    // Address Information
+    // Address Information (stored as JSONB in legal_address)
     address_line1: '',
     address_line2: '',
     city: '',
@@ -43,11 +70,11 @@ const KYCForm = () => {
     postal_code: '',
     country: '',
     
-    // Document uploads
-    id_document: null,
-    selfie_image: null,
+    // Document uploads (URLs stored in your schema)
+    id_document_url: '',
+    selfie_image_url: '',
     
-    // Verification type
+    // Verification type (your enum: individual/business)
     verification_type: 'individual'
   });
 
@@ -149,38 +176,25 @@ const KYCForm = () => {
       return;
     }
 
-    setLoading(true);
+    if (!user?.id) {
+      setError('You must be logged in to submit KYC verification');
+      return;
+    }
+
+    setIsSubmitting(true);
     setError('');
     setStatusMessage('Submitting verification...');
 
     try {
-      // Upload documents to Supabase Storage (optional)
-      let id_document_url = null;
-      let selfie_image_url = null;
-      
-      // Only attempt upload if files are provided
-      try {
-        if (formData.id_document) {
-          setStatusMessage('Uploading ID document...');
-          id_document_url = await uploadFile(formData.id_document, 'id-documents');
-        }
-        if (formData.selfie_image) {
-          setStatusMessage('Uploading selfie...');
-          selfie_image_url = await uploadFile(formData.selfie_image, 'selfies');
-        }
-      } catch (uploadError) {
-        console.warn('File upload failed (storage bucket not configured):', uploadError);
-        // Continue without uploaded files since storage bucket may not be configured
-        setStatusMessage('Proceeding without file uploads (storage not configured)...');
-      }
+      console.log('🚀 Starting KYC submission for user:', user.id);
 
-      // Prepare data for user_verifications table
+      // Prepare KYC data according to your exact schema
       const kycData = {
         user_id: user.id,
         legal_name: formData.legal_name,
         legal_address: {
           line1: formData.address_line1,
-          line2: formData.address_line2,
+          line2: formData.address_line2 || '',
           city: formData.city,
           state: formData.state,
           postal_code: formData.postal_code,
@@ -189,34 +203,40 @@ const KYCForm = () => {
         phone: formData.phone,
         legal_email: formData.legal_email,
         business_email: formData.business_email || null,
-        id_document_url,
-        selfie_image_url,
-        verification_type: formData.verification_type
+        id_document_url: formData.id_document_url || null,
+        selfie_image_url: formData.selfie_image_url || null,
+        verification_type: formData.verification_type || 'individual'
       };
 
-      const result = await submitKYC(kycData);
+      console.log('📝 Submitting KYC data:', kycData);
 
-      if (result.success) {
-        console.log('KYC submitted successfully');
-        
-        // Refresh user data to get updated verification status
-        await refreshUserData();
-        
-        setStatusMessage('Verification submitted successfully! Your status is now pending review. Redirecting to dashboard...');
-        
-        setTimeout(() => {
-          navigate('/dashboard', { replace: true, state: { onboarding: 'kyc-submitted' } });
-        }, 2000);
+      // Submit using the new API
+      const result = await kycApi.submitKyc(kycData);
+      
+      console.log('✅ KYC submitted successfully:', result);
+
+      // Set success message
+      setStatusMessage('Verification submitted successfully! Redirecting...');
+      setIsRedirecting(true);
+      
+      // Immediate redirect after success (no timeout needed)
+      if (user.role === 'creator') {
+        navigate('/dashboard', { replace: true });
       } else {
-        setError(result.error || 'Failed to submit KYC form');
-        setStatusMessage('');
+        navigate('/explore', { replace: true });
       }
-    } catch (err) {
-      console.error('KYC submission error:', err);
-      setError('An unexpected error occurred');
+
+      // Update user data in background (don't await to avoid delays)
+      refreshUserData().catch(error => {
+        console.warn('Failed to refresh user data:', error);
+      });
+
+    } catch (error) {
+      console.error('❌ KYC submission failed:', error);
+      setError(error.message || 'Failed to submit verification. Please try again.');
       setStatusMessage('');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -596,11 +616,20 @@ const KYCForm = () => {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#f8fafc',
-      padding: '40px 20px'
-    }}>
+    <>
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#f8fafc',
+        padding: '40px 20px'
+      }}>
       <div style={{
         maxWidth: '600px',
         margin: '0 auto',
@@ -631,6 +660,19 @@ const KYCForm = () => {
             textAlign: 'center'
           }}>
             {statusMessage}
+            {isRedirecting && (
+              <div style={{ marginTop: '8px' }}>
+                <div style={{
+                  width: '20px',
+                  height: '20px',
+                  border: '2px solid #3b82f6',
+                  borderTop: '2px solid transparent',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                  margin: '0 auto'
+                }}></div>
+              </div>
+            )}
           </div>
         )}
 
@@ -647,75 +689,80 @@ const KYCForm = () => {
           </div>
         )}
 
-        <div style={{ marginBottom: '32px' }}>
-          {renderStepContent()}
-        </div>
+        {!isRedirecting && (
+          <>
+            <div style={{ marginBottom: '32px' }}>
+              {renderStepContent()}
+            </div>
 
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          paddingTop: '24px',
-          borderTop: '1px solid #e5e7eb'
-        }}>
-          <button
-            onClick={prevStep}
-            disabled={currentStep === 1}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: currentStep === 1 ? '#f3f4f6' : '#6b7280',
-              color: currentStep === 1 ? '#9ca3af' : 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '500',
-              cursor: currentStep === 1 ? 'not-allowed' : 'pointer'
-            }}
-          >
-            Previous
-          </button>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingTop: '24px',
+              borderTop: '1px solid #e5e7eb'
+            }}>
+              <button
+                onClick={prevStep}
+                disabled={currentStep === 1}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: currentStep === 1 ? '#f3f4f6' : '#6b7280',
+                  color: currentStep === 1 ? '#9ca3af' : 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: currentStep === 1 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Previous
+              </button>
 
-          <div style={{ fontSize: '14px', color: '#6b7280' }}>
-            Step {currentStep} of 3
-          </div>
+              <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                Step {currentStep} of 3
+              </div>
 
-          {currentStep < 3 ? (
-            <button
-              onClick={nextStep}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: '#29C7AC',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer'
-              }}
-            >
-              Next
-            </button>
-          ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={loading}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: loading ? '#9ca3af' : '#29C7AC',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: loading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {loading ? 'Submitting...' : 'Submit Verification'}
-            </button>
-          )}
-        </div>
+              {currentStep < 3 ? (
+                <button
+                  onClick={nextStep}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#29C7AC',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: isSubmitting ? '#9ca3af' : '#29C7AC',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isSubmitting ? 'Submitting...' : 'Submit Verification'}
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
+    </>
   );
 };
 

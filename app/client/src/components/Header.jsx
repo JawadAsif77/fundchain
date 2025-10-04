@@ -8,13 +8,16 @@ const Header = () => {
   const { user, profile, logout, validateSession } = useAuth();
   const location = useLocation();
 
-  // Session health monitor
+  // Session health monitor - optimized to prevent interference
   useEffect(() => {
     if (!user) return;
 
-    // Check session health every 5 minutes
+    // Check session health every 10 minutes (reduced frequency)
     const sessionCheck = setInterval(async () => {
       try {
+        // Only check if tab is visible to prevent unnecessary API calls
+        if (document.hidden) return;
+        
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error || !session) {
@@ -23,12 +26,10 @@ const Header = () => {
           return;
         }
         
-        // Check if token expires in next 10 minutes
+        // Refresh only when expired; avoid proactive refresh races
         const expiresAt = session.expires_at * 1000;
-        const tenMinutes = 10 * 60 * 1000;
-        
-        if (expiresAt - Date.now() < tenMinutes) {
-          console.log('Header: Token expiring soon, attempting refresh...');
+        if (expiresAt <= Date.now()) {
+          console.log('Header: Token expired, attempting refresh...');
           const { error: refreshError } = await supabase.auth.refreshSession();
           if (refreshError) {
             console.error('Header: Token refresh failed:', refreshError);
@@ -37,7 +38,7 @@ const Header = () => {
       } catch (error) {
         console.error('Header: Session check failed:', error);
       }
-    }, 5 * 60 * 1000); // Check every 5 minutes
+    }, 10 * 60 * 1000); // Check every 10 minutes (reduced frequency)
 
     return () => clearInterval(sessionCheck);
   }, [user, logout]);
