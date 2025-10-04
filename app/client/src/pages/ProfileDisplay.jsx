@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../store/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import Loader from '../components/Loader';
@@ -8,25 +8,42 @@ const ProfileDisplay = () => {
   const { user, profile, loading: authLoading, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState(null);
 
-  useEffect(() => {
+  // Memoize profile data to prevent unnecessary re-renders
+  const userProfile = useMemo(() => {
+    console.log('📋 ProfileDisplay: Memoizing profile data');
     console.log('📋 ProfileDisplay: User data:', user);
     console.log('📋 ProfileDisplay: Profile data:', profile);
-    console.log('📋 ProfileDisplay: Auth loading:', authLoading);
     
     // Use profile from AuthContext if available, otherwise fall back to user
-    const profileData = profile || user;
+    return profile || user;
+  }, [profile, user]);
+
+  useEffect(() => {
+    console.log('📋 ProfileDisplay: Auth loading:', authLoading);
+    console.log('📋 ProfileDisplay: User profile:', userProfile);
     
-    if (profileData && !authLoading) {
-      console.log('✅ ProfileDisplay: Setting profile data:', profileData);
-      setUserProfile(profileData);
+    if (userProfile && !authLoading) {
+      console.log('✅ ProfileDisplay: Profile data available, setting loading to false');
       setLoading(false);
     } else if (!authLoading) {
       console.log('⚠️ ProfileDisplay: No profile data available');
       setLoading(false);
     }
-  }, [user, profile, authLoading]);
+  }, [userProfile, authLoading]);
+
+  // Derive stable display fields
+  const displayName = useMemo(() => {
+    if (userProfile?.full_name && userProfile.full_name.trim()) return userProfile.full_name;
+    if (user?.email) return user.email.split('@')[0];
+    return 'Anonymous User';
+  }, [userProfile, user]);
+
+  const displayUsername = useMemo(() => {
+    if (userProfile?.username && userProfile.username.trim()) return `@${userProfile.username}`;
+    if (user?.email) return `@${user.email.split('@')[0]}`;
+    return '@No username';
+  }, [userProfile, user]);
 
   const handleEditProfile = () => {
     navigate('/profile-edit');

@@ -18,40 +18,37 @@ const Login = () => {
     if (user && isSubmitting) {
       console.log('User is now authenticated:', user.id);
       
-      // Give some time for roleStatus to load, but don't wait indefinitely
-      const navigationTimeout = setTimeout(() => {
-        if (roleStatus && roleStatus.hasRole && roleStatus.role) {
-          // Check if user has basic profile info (don't require full profile completion)
-          const hasBasicProfile = profile?.full_name && profile?.username;
-          
-          if (!hasBasicProfile) {
-            console.log('Basic profile incomplete, redirecting to profile page...');
-            navigate('/profile');
-          } else {
-            // Route based on user role to their appropriate DEFAULT page
-            if (roleStatus.role === 'creator') {
-              console.log('Redirecting creator to dashboard...');
-              navigate('/dashboard');
-            } else if (roleStatus.role === 'investor') {
-              console.log('Redirecting investor to explore (default page)...');
-              navigate('/explore');  // Investors go to explore by default
-            } else if (roleStatus.role === 'admin') {
-              console.log('Redirecting admin to admin panel...');
-              navigate('/admin');
-            } else {
-              console.log('Unknown role, redirecting to explore...');
-              navigate('/explore');
-            }
-          }
+      // Immediate navigation based on current state (no timeout)
+      if (roleStatus && roleStatus.hasRole && roleStatus.role) {
+        // Check if user has basic profile info (don't require full profile completion)
+        const hasBasicProfile = profile?.full_name && profile?.username;
+        
+        if (!hasBasicProfile) {
+          console.log('Basic profile incomplete, redirecting to profile page...');
+          navigate('/profile', { replace: true });
         } else {
-          // User doesn't have a role yet, redirect to profile for role selection
-          console.log('No role selected, redirecting to profile for role selection...');
-          navigate('/profile');
+          // Route based on user role to their appropriate DEFAULT page
+          if (roleStatus.role === 'creator') {
+            console.log('Redirecting creator to dashboard...');
+            navigate('/dashboard', { replace: true });
+          } else if (roleStatus.role === 'investor') {
+            console.log('Redirecting investor to explore (default page)...');
+            navigate('/explore', { replace: true });  // Investors go to explore by default
+          } else if (roleStatus.role === 'admin') {
+            console.log('Redirecting admin to admin panel...');
+            navigate('/admin', { replace: true });
+          } else {
+            console.log('Unknown role, redirecting to explore...');
+            navigate('/explore', { replace: true });
+          }
         }
-      }, 2000); // Wait 2 seconds for roleStatus to load
-
-      // Clean up timeout if component unmounts
-      return () => clearTimeout(navigationTimeout);
+      } else {
+        // User doesn't have a role yet, redirect to profile for role selection
+        console.log('No role selected, redirecting to profile for role selection...');
+        navigate('/profile', { replace: true });
+      }
+      
+      setIsSubmitting(false);
     }
   }, [user, isSubmitting, navigate, roleStatus, profile]);
 

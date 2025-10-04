@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
+import { adminApi } from '../lib/api.js';
 
 const AdminPanel = () => {
   const { user, profile, logout, loading: authLoading } = useAuth();
@@ -10,6 +11,10 @@ const AdminPanel = () => {
   const [error, setError] = useState('');
   const [selectedVerification, setSelectedVerification] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  // Campaign approvals state
+  const [pendingCampaigns, setPendingCampaigns] = useState([]);
+  const [campaignLoading, setCampaignLoading] = useState(true);
+  const [campaignError, setCampaignError] = useState('');
   const navigate = useNavigate();
 
   // Check if user is admin
@@ -24,6 +29,7 @@ const AdminPanel = () => {
   useEffect(() => {
     if (profile?.role === 'admin') {
       loadPendingVerifications();
+      loadPendingCampaigns();
     }
   }, [profile]);
 
@@ -84,6 +90,87 @@ const AdminPanel = () => {
       setError(`An unexpected error occurred: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPendingCampaigns = async () => {
+    try {
+      setCampaignLoading(true);
+      setCampaignError('');
+      // Load campaigns in pending_review
+      const { data: campaignsData, error: campaignsError } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('status', 'pending_review')
+        .order('created_at', { ascending: false });
+      if (campaignsError) {
+        console.error('Error loading campaigns:', campaignsError);
+        setCampaignError(`Database error: ${campaignsError.message}`);
+        setPendingCampaigns([]);
+        return;
+      }
+
+      if (campaignsData && campaignsData.length > 0) {
+        const creatorIds = campaignsData.map(c => c.creator_id).filter(Boolean);
+        let usersMap = {};
+        if (creatorIds.length > 0) {
+          const { data: usersData, error: usersErr } = await supabase
+            .from('users')
+            .select('id, email, full_name')
+            .in('id', creatorIds);
+          if (!usersErr && usersData) {
+            usersMap = usersData.reduce((acc, u) => { acc[u.id] = u; return acc; }, {});
+          }
+        }
+        const enriched = campaignsData.map(c => ({
+          ...c,
+          creator_user: usersMap[c.creator_id] || null
+        }));
+        setPendingCampaigns(enriched);
+      } else {
+        setPendingCampaigns([]);
+      }
+    } catch (err) {
+      console.error('Unexpected error (campaigns):', err);
+      setCampaignError(`An unexpected error occurred: ${err.message}`);
+      setPendingCampaigns([]);
+    } finally {
+      setCampaignLoading(false);
+    }
+  };
+
+  const handleApproveCampaign = async (campaignId) => {
+    try {
+      setActionLoading(true);
+      const res = await adminApi.approveCampaign(campaignId);
+      if (!res.success) {
+        setCampaignError(res.error || 'Failed to approve campaign');
+        return;
+      }
+      await loadPendingCampaigns();
+    } catch (err) {
+      console.error('Approve campaign error:', err);
+      setCampaignError('An unexpected error occurred');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectCampaign = async (campaignId) => {
+    try {
+      const reason = window.prompt('Enter a reason for rejection (optional):') || null;
+      setActionLoading(true);
+      const res = await adminApi.rejectCampaign(campaignId, reason);
+      if (!res.success) {
+        setCampaignError(res.error || 'Failed to reject campaign');
+        return;
+      }
+      await loadPendingCampaigns();
+    } catch (err) {
+      console.error('Reject campaign error:', err);
+      setCampaignError('An unexpected error occurred');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -203,7 +290,7 @@ const AdminPanel = () => {
             color: '#6b7280',
             margin: 0
           }}>
-            Identity Verification Management
+            Identity & Campaign Approvals
           </p>
         </div>
         
@@ -239,6 +326,18 @@ const AdminPanel = () => {
             color: '#dc2626'
           }}>
             {error}
+          </div>
+        )}
+        {campaignError && (
+          <div style={{
+            marginBottom: '24px',
+            padding: '12px 16px',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '8px',
+            color: '#dc2626'
+          }}>
+            {campaignError}
           </div>
         )}
 
@@ -361,6 +460,72 @@ const AdminPanel = () => {
                           }}
                         >
                           Review
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Pending Campaign Approvals */}
+        <div style={{
+          marginTop: '32px',
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            padding: '20px 24px',
+            borderBottom: '1px solid #e5e7eb',
+            backgroundColor: '#f9fafb'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827', margin: 0 }}>Project Approvals</h2>
+              <div style={{ padding: '4px 12px', backgroundColor: '#DBEAFE', color: '#1E40AF', borderRadius: '20px', fontSize: '14px', fontWeight: 500 }}>
+                {pendingCampaigns.length} pending
+              </div>
+            </div>
+          </div>
+          <div style={{ padding: '24px' }}>
+            {campaignLoading ? (
+              <div>Loading pending campaigns…</div>
+            ) : pendingCampaigns.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', color: '#374151' }}>No pending campaigns</h3>
+                <p style={{ margin: 0, fontSize: '14px', color: '#6b7280' }}>All campaigns have been reviewed</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: '16px' }}>
+                {pendingCampaigns.map((c) => (
+                  <div key={c.id} style={{ padding: '20px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px' }}>
+                      <div>
+                        <h3 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: 600, color: '#111827' }}>{c.title}</h3>
+                        <div style={{ display: 'grid', gap: '4px', fontSize: '14px', color: '#6b7280' }}>
+                          <div>Creator: {c.creator_user?.full_name || c.creator_user?.email || c.creator_id}</div>
+                          <div>Goal: ${Number(c.funding_goal || 0).toLocaleString()}</div>
+                          <div>Min investment: ${Number(c.min_investment || 0).toLocaleString()}</div>
+                          <div>Submitted: {new Date(c.created_at).toLocaleDateString()}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'start' }}>
+                        <button
+                          onClick={() => handleApproveCampaign(c.id)}
+                          disabled={actionLoading}
+                          style={{ padding: '8px 12px', backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleRejectCampaign(c.id)}
+                          disabled={actionLoading}
+                          style={{ padding: '8px 12px', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }}
+                        >
+                          Reject
                         </button>
                       </div>
                     </div>

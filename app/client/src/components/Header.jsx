@@ -8,13 +8,16 @@ const Header = () => {
   const { user, profile, logout, validateSession } = useAuth();
   const location = useLocation();
 
-  // Session health monitor
+  // Session health monitor - optimized to prevent interference
   useEffect(() => {
     if (!user) return;
 
-    // Check session health every 5 minutes
+    // Check session health every 10 minutes (reduced frequency)
     const sessionCheck = setInterval(async () => {
       try {
+        // Only check if tab is visible to prevent unnecessary API calls
+        if (document.hidden) return;
+        
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error || !session) {
@@ -23,12 +26,10 @@ const Header = () => {
           return;
         }
         
-        // Check if token expires in next 10 minutes
+        // Refresh only when expired; avoid proactive refresh races
         const expiresAt = session.expires_at * 1000;
-        const tenMinutes = 10 * 60 * 1000;
-        
-        if (expiresAt - Date.now() < tenMinutes) {
-          console.log('Header: Token expiring soon, attempting refresh...');
+        if (expiresAt <= Date.now()) {
+          console.log('Header: Token expired, attempting refresh...');
           const { error: refreshError } = await supabase.auth.refreshSession();
           if (refreshError) {
             console.error('Header: Token refresh failed:', refreshError);
@@ -37,7 +38,7 @@ const Header = () => {
       } catch (error) {
         console.error('Header: Session check failed:', error);
       }
-    }, 5 * 60 * 1000); // Check every 5 minutes
+    }, 10 * 60 * 1000); // Check every 10 minutes (reduced frequency)
 
     return () => clearInterval(sessionCheck);
   }, [user, logout]);
@@ -193,6 +194,34 @@ const Header = () => {
             )}
             {user && (
               <Link
+                to="/wallet"
+                style={{
+                  color: isActiveLink('/wallet') ? 'var(--color-primary)' : 'var(--color-text)',
+                  fontWeight: 'var(--font-semibold)',
+                  padding: 'var(--space-2) 0',
+                  textDecoration: 'none',
+                  transition: 'var(--transition-default)'
+                }}
+              >
+                Wallet
+              </Link>
+            )}
+            {user && profile?.role === 'admin' && (
+              <Link
+                to="/admin"
+                style={{
+                  color: isActiveLink('/admin') ? 'var(--color-primary)' : 'var(--color-text)',
+                  fontWeight: 'var(--font-semibold)',
+                  padding: 'var(--space-2) 0',
+                  textDecoration: 'none',
+                  transition: 'var(--transition-default)'
+                }}
+              >
+                Admin
+              </Link>
+            )}
+            {user && (
+              <Link
                 to="/profile"
                 style={{
                   color: isActiveLink('/profile') ? 'var(--color-primary)' : 'var(--color-text)',
@@ -228,6 +257,13 @@ const Header = () => {
                   onClick={closeMobileMenu}
                 >
                   👤 Profile
+                </Link>
+                <Link
+                  to="/wallet"
+                  className="btn btn--ghost btn--sm"
+                  onClick={closeMobileMenu}
+                >
+                  💼 Wallet
                 </Link>
                 <button
                   onClick={handleLogout}
@@ -377,6 +413,40 @@ const Header = () => {
                   }}
                 >
                   Dashboard
+                </Link>
+              )}
+              {user && (
+                <Link
+                  to="/wallet"
+                  onClick={closeMobileMenu}
+                  style={{
+                    padding: 'var(--space-3) 0',
+                    borderBottom: '1px solid var(--color-border-light)',
+                    color: 'var(--color-text)',
+                    textDecoration: 'none',
+                    fontSize: 'var(--text-md)',
+                    fontWeight: 'var(--font-semibold)',
+                    transition: 'var(--transition-default)'
+                  }}
+                >
+                  💼 Wallet
+                </Link>
+              )}
+              {user && profile?.role === 'admin' && (
+                <Link
+                  to="/admin"
+                  onClick={closeMobileMenu}
+                  style={{
+                    padding: 'var(--space-3) 0',
+                    borderBottom: '1px solid var(--color-border-light)',
+                    color: 'var(--color-text)',
+                    textDecoration: 'none',
+                    fontSize: 'var(--text-md)',
+                    fontWeight: 'var(--font-semibold)',
+                    transition: 'var(--transition-default)'
+                  }}
+                >
+                  Admin
                 </Link>
               )}
               {user && (

@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Navigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Navigate, useParams } from 'react-router-dom';
 import MilestoneList from '../components/MilestoneList';
 import InvestPanel from '../components/InvestPanel';
 import Loader from '../components/Loader';
-import { campaigns } from '../mock/campaigns';
-import { milestones } from '../mock/milestones';
+import { campaignApi } from '../lib/api.js';
 
 const Campaign = () => {
   const { slug } = useParams();
@@ -14,21 +13,56 @@ const Campaign = () => {
   const [campaignMilestones, setCampaignMilestones] = useState([]);
 
   useEffect(() => {
-    // Simulate API call delay
-    const timer = setTimeout(() => {
-      // PHASE 2: Replace with actual API call to Supabase
-      const foundCampaign = campaigns.find(c => c.slug === slug);
-      setCampaign(foundCampaign);
-      
-      if (foundCampaign) {
-        const foundMilestones = milestones.filter(m => m.projectId === foundCampaign.id);
-        setCampaignMilestones(foundMilestones);
-      }
-      
-      setLoading(false);
-    }, 500);
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setLoading(true);
+        const { data } = await campaignApi.getCampaignBySlug(slug);
+        if (cancelled) return;
+        if (!data) {
+          setCampaign(null);
+          setLoading(false);
+          return;
+        }
+        const mapped = {
+          id: data.id,
+          slug: data.slug,
+          title: data.title,
+          summary: data.short_description || '',
+          category: data.categories?.name || 'General',
+          goalAmount: Number(data.funding_goal || 0),
+          raisedAmount: Number(data.current_funding || 0),
+          deadlineISO: data.end_date,
+          status: data.status,
+          riskScore: data.risk_level ? Math.min(100, Math.max(0, Number(data.risk_level) * 20)) : 50,
+          region: data.location || '—',
+          minInvest: Number(data.min_investment || 0),
+          maxInvest: Number(data.max_investment || (data.funding_goal ? Number(data.funding_goal) : 0)),
+        };
+        setCampaign(mapped);
 
-    return () => clearTimeout(timer);
+        const m = await campaignApi.getMilestones(data.id);
+        if (!cancelled) {
+          const mm = (m.data || []).map((row, idx) => ({
+            id: row.id,
+            index: row.order_index ?? idx + 1,
+            name: row.title,
+            description: row.description || '',
+            payoutPct: row.target_amount && mapped.goalAmount ? Math.round((Number(row.target_amount) / mapped.goalAmount) * 100) : 0,
+            status: row.is_completed ? 'completed' : 'pending'
+          }));
+          setCampaignMilestones(mm);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setCampaign(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, [slug]);
 
   const formatCurrency = (amount) => {
@@ -246,7 +280,16 @@ const Campaign = () => {
             {/* Sidebar */}
             <div>
               <div className="sticky" style={{ top: '6rem' }}>
-                <InvestPanel campaign={campaign} />
+                <InvestPanel 
+                  campaign={campaign} 
+                  onInvestSuccess={({ amount }) => {
+                    // Optimistically update progress while DB triggers update canonical values
+                    setCampaign(prev => prev ? ({
+                      ...prev,
+                      raisedAmount: Number(prev.raisedAmount || 0) + Number(amount)
+                    }) : prev);
+                  }}
+                />
               </div>
             </div>
           </div>

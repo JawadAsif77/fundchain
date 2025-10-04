@@ -20,6 +20,7 @@ import CreateProject from './pages/CreateProject';
 import AdminPanel from './pages/AdminPanel';
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import Wallet from './pages/Wallet';
 
 // Temporary simple components - all real components are now imported
 // Campaign component is now imported from './pages/Campaign'
@@ -111,6 +112,14 @@ function App() {
                             <CreateProject />
                           </ProtectedRoute>
                         } 
+                      />
+                      <Route 
+                        path="/wallet" 
+                        element={
+                          <ProtectedRoute>
+                            <Wallet />
+                          </ProtectedRoute>
+                        }
                       />
                       
                       {/* 404 catch-all */}

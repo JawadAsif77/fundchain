@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import CampaignCard from '../components/CampaignCard';
 import EmptyState from '../components/EmptyState';
 import { campaigns } from '../mock/campaigns';
 import { investments } from '../mock/investments';
-import { getPublicProjects, getUserProjects, getUserInvestments } from '../lib/api.js';
+import { getPublicProjects, getUserProjects, getUserInvestments, getUserCampaigns } from '../lib/api.js';
 
 const Dashboard = () => {
-  console.log('Dashboard component rendering...');
-  
   // ALL HOOKS MUST BE DECLARED FIRST - BEFORE ANY RETURNS OR CONDITIONS
   const { user, profile, roleStatus, isFullyOnboarded, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
@@ -17,23 +15,28 @@ const Dashboard = () => {
   const [investments, setInvestments] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
+  const [showApprovalBanner, setShowApprovalBanner] = useState(Boolean(location.state?.campaignSubmitted));
 
-  // Debug logging
-  console.log('Dashboard - Auth State:', {
-    user: user ? { id: user.id, email: user.email } : null,
-    profile: profile ? { id: profile.id, role: profile.role, is_verified: profile.is_verified } : null,
-    roleStatus,
-    isFullyOnboarded,
-    authLoading
-  });
+  // Reduced debug logging for better performance
+  const debugLog = process.env.NODE_ENV === 'development';
+  
+  if (debugLog) {
+    console.log('Dashboard - Auth State:', {
+      user: user ? { id: user.id, email: user.email } : null,
+      profile: profile ? { id: profile.id, role: profile.role, is_verified: profile.is_verified } : null,
+      roleStatus,
+      isFullyOnboarded,
+      authLoading
+    });
+  }
 
-  console.log('Dashboard - user:', user);
-  console.log('Dashboard - roleStatus:', roleStatus);
-
-  const isCreator = roleStatus?.role === 'creator';
-  const isInvestor = roleStatus?.role === 'investor';
+  const role = roleStatus?.role || 'investor';
+  const isCreator = role === 'creator';
+  const isInvestor = role === 'investor';
   const kycStatus = roleStatus?.kycStatus;
-  const showKYCPendingBanner = isCreator && (kycStatus === 'pending' || (roleStatus?.companyData && !roleStatus?.isKYCVerified));
+  const isVerified = roleStatus?.isKYCVerified || profile?.is_verified === 'yes';
+  const showKYCPendingBanner = isCreator && !isVerified && (kycStatus === 'pending');
 
   // Handle redirects with useEffect to avoid state updates during render
   useEffect(() => {
@@ -41,98 +44,119 @@ const Dashboard = () => {
     if (!loading && !authLoading && user && roleStatus) {
       // If user is admin, redirect to admin panel
       if (profile?.role === 'admin') {
-        console.log('Admin user detected, redirecting to admin panel...');
+        if (debugLog) console.log('Admin user detected, redirecting to admin panel...');
         navigate('/admin', { replace: true });
         return;
       }
 
       if (!roleStatus?.hasRole) {
-        console.log('User has no role, redirecting to profile for role selection...');
+        if (debugLog) console.log('User has no role, redirecting to profile for role selection...');
         navigate('/profile', { replace: true });
         return;
       }
 
-      // For creators: always check verification status
-      if (roleStatus?.role === 'creator') {
+  // For creators: always check verification status
+  if (role === 'creator') {
         // Check user's verification status from the profile object
-        const userVerificationStatus = profile?.is_verified || 'no';
+    const userVerificationStatus = (profile?.is_verified || 'no');
         
-        console.log('Creator verification status:', userVerificationStatus);
+        if (debugLog) console.log('Creator verification status:', userVerificationStatus);
         
         // If verification status is 'no', redirect to KYC
         if (userVerificationStatus === 'no') {
-          console.log('Creator has no verification, redirecting to KYC...');
+          if (debugLog) console.log('Creator has no verification, redirecting to KYC...');
           navigate('/kyc', { replace: true });
           return;
         }
         
-        // If no KYC submission exists yet (backward compatibility)
-        if (!roleStatus?.companyData && userVerificationStatus !== 'pending' && userVerificationStatus !== 'yes') {
-          console.log('Creator needs to complete verification, redirecting to KYC...');
-          navigate('/kyc', { replace: true });
-          return;
-        }
+        // If KYC submission pending or missing, we keep the banner but do not block dashboard
       }
 
-      // Both investors and creators can access dashboard (if creators have submitted KYC)
-      // This is now the universal dashboard with role-specific content
+    // Both investors and creators can access dashboard (creators may see KYC prompts)
     }
-  }, [user, profile, roleStatus, loading, authLoading, navigate]);
+  }, [user, profile, roleStatus, loading, authLoading, navigate, debugLog]);
 
   // Load projects/campaigns based on user role
   useEffect(() => {
+    let mounted = true;
+    
     const loadData = async () => {
+      if (!mounted) return;
+      
       try {
-        console.log('Dashboard loadData started');
-        console.log('roleStatus:', roleStatus);
-        console.log('isFullyOnboarded():', isFullyOnboarded());
+        if (debugLog) {
+          console.log('Dashboard loadData started');
+          console.log('roleStatus:', roleStatus);
+          console.log('isFullyOnboarded:', isFullyOnboarded);
+        }
         
-        const fullyOnboarded = isFullyOnboarded();
-        if (roleStatus?.role === 'creator' && fullyOnboarded) {
-          console.log('Loading creator projects...');
-          // Load creator's projects from database
-          const result = await getUserProjects();
-          console.log('getUserProjects result:', result);
-          if (result.success) {
+        const fullyOnboarded = isFullyOnboarded;
+        if (role === 'creator' && user?.id) {
+          console.log('🔍 Dashboard: Loading creator projects for user:', user?.id);
+          // Load creator's campaigns from database
+          const result = await getUserCampaigns(user?.id);
+          console.log('✅ Dashboard: getUserCampaigns result:', result);
+          console.log('📊 Dashboard: Campaigns data:', result?.data);
+          if (result.success && mounted) {
+            console.log('✅ Dashboard: Setting projects state with', result.data?.length || 0, 'campaigns');
             setProjects(result.data || []);
+          } else {
+            console.error('❌ Dashboard: Failed to load campaigns or not mounted');
           }
-        } else if (roleStatus?.role === 'investor' && fullyOnboarded) {
-          console.log('Loading investor investments...');
+        } else if (role === 'investor' && user?.id) {
+          if (debugLog) console.log('Loading investor investments...');
           // Load investor's investments from database
-          const result = await getUserInvestments();
-          console.log('getUserInvestments result:', result);
-          if (result.success) {
+          const result = await getUserInvestments(user?.id);
+          if (debugLog) console.log('getUserInvestments result:', result);
+          if (result.success && mounted) {
             setInvestments(result.data || []);
           }
         } else {
-          console.log('User not fully onboarded or no role, skipping data loading');
+          console.log('❌ Dashboard: Cannot load data - role:', role, 'user.id:', user?.id);
         }
       } catch (error) {
         console.error('Error loading dashboard data:', error);
       } finally {
-        console.log('Dashboard loadData finished, setting loading to false');
-        setLoading(false);
+        if (mounted) {
+          if (debugLog) console.log('Dashboard loadData finished, setting loading to false');
+          setLoading(false);
+        }
       }
     };
 
-    // Add timeout to prevent infinite loading
+    // Shorter timeout for better UX
     const timeout = setTimeout(() => {
-      console.log('Dashboard loading timeout reached, forcing loading to false');
-      setLoading(false);
-    }, 5000); // 5 second timeout
+      if (mounted) {
+        if (debugLog) console.log('Dashboard loading timeout reached, forcing loading to false');
+        setLoading(false);
+      }
+    }, 3000); // Reduced to 3 second timeout
 
-    if (roleStatus) {
-      console.log('roleStatus exists, calling loadData');
+    // Load data immediately if we have user and role
+    if (user?.id && role && !authLoading) {
+      if (debugLog) console.log('Dashboard: Have user and role, calling loadData immediately');
       loadData();
     } else if (!authLoading) {
-      console.log('No roleStatus and auth not loading, setting loading to false');
+      if (debugLog) console.log('Dashboard: Missing user/role or auth still loading, setting loading to false');
       setLoading(false);
     } else {
-      console.log('No roleStatus but auth still loading, waiting...');
+      if (debugLog) console.log('Auth still loading, waiting...');
     }
 
-    return () => clearTimeout(timeout);
-  }, [roleStatus, authLoading]); // Include authLoading in dependencies
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+    };
+  }, [roleStatus, authLoading, isFullyOnboarded, role, user?.id]);
+
+  // Clear navigation state after first render to prevent banner reappearing on refresh
+  useEffect(() => {
+    if (showApprovalBanner) {
+      // Remove state from history
+      navigate('.', { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Get user's investments (use state from database)
   const userInvestments = useMemo(() => {
@@ -140,26 +164,29 @@ const Dashboard = () => {
     return investments || [];
   }, [investments, roleStatus]);
 
-  // Get user's projects (use state from database)
+  // Get user's projects/campaigns (use state from database)
   const userProjects = useMemo(() => {
     if (roleStatus?.role !== 'creator') return [];
+    console.log('📦 Dashboard: userProjects memo updating. projects:', projects);
     return projects || [];
   }, [projects, roleStatus]);
 
-  // Adapter function to convert database project to CampaignCard format
-  const adaptProjectForCard = (project) => ({
-    id: project.id,
-    slug: project.slug,
-    title: project.title,
-    summary: project.summary,
-    category: project.category,
-    goalAmount: project.goal_amount,
-    raisedAmount: project.total_raised || 0,
-    status: project.status,
-    deadlineISO: project.deadline,
-    imageUrl: project.image_url,
-    creatorId: project.creator_id,
-    fundingProgress: project.funding_progress || 0
+  // Adapter function to convert database campaign to CampaignCard format
+  const adaptProjectForCard = (c) => ({
+    id: c.id,
+    slug: c.slug || `campaign-${c.id}`,
+    title: c.title || 'Untitled Campaign',
+    summary: c.summary || c.short_description || c.description?.substring(0, 100) || 'No description available',
+    category: c.category || c.categories?.name || 'General',
+    goalAmount: c.goal_amount ?? Number(c.funding_goal || 0),
+    raisedAmount: c.total_raised ?? Number(c.current_funding || 0),
+    status: c.status || 'draft',
+    deadlineISO: c.deadline || c.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now as fallback
+    imageUrl: c.image_url || null,
+    creatorId: c.creator_id,
+    fundingProgress: c.funding_progress || 0,
+    riskScore: c.risk_level ? Math.min(100, Math.max(0, Number(c.risk_level) * 20)) : 50,
+    region: c.location || 'Not specified'
   });
 
   // Adapter function to convert database investment to display format
@@ -226,14 +253,16 @@ const Dashboard = () => {
     );
   }
 
-  // Debug logging
-  console.log('Dashboard render - loading:', loading);
-  console.log('Dashboard render - user:', user);
-  console.log('Dashboard render - roleStatus:', roleStatus);
+  // Debug logging (only in development)
+  if (debugLog) {
+    console.log('Dashboard render - loading:', loading);
+    console.log('Dashboard render - user:', user);
+    console.log('Dashboard render - roleStatus:', roleStatus);
+  }
 
   // Safety check - show loading if no user
   if (!user) {
-    console.log('Dashboard - No user found, showing loading state');
+    if (debugLog) console.log('Dashboard - No user found, showing loading state');
     return (
       <div style={{ 
         minHeight: '80vh', 
@@ -434,7 +463,7 @@ const Dashboard = () => {
       </div>
 
       {/* KYC Status */}
-      {!roleStatus?.companyData && (
+      {!isVerified && (
         <div style={{
           backgroundColor: '#fef3c7',
           border: '1px solid #f59e0b',
@@ -481,7 +510,7 @@ const Dashboard = () => {
           marginBottom: '20px' 
         }}>
           <h2 style={{ fontSize: '20px', fontWeight: '600' }}>Your Projects</h2>
-          {roleStatus?.companyData ? (
+          {isVerified ? (
             <button
               onClick={() => {
                 navigate('/create-project');
@@ -497,7 +526,7 @@ const Dashboard = () => {
                 cursor: 'pointer'
               }}
             >
-              Create Project
+              Start Your Campaign
             </button>
           ) : (
             <span style={{
@@ -516,22 +545,23 @@ const Dashboard = () => {
             gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
             gap: '20px'
           }}>
-            {userProjects.map(project => (
-              <CampaignCard key={project.id} campaign={adaptProjectForCard(project)} />
-            ))}
+            {userProjects.map(project => {
+              console.log('🎨 Dashboard: Rendering project card for:', project.title, 'status:', project.status);
+              return <CampaignCard key={project.id} campaign={adaptProjectForCard(project)} />;
+            })}
           </div>
         ) : (
           <EmptyState
             title="No projects yet"
             description={
-              roleStatus?.companyData
+              isVerified
                 ? "Create your first project to start raising funds"
                 : "Complete your verification to start creating projects"
             }
             action={
-              roleStatus?.companyData
+              isVerified
                 ? {
-                    label: "Create Project",
+                    label: "Start Your Campaign",
                     onClick: () => navigate('/create-project')
                   }
                 : {
@@ -551,6 +581,53 @@ const Dashboard = () => {
       margin: '0 auto',
       padding: '40px 20px'
     }}>
+      {showApprovalBanner && (
+        <div style={{
+          marginBottom: '24px',
+          padding: '16px',
+          borderRadius: '12px',
+          backgroundColor: '#ecfeff',
+          border: '1px solid #67e8f9',
+          color: '#0e7490',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div>
+            <strong>Submission received.</strong>{' '}
+            Your campaign is pending admin review. You’ll see it under “Your Projects” as “pending_review” until approved.
+          </div>
+          <button
+            onClick={() => setShowApprovalBanner(false)}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: 'transparent',
+              border: '1px solid #67e8f9',
+              borderRadius: '6px',
+              color: '#0e7490',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Show banner if user has any campaigns pending review */}
+      {role === 'creator' && userProjects.some(p => p.status === 'pending_review') && (
+        <div style={{
+          marginBottom: '24px',
+          padding: '16px',
+          borderRadius: '12px',
+          backgroundColor: '#fffbeb',
+          border: '1px solid #fde68a',
+          color: '#92400e'
+        }}>
+          You have campaigns awaiting admin approval. They’ll appear publicly once approved.
+        </div>
+      )}
       {showKYCPendingBanner && (
         <div style={{
           marginBottom: '24px',
@@ -601,7 +678,7 @@ const Dashboard = () => {
             color: '#1f2937',
             marginBottom: '8px'
           }}>
-            {roleStatus?.role === 'investor' ? 'Investor Dashboard' : 'Creator Dashboard'}
+        {role === 'investor' ? 'Investor Dashboard' : 'Creator Dashboard'}
           </h1>
           <p style={{ 
             fontSize: '16px', 

@@ -1,1113 +1,1037 @@
-// API abstraction layer for Phase 1 (mock data)
-// PHASE 2: Replace these functions with actual Supabase API calls
+// =============================================================================
+// API LAYER - UPDATED FOR REAL DATABASE SCHEMA
+// =============================================================================
+// Complete API overhaul based on actual Supabase schema
+// Handles all CRUD operations for the FundChain platform
+// =============================================================================
 
+import { supabase } from './supabase.js';
+
+// Mock data imports (for fallback during development)
 import { campaigns } from '../mock/campaigns.js';
 import { milestones } from '../mock/milestones.js';
 import { users } from '../mock/users.js';
 import { investments } from '../mock/investments.js';
-import { supabase } from './supabase.js';
 
-// Simulate network delay for more realistic behavior
+// Simulate network delay for better UX
 const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Campaign API
+// =============================================================================
+// USER API - Based on your exact users table
+// =============================================================================
+export const userApi = {
+  // Get user profile by ID
+  async getProfile(userId) {
+    try {
+      console.log('🔍 API: Fetching user profile for:', userId);
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select(`
+          id, email, username, full_name, avatar_url, role,
+          linkedin_url, twitter_url, instagram_url, is_verified,
+          created_at, updated_at, bio, location, phone, date_of_birth,
+          social_links, preferences, verification_level, trust_score,
+          referral_code, last_active_at, followers_count, following_count,
+          is_accredited_investor, total_invested, total_campaigns_backed
+        `)
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('❌ Failed to fetch user profile:', error);
+        throw new Error(`Failed to fetch profile: ${error.message}`);
+      }
+
+      console.log('✅ User profile fetched successfully');
+      return { data };
+    } catch (error) {
+      console.error('💥 Get profile error:', error);
+      throw error;
+    }
+  },
+
+  // Update user profile
+  async updateProfile(userId, profileData) {
+    try {
+      console.log('🔄 API: Starting profile update for user:', userId);
+      console.log('📝 Profile data received:', profileData);
+      
+      // Map form data to exact database columns
+      const updateData = {};
+      
+      // Basic fields
+      if (profileData.full_name !== undefined) updateData.full_name = profileData.full_name;
+      if (profileData.username !== undefined) updateData.username = profileData.username;
+      if (profileData.bio !== undefined) updateData.bio = profileData.bio;
+      if (profileData.location !== undefined) updateData.location = profileData.location;
+      if (profileData.phone !== undefined) updateData.phone = profileData.phone;
+      if (profileData.date_of_birth !== undefined) updateData.date_of_birth = profileData.date_of_birth;
+      if (profileData.avatar_url !== undefined) updateData.avatar_url = profileData.avatar_url;
+      
+      // Social media (individual columns)
+      if (profileData.linkedin_url !== undefined) updateData.linkedin_url = profileData.linkedin_url;
+      if (profileData.twitter_url !== undefined) updateData.twitter_url = profileData.twitter_url;
+      if (profileData.instagram_url !== undefined) updateData.instagram_url = profileData.instagram_url;
+      
+  // JSONB fields
+  if (profileData.social_links !== undefined) updateData.social_links = profileData.social_links || {};
+  if (profileData.preferences !== undefined) updateData.preferences = profileData.preferences;
+      
+      // Role enum (include only on explicit change)
+      if (profileData.role && ['investor', 'creator', 'admin'].includes(profileData.role)) {
+        updateData.role = profileData.role;
+      }
+      
+      // Always update timestamp
+      updateData.updated_at = new Date().toISOString();
+      
+      console.log('✅ Mapped to database format:', updateData);
+      
+      // Perform update with minimal return to avoid RLS issues on SELECT after UPDATE
+      const { error: updateError } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', userId);
+
+      if (updateError) {
+        console.error('❌ Database update failed:', updateError);
+        throw new Error(`Failed to update profile: ${updateError.message}`);
+      }
+
+      console.log('✅ Update applied, fetching fresh profile...');
+      const { data, error: fetchError } = await supabase
+        .from('users')
+        .select(`
+          id, email, username, full_name, avatar_url, role,
+          linkedin_url, twitter_url, instagram_url, is_verified,
+          created_at, updated_at, bio, location, phone, date_of_birth,
+          social_links, preferences, verification_level, trust_score,
+          referral_code, last_active_at, followers_count, following_count,
+          is_accredited_investor, total_invested, total_campaigns_backed
+        `)
+        .eq('id', userId)
+        .single();
+
+      if (fetchError) {
+        console.error('⚠️ Profile fetch after update failed:', fetchError);
+        throw new Error(`Profile updated but fetch failed: ${fetchError.message}`);
+      }
+
+      console.log('🎉 Profile updated and fetched successfully');
+      // Normalize return shape for callers expecting { data, error }
+      return { data, error: null };
+      
+    } catch (error) {
+      console.error('💥 Profile update error:', error);
+      // Normalize thrown error shape similar to Supabase helpers
+      throw error;
+    }
+  },
+
+  // Create new user record
+  async createUser(userData) {
+    try {
+      console.log('🆕 API: Creating user record');
+      
+      const userRecord = {
+        id: userData.id,
+        email: userData.email,
+        full_name: userData.user_metadata?.full_name || userData.email?.split('@')[0],
+        role: 'investor', // Default role
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      const { data, error } = await supabase
+        .from('users')
+        .insert(userRecord)
+        .select('*')
+        .single();
+        
+      if (error) {
+        console.error('❌ User creation failed:', error);
+        throw new Error(`Failed to create user: ${error.message}`);
+      }
+      
+      console.log('✅ User created successfully');
+      return data;
+    } catch (error) {
+      console.error('💥 Create user error:', error);
+      throw error;
+    }
+  }
+};
+
+// =============================================================================
+// KYC API - Based on your user_verifications table
+// =============================================================================
+export const kycApi = {
+  // Submit KYC verification
+  async submitKyc(kycData) {
+    try {
+      console.log('🔄 API: Submitting KYC verification');
+      
+      const verificationData = {
+        user_id: kycData.user_id,
+        legal_name: kycData.legal_name,
+        legal_address: kycData.legal_address, // JSONB with required fields
+        phone: kycData.phone,
+        legal_email: kycData.legal_email,
+        business_email: kycData.business_email || null,
+        id_document_url: kycData.id_document_url || null,
+        selfie_image_url: kycData.selfie_image_url || null,
+        verification_type: kycData.verification_type || 'individual',
+        verification_status: 'pending',
+        submitted_at: new Date().toISOString()
+      };
+      
+      const { data, error } = await supabase
+        .from('user_verifications')
+        .upsert(verificationData, { 
+          onConflict: 'user_id'
+        })
+        .select('*')
+        .single();
+        
+      if (error) {
+        console.error('❌ KYC submission failed:', error);
+        throw new Error(`KYC submission failed: ${error.message}`);
+      }
+      
+      console.log('✅ KYC submitted successfully');
+      return data;
+    } catch (error) {
+      console.error('💥 KYC submission error:', error);
+      throw error;
+    }
+  },
+
+  // Get KYC status
+  async getKycStatus(userId) {
+    try {
+      const { data, error } = await supabase
+        .from('user_verifications')
+        .select('verification_status, verification_type, submitted_at, reviewed_at')
+        .eq('user_id', userId)
+        .single();
+        
+      if (error && error.code !== 'PGRST116') {
+        throw new Error(`Failed to get KYC status: ${error.message}`);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('💥 Get KYC status error:', error);
+      throw error;
+    }
+  }
+};
+
+// =============================================================================
+// COMPANY API - Based on your companies table
+// =============================================================================
+export const companyApi = {
+  // Create company
+  async createCompany(companyData) {
+    try {
+      console.log('🔄 API: Creating company');
+      
+      const { data, error } = await supabase
+        .from('companies')
+        .insert({
+          owner_id: companyData.owner_id,
+          name: companyData.name,
+          registration_number: companyData.registration_number || null,
+          country: companyData.country,
+          website: companyData.website || null,
+          verified: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select('*')
+        .single();
+        
+      if (error) {
+        console.error('❌ Company creation failed:', error);
+        throw new Error(`Company creation failed: ${error.message}`);
+      }
+      
+      console.log('✅ Company created successfully');
+      return data;
+    } catch (error) {
+      console.error('💥 Company creation error:', error);
+      throw error;
+    }
+  },
+
+  // Get user's companies
+  async getUserCompanies(userId) {
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('owner_id', userId)
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        throw new Error(`Failed to get companies: ${error.message}`);
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('💥 Get companies error:', error);
+      throw error;
+    }
+  }
+};
+
+// =============================================================================
+// PROJECT API - Based on your projects table
+// =============================================================================
+export const projectApi = {
+  // Create project
+  async createProject(projectData) {
+    try {
+      console.log('🔄 API: Creating project');
+      
+      const { data, error } = await supabase
+        .from('projects')
+        .insert({
+          creator_id: projectData.creator_id,
+          company_id: projectData.company_id,
+          title: projectData.title,
+          slug: projectData.slug,
+          summary: projectData.summary,
+          description: projectData.description || null,
+          category: projectData.category,
+          goal_amount: projectData.goal_amount,
+          deadline: projectData.deadline,
+          status: 'draft',
+          image_url: projectData.image_url || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select('*')
+        .single();
+        
+      if (error) {
+        console.error('❌ Project creation failed:', error);
+        throw new Error(`Project creation failed: ${error.message}`);
+      }
+      
+      console.log('✅ Project created successfully');
+      return data;
+    } catch (error) {
+      console.error('💥 Project creation error:', error);
+      throw error;
+    }
+  },
+
+  // Get all projects (public)
+  async getAll() {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select(`
+          *,
+          companies(name, verified),
+          users!projects_creator_id_fkey(full_name, avatar_url, is_verified)
+        `)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        throw new Error(`Failed to get projects: ${error.message}`);
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('💥 Get all projects error:', error);
+      throw error;
+    }
+  },
+
+  // Get user's projects
+  async getUserProjects(userId) {
+    try {
+      let query = supabase
+        .from('projects')
+        .select(`
+          *,
+          companies(name, verified)
+        `)
+        .order('created_at', { ascending: false });
+      
+      // If userId is provided, filter by creator, otherwise get all
+      if (userId) {
+        query = query.eq('creator_id', userId);
+      }
+        
+      const { data, error } = await query;
+        
+      if (error) {
+        throw new Error(`Failed to get projects: ${error.message}`);
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('💥 Get projects error:', error);
+      throw error;
+    }
+  }
+};
+
+// =============================================================================
+// CAMPAIGN API - Based on your campaigns table
+// =============================================================================
 export const campaignApi = {
-  // Get all campaigns with optional filters
+  // Ensure a category exists and return its id
+  async ensureCategoryByName(name) {
+    if (!name) return null;
+    try {
+      const { data: existing, error: selErr } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('name', name)
+        .single();
+      if (!selErr && existing) return existing.id;
+    } catch (_) {}
+    // Insert if not found
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .insert({ name, created_at: new Date().toISOString() })
+        .select('id')
+        .single();
+      if (error) return null;
+      return data?.id || null;
+    } catch (_) {
+      return null;
+    }
+  },
+
+  // Read-only helper to fetch a category id by name without creating it
+  async getCategoryIdByName(name) {
+    if (!name) return null;
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('name', name)
+        .single();
+      if (error) return null;
+      return data?.id || null;
+    } catch (_) {
+      return null;
+    }
+  },
+
+  // Create a campaign draft/pending review
+  async createCampaign(form, creatorId) {
+    try {
+      // Resolve creator_id from current session if not provided
+      let finalCreatorId = creatorId;
+      if (!finalCreatorId) {
+        const { data: authData } = await supabase.auth.getUser();
+        finalCreatorId = authData?.user?.id || null;
+      }
+
+      const category_id = await this.ensureCategoryByName(form.category);
+      const payload = {
+        creator_id: finalCreatorId,
+        category_id,
+        title: form.title,
+        slug: form.slug,
+        description: form.description,
+        short_description: form.summary || null,
+        image_url: form.imageUrl || null,
+        funding_goal: form.goalAmount,
+        min_investment: Math.max(10, Math.min(1000, Math.floor((form.goalAmount || 1000) / 100))),
+        end_date: form.deadline ? new Date(form.deadline).toISOString() : null,
+        status: 'pending_review',
+        verified: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const { data, error } = await supabase
+        .from('campaigns')
+        .insert(payload)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('💥 Create campaign error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+  // Get all campaigns with filters
   async getCampaigns(filters = {}) {
-    await delay();
-    
-    let filtered = [...campaigns];
-    
-    // Apply filters (same logic as Explore page)
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      filtered = filtered.filter(campaign => 
-        campaign.title.toLowerCase().includes(searchLower) ||
-        campaign.summary.toLowerCase().includes(searchLower)
-      );
+    try {
+      let query = supabase
+        .from('campaigns')
+        .select(`
+          *,
+          categories(name, icon)
+        `)
+        .eq('status', 'active'); // Only show active campaigns
+
+      // Apply filters
+      if (filters.category) {
+        const catId = await this.getCategoryIdByName(filters.category);
+        if (catId) query = query.eq('category_id', catId);
+      }
+
+      if (filters.search) {
+        query = query.or(`title.ilike.%${filters.search}%, description.ilike.%${filters.search}%`);
+      }
+
+      query = query.order('created_at', { ascending: false });
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('❌ Failed to fetch campaigns:', error);
+        // Fallback to mock data
+        return { data: campaigns, count: campaigns.length };
+      }
+
+      return { data: data || [], count: data?.length || 0 };
+    } catch (error) {
+      console.error('💥 Get campaigns error:', error);
+      // Fallback to mock data
+      return { data: campaigns, count: campaigns.length };
     }
-    
-    if (filters.category) {
-      filtered = filtered.filter(campaign => campaign.category === filters.category);
+  },
+
+  // Get campaigns created by a specific user (any status)
+  async getUserCampaigns(userId) {
+    try {
+      // Fallback: infer current user if not provided
+      let uid = userId;
+      if (!uid) {
+        const { data: authData } = await supabase.auth.getUser();
+        uid = authData?.user?.id || null;
+      }
+
+      console.log('🔍 API: getUserCampaigns called for userId:', uid);
+
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select(`
+          *,
+          categories(name, icon)
+        `)
+        .eq('creator_id', uid)
+        .order('created_at', { ascending: false });
+      
+      console.log('📊 API: getUserCampaigns query result. Error:', error, 'Data count:', data?.length);
+      
+      if (error) {
+        console.error('❌ API: getUserCampaigns error:', error);
+        throw error;
+      }
+      
+      console.log('✅ API: getUserCampaigns success. Returning', data?.length || 0, 'campaigns');
+      return { success: true, data: data || [] };
+    } catch (error) {
+      console.error('💥 Get user campaigns error:', error);
+      return { success: false, data: [], error: error.message };
     }
-    
-    if (filters.status) {
-      filtered = filtered.filter(campaign => campaign.status === filters.status);
-    }
-    
-    return {
-      data: filtered,
-      count: filtered.length
-    };
   },
 
   // Get campaign by slug
   async getCampaignBySlug(slug) {
-    await delay();
-    
-    const campaign = campaigns.find(c => c.slug === slug);
-    if (!campaign) {
-      throw new Error('Campaign not found');
-    }
-    
-    return { data: campaign };
-  },
-
-  // Get campaigns by creator ID
-  async getCampaignsByCreator(creatorId) {
-    await delay();
-    
-    const creatorCampaigns = campaigns.filter(c => c.creatorId === creatorId);
-    return {
-      data: creatorCampaigns,
-      count: creatorCampaigns.length
-    };
-  },
-
-  // Create new campaign (placeholder for Phase 2)
-  async createCampaign(campaignData) {
-    await delay(1000);
-    
-    // PHASE 2: Implement actual campaign creation with Supabase
-    throw new Error('Campaign creation will be available in Phase 2 with database integration');
-  }
-};
-
-// Milestone API
-export const milestoneApi = {
-  // Get milestones for a campaign
-  async getMilestonesByProject(projectId) {
-    await delay();
-    
-    const projectMilestones = milestones.filter(m => m.projectId === projectId);
-    return {
-      data: projectMilestones,
-      count: projectMilestones.length
-    };
-  }
-};
-
-// Investment API
-export const investmentApi = {
-  // Get investments by investor ID
-  async getInvestmentsByInvestor(investorId) {
-    await delay();
-    
-    const investorInvestments = investments.filter(i => i.investorId === investorId);
-    
-    // Enrich with campaign data
-    const enrichedInvestments = investorInvestments.map(investment => {
-      const campaign = campaigns.find(c => c.id === investment.projectId);
-      return {
-        ...investment,
-        campaign
-      };
-    }).filter(investment => investment.campaign); // Only include valid campaigns
-    
-    return {
-      data: enrichedInvestments,
-      count: enrichedInvestments.length
-    };
-  },
-
-  // Create new investment (placeholder for Phase 2)
-  async createInvestment(investmentData) {
-    await delay(1000);
-    
-    // PHASE 2: Implement actual investment processing with Supabase
-    throw new Error('Investment processing will be available in Phase 2 with database integration');
-  }
-};
-
-// User API
-export const userApi = {
-  // Get user by ID
-  async getUserById(userId) {
-    await delay();
-    
-    const user = users.find(u => u.id === userId);
-    if (!user) {
-      throw new Error('User not found');
-    }
-    
-    return { data: user };
-  },
-
-  // Update user profile using RPC to bypass RLS
-  async updateProfile(userId, profileData) {
     try {
-      console.log('🔄 Starting RPC profile update for user:', userId);
-      console.log('📝 Raw profile data received:', profileData);
-      
-      // Prepare data for RPC function (only include supported parameters)
-      const rpcParams = {
-        user_id: userId,
-        p_full_name: profileData.full_name || null,
-        p_username: profileData.username || null,
-        p_linkedin_url: profileData.linkedin_url || null,
-        p_twitter_url: profileData.twitter_url || null,
-        p_instagram_url: profileData.instagram_url || null
-      };
-      
-      console.log('🚀 Calling update_user_profile RPC with:', rpcParams);
-      
-      // Add timeout to prevent hanging
-      const rpcPromise = supabase.rpc('update_user_profile', rpcParams);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('RPC call timed out after 10 seconds')), 10000)
-      );
-      
-      const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
-
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select(`
+          *,
+          categories(name, icon, color)
+        `)
+        .eq('slug', slug)
+        .single();
+        
       if (error) {
-        console.error('❌ RPC update failed:', error);
-        
-        // If RPC function doesn't exist, provide helpful error
-        if (error.message?.includes('does not exist')) {
-          throw new Error('RPC function not found. Please run the RPC setup SQL in Supabase first.');
-        }
-        
-        throw new Error(`Failed to update profile: ${error.message}`);
+        console.error('❌ Campaign not found:', error);
+        // Fallback to mock data
+        const campaign = campaigns.find(c => c.slug === slug);
+        if (!campaign) throw new Error('Campaign not found');
+        return { data: campaign };
       }
-
-      // RPC returns array, get first item
-      const updatedProfile = data && data.length > 0 ? data[0] : null;
       
-      if (!updatedProfile) {
-        throw new Error('Profile update returned no data');
-      }
-
-      console.log('🎉 RPC Profile updated successfully:', updatedProfile);
-      return { data: updatedProfile, error: null };
-      
+      return { data };
     } catch (error) {
-      console.error('💥 RPC Profile update error:', error);
-      return { data: null, error: error };
-    }
-  }
-};
-
-// Auth API (used by AuthContext)
-export const authApi = {
-  // Login user
-  async login(email, password) {
-    await delay(500);
-    
-    // PHASE 2: Replace with actual Supabase auth
-    const user = users.find(u => u.email === email);
-    if (!user) {
-      throw new Error('Invalid email or password');
-    }
-    
-    return { data: user };
-  },
-
-  // Register new user
-  async register(email, password, displayName) {
-    await delay(500);
-    
-    // PHASE 2: Replace with actual Supabase auth
-    const existingUser = users.find(u => u.email === email);
-    if (existingUser) {
-      throw new Error('User already exists');
-    }
-    
-    const newUser = {
-      id: Date.now(), // Simple ID generation for mock
-      email,
-      displayName,
-      role: 'investor', // Default role
-      createdAt: new Date().toISOString()
-    };
-    
-    // Add to mock users array (for session only)
-    users.push(newUser);
-    
-    return { data: newUser };
-  },
-
-  // Logout user
-  async logout() {
-    await delay(200);
-    // PHASE 2: Implement actual Supabase logout
-    return { success: true };
-  }
-};
-
-// Search API
-export const searchApi = {
-  // Search across campaigns
-  async searchCampaigns(query, filters = {}) {
-    await delay();
-    
-    const results = await campaignApi.getCampaigns({
-      ...filters,
-      search: query
-    });
-    
-    return results;
-  }
-};
-
-// Analytics API (placeholder for future features)
-export const analyticsApi = {
-  // Get platform statistics
-  async getPlatformStats() {
-    await delay();
-    
-    const totalProjects = campaigns.length;
-    const activeProjects = campaigns.filter(c => c.status === 'live').length;
-    const completedProjects = campaigns.filter(c => c.status === 'completed').length;
-    const totalRaised = campaigns.reduce((sum, c) => sum + c.raisedAmount, 0);
-    
-    return {
-      data: {
-        totalProjects,
-        activeProjects,
-        completedProjects,
-        totalRaised
-      }
-    };
-  }
-};
-
-// Export all APIs as a single object for convenience
-export default {
-  campaigns: campaignApi,
-  milestones: milestoneApi,
-  investments: investmentApi,
-  users: userApi,
-  auth: authApi,
-  search: searchApi,
-  analytics: analyticsApi
-};
-
-// =============================================================================
-// PHASE 3 API HELPERS
-// =============================================================================
-// New Phase 3 functionality for roles, KYC, projects, and investments
-
-import { supabase as supabaseClient, db } from './supabase.js';
-
-// =============================================================================
-// ROLE MANAGEMENT
-// =============================================================================
-
-/**
- * Update user role (investor or creator)
- */
-export const selectRole = async (role) => {
-  try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-
-    console.log('Attempting to select role for user:', user.id, 'role:', role);
-
-    try {
-      await createUserRecord(user.id);
-    } catch (recordError) {
-      console.warn('selectRole: createUserRecord failed (continuing):', recordError);
-    }
-
-    // Method 1: Try using the existing db helper first
-    try {
-      const updateResult = await db.users.updateProfile(user.id, { role });
-
-      if (!updateResult.error) {
-        console.log('Role updated via db.users.updateProfile');
-        return { success: true, data: updateResult.data, role };
-      }
-
-      if (updateResult.error.code === 'PGRST116') {
-        // Profile doesn't exist, create it
-        console.log('Creating new user profile via db.users.createProfile...');
-        const profileData = {
-          id: user.id,
-          email: user.email,
-          full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
-          avatar_url: user.user_metadata?.avatar_url || null,
-          role
-        };
-        
-        const createResult = await db.users.createProfile(profileData);
-
-        if (!createResult.error) {
-          console.log('Profile created successfully');
-          return { success: true, data: createResult.data, role };
-        }
-
-        console.log('Create failed, trying direct upsert...', createResult.error);
-      } else {
-        console.log('Update failed, trying direct upsert...', updateResult.error);
-      }
-    } catch (helperError) {
-      console.log('Helper functions failed, trying direct approach...', helperError);
-    }
-
-    // Method 2: Direct upsert as fallback
-    console.log('Attempting direct upsert...');
-    const { data, error } = await supabaseClient
-      .from('users')
-      .upsert({ 
-        id: user.id,
-        email: user.email,
-        full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
-        avatar_url: user.user_metadata?.avatar_url || null,
-        role 
-      }, {
-        onConflict: 'id'
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Direct upsert failed:', error);
+      console.error('💥 Get campaign error:', error);
       throw error;
     }
+  },
 
-    console.log('Direct upsert successful');
-    return { success: true, data, role };
-
-  } catch (error) {
-    console.error('Error selecting role:', error);
-    return { success: false, error: error.message || 'Failed to select role' };
+  // Get milestones for a campaign
+  async getMilestones(campaignId) {
+    try {
+      const { data, error } = await supabase
+        .from('milestones')
+        .select('id, title, description, target_amount, order_index, is_completed, created_at')
+        .eq('campaign_id', campaignId)
+        .order('order_index', { ascending: true });
+      if (error) throw error;
+      return { success: true, data: data || [] };
+    } catch (error) {
+      console.error('💥 Get milestones error:', error);
+      return { success: false, data: [], error: error.message };
+    }
   }
 };
 
-/**
- * Get user role and company status
- * @param {string} userId - Optional user ID, uses current auth user if not provided
- */
-export const getUserRoleStatus = async (userId = null) => {
-  const defaultStatus = {
-    hasRole: false,
-    role: null,
-    isKYCVerified: false,
-    companyData: null,
-    success: true,
-    kycStatus: 'not_started'
-  };
-
-  try {
-    console.log('getUserRoleStatus: Starting with userId:', userId);
-    let targetUserId = userId;
-    
-    // If no userId provided, get current auth user
-    if (!targetUserId) {
-      console.log('getUserRoleStatus: No userId provided, getting current auth user');
-      const { data: { user } } = await supabaseClient.auth.getUser();
-      if (!user) {
-        console.warn('getUserRoleStatus called without authenticated user');
-        return defaultStatus;
+// =============================================================================
+// INVESTMENT API - Based on your investments table
+// =============================================================================
+export const investmentApi = {
+  // Get user investments
+  async getUserInvestments(userId) {
+    try {
+      const { data, error } = await supabase
+        .from('investments')
+        .select(`
+          *,
+          campaigns(title, slug, image_url, status)
+        `)
+        .eq('investor_id', userId)
+        .order('investment_date', { ascending: false });
+        
+      if (error) {
+        console.error('❌ Failed to fetch investments:', error);
+        return { data: [], count: 0 };
       }
-      targetUserId = user.id;
-      console.log('getUserRoleStatus: Got auth user ID:', targetUserId);
+      
+      return { data: data || [], count: data?.length || 0 };
+    } catch (error) {
+      console.error('💥 Get investments error:', error);
+      return { data: [], count: 0 };
     }
+  }
+};
 
-    console.log('getUserRoleStatus: Querying users table for ID:', targetUserId);
-    // Get user with role information and verification status
-    const { data: userData, error: userError } = await supabaseClient
+// =============================================================================
+// WALLET API - Dummy wallet stored in users.preferences.wallet_balance
+// =============================================================================
+export const walletApi = {
+  async getBalance() {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return { success: false, balance: 0, error: 'Not authenticated' };
+    const { data, error } = await supabase
       .from('users')
-      .select('role, full_name, email, is_verified')
-      .eq('id', targetUserId)
-      .maybeSingle();
+      .select('preferences')
+      .eq('id', uid)
+      .single();
+    if (error) return { success: false, balance: 0, error: error.message };
+    const balance = Number(data?.preferences?.wallet_balance || 0);
+    return { success: true, balance };
+  },
 
-    console.log('getUserRoleStatus: Query result - userData:', userData, 'error:', userError);
+  async topUp(amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Invalid amount' };
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return { success: false, error: 'Not authenticated' };
+    // Read current preferences
+    const { data: current, error: readErr } = await supabase
+      .from('users')
+      .select('preferences')
+      .eq('id', uid)
+      .single();
+    if (readErr) return { success: false, error: readErr.message };
+    const prefs = current?.preferences || {};
+    const nextBalance = Number(prefs.wallet_balance || 0) + Number(amount);
+    const nextPrefs = { ...prefs, wallet_balance: nextBalance };
+    const { error: updErr } = await supabase
+      .from('users')
+      .update({ preferences: nextPrefs, updated_at: new Date().toISOString() })
+      .eq('id', uid);
+    if (updErr) return { success: false, error: updErr.message };
+    return { success: true, balance: nextBalance };
+  },
 
-    // If the user record hasn't been created yet, create it
-    if (userError && userError.code === 'PGRST116') {
-      console.log('getUserRoleStatus: User record not found (PGRST116), creating user record');
-      try {
-        await createUserRecord(targetUserId);
-        console.log('getUserRoleStatus: User record created successfully, returning defaults');
-        return defaultStatus;
-      } catch (createError) {
-        console.error('getUserRoleStatus: Failed to create user record:', createError);
-        return defaultStatus;
-      }
-    }
+  async invest(campaignId, amount) {
+    if (!campaignId) return { success: false, error: 'Missing campaign' };
+    if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Invalid amount' };
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return { success: false, error: 'Not authenticated' };
+    // Check balance
+    const bal = await this.getBalance();
+    if (!bal.success) return bal;
+    if (bal.balance < amount) return { success: false, error: 'Insufficient balance' };
 
-    if (userError) {
-      console.error('getUserRoleStatus: Unexpected error:', userError);
-      throw userError;
-    }
-
-    const status = {
-      ...defaultStatus,
-      hasRole: !!userData?.role,
-      role: userData?.role ?? null,
-      success: true
+    // Try to insert a new confirmed investment
+    const insertPayload = {
+      investor_id: uid,
+      campaign_id: campaignId,
+      amount: Number(amount),
+      status: 'confirmed',
+      investment_date: new Date().toISOString(),
+      confirmed_at: new Date().toISOString()
     };
 
-    console.log('getUserRoleStatus: Base status created:', status);
-
-    // Investors don't require KYC in the current mock flow
-    if (status.role === 'investor') {
-      const finalStatus = {
-        ...status,
-        isKYCVerified: true,
-        kycStatus: 'not_required'
-      };
-      console.log('getUserRoleStatus: Returning investor status:', finalStatus);
-      return finalStatus;
+    let inv = null;
+    let invErr = null;
+    try {
+      const res = await supabase
+        .from('investments')
+        .insert(insertPayload)
+        .select('*')
+        .single();
+      inv = res.data;
+      invErr = res.error || null;
+    } catch (e) {
+      invErr = e;
     }
 
-    // Creators need to complete KYC verification
-    if (status.role === 'creator') {
-      console.log('getUserRoleStatus: Creator role, checking verification status');
-      
-      // Check user verification status from users table
-      const userVerificationStatus = userData?.is_verified || 'no';
-      
-      // Check if there's a KYC submission in user_verifications table
-      const { data: kycData, error: kycError } = await supabaseClient
-        .from('user_verifications')
-        .select('id, verification_status, submitted_at, reviewed_at')
-        .eq('user_id', targetUserId)
-        .maybeSingle();
-
-      console.log('getUserRoleStatus: KYC query result - data:', kycData, 'error:', kycError);
-
-      let kycStatus = 'not_started';
-      let isKYCVerified = false;
-
-      if (userVerificationStatus === 'yes') {
-        kycStatus = 'approved';
-        isKYCVerified = true;
-      } else if (userVerificationStatus === 'pending') {
-        kycStatus = 'pending';
-        isKYCVerified = false;
-      } else if (kycData) {
-        // There's a KYC submission, check its status
-        kycStatus = kycData.verification_status || 'pending';
-        isKYCVerified = kycStatus === 'approved';
+    // If duplicate (one investment per user per campaign), increment existing investment instead
+    if (invErr && (invErr.code === '23505' || String(invErr.message || '').includes('investments_investor_id_campaign_id_key'))) {
+      // Fetch existing investment
+      const { data: existing, error: fetchErr } = await supabase
+        .from('investments')
+        .select('*')
+        .eq('investor_id', uid)
+        .eq('campaign_id', campaignId)
+        .single();
+      if (fetchErr || !existing) {
+        return { success: false, error: (fetchErr?.message || 'Existing investment not found') };
       }
 
-      const finalStatus = {
-        ...status,
-        companyData: kycData ? {
-          id: kycData.id,
-          verified: isKYCVerified,
-          submitted_at: kycData.submitted_at,
-          reviewed_at: kycData.reviewed_at
-        } : null,
-        isKYCVerified,
-        kycStatus
-      };
-      console.log('getUserRoleStatus: Returning creator status:', finalStatus);
-      return finalStatus;
+      const newTotalAmount = Number(existing.amount || 0) + Number(amount);
+
+      // If previously confirmed, temporarily set to pending to let trigger subtract old amount
+      if (existing.status === 'confirmed') {
+        const { error: toPendingErr } = await supabase
+          .from('investments')
+          .update({ status: 'pending' })
+          .eq('id', existing.id);
+        if (toPendingErr) {
+          return { success: false, error: toPendingErr.message };
+        }
+      }
+
+      // Now set new amount and confirm again so trigger re-adds with new total
+      const { data: upd, error: updErr } = await supabase
+        .from('investments')
+        .update({ amount: newTotalAmount, status: 'confirmed', confirmed_at: new Date().toISOString() })
+        .eq('id', existing.id)
+        .select('*')
+        .single();
+      if (updErr) {
+        return { success: false, error: updErr.message };
+      }
+      inv = upd;
+    } else if (invErr) {
+      // Other errors
+      return { success: false, error: invErr.message };
     }
 
-    // Admins don't need KYC verification - they have full access
-    if (status.role === 'admin') {
-      console.log('getUserRoleStatus: Admin role detected');
-      const finalStatus = {
-        ...status,
-        isKYCVerified: true, // Admins are automatically verified
-        kycStatus: 'not_required',
-        companyData: null // Admins don't need company data
-      };
-      console.log('getUserRoleStatus: Returning admin status:', finalStatus);
-      return finalStatus;
+    // Decrement balance
+    const { data: current, error: readErr } = await supabase
+      .from('users')
+      .select('preferences')
+      .eq('id', uid)
+      .single();
+    if (readErr) return { success: false, error: readErr.message };
+    const prefs = current?.preferences || {};
+    const nextBalance = Math.max(0, Number(prefs.wallet_balance || 0) - Number(amount));
+    const nextPrefs = { ...prefs, wallet_balance: nextBalance };
+    const { error: updErr } = await supabase
+      .from('users')
+      .update({ preferences: nextPrefs, updated_at: new Date().toISOString() })
+      .eq('id', uid);
+    if (updErr) return { success: false, error: updErr.message };
+
+    return { success: true, balance: nextBalance, investment: inv };
+  }
+};
+
+// =============================================================================
+// NOTIFICATION API - Based on your notifications table
+// =============================================================================
+export const notificationApi = {
+  // Get user notifications
+  async getUserNotifications(userId) {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+        
+      if (error) {
+        throw new Error(`Failed to get notifications: ${error.message}`);
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('💥 Get notifications error:', error);
+      return [];
+    }
+  },
+
+  // Mark notification as read
+  async markAsRead(notificationId) {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId);
+        
+      if (error) {
+        throw new Error(`Failed to mark notification as read: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('💥 Mark notification as read error:', error);
+      throw error;
+    }
+  }
+};
+
+// =============================================================================
+// LEGACY COMPATIBILITY FUNCTIONS
+// =============================================================================
+// These functions provide backward compatibility for existing components
+
+export const getUserRoleStatus = async (userId) => {
+  try {
+    const { data } = await userApi.getProfile(userId);
+    
+    // Check if user has a valid role set (investor and creator are both valid)
+    const validRoles = ['investor', 'creator', 'admin'];
+    const hasRole = !!(data?.role && validRoles.includes(data.role));
+    
+    // For creators, check if they have KYC verification or company data
+  let companyData = null;
+  let hasKycVerification = false;
+  let kycStatusValue = null; // 'pending' | 'approved' | null
+    
+    if (data?.role === 'creator') {
+      try {
+        // Check for KYC verification first
+        const kyc = await kycApi.getKycStatus(userId);
+        kycStatusValue = kyc?.verification_status || null;
+        hasKycVerification = !!(kyc && (kyc.verification_status === 'pending' || kyc.verification_status === 'approved'));
+
+        // Also check for company data (legacy gate; no longer required once verified)
+        const companies = await companyApi.getUserCompanies(userId);
+        companyData = companies?.length > 0 ? companies[0] : null;
+      } catch (error) {
+        console.warn('Could not fetch KYC/company data:', error);
+      }
     }
     
-    console.log('getUserRoleStatus: Returning default status (no specific role):', status);
-    return status;
-    
+    return {
+      hasRole,
+      // Normalize to a valid role with investor as safe default
+      role: validRoles.includes(data?.role) ? data.role : 'investor',
+      isVerified: data?.is_verified === 'yes',
+      verificationLevel: data?.verification_level || 'basic',
+      companyData,
+      hasKycVerification,
+      // New fields used by Dashboard
+      kycStatus: kycStatusValue,
+      isKYCVerified: (data?.is_verified === 'yes' || kycStatusValue === 'approved')
+    };
   } catch (error) {
     console.error('Error getting user role status:', error);
-    console.error('Error stack:', error.stack);
-    return {
-      ...defaultStatus,
-      success: false,
-      error: error.message
+    return { 
+      hasRole: false,
+      role: 'investor', 
+      isVerified: false, 
+      verificationLevel: 'basic',
+      companyData: null,
+      hasKycVerification: false
     };
   }
 };
 
-/**
- * Creates a user record in the public.users table if it doesn't exist
- * This should be called when a user first signs up or when we detect they don't have a record
- */
-export const createUserRecord = async (userId = null) => {
+export const getPublicProjects = async () => {
   try {
-    let targetUserId = userId;
-    let userEmail = null;
-    
-    // If no userId provided, get current auth user
-    if (!targetUserId) {
-      const { data: { user } } = await supabaseClient.auth.getUser();
-      if (!user) {
-        throw new Error('No authenticated user found');
-      }
-      targetUserId = user.id;
-      userEmail = user.email;
-    } else {
-      // If userId provided, we need to get the email from auth
-      const { data: { user } } = await supabaseClient.auth.getUser();
-      if (user && user.id === targetUserId) {
-        userEmail = user.email;
-      }
-    }
-
-    console.log('createUserRecord: Creating user record for ID:', targetUserId, 'email:', userEmail);
-
-    // Create the user record
-    const { data, error } = await supabaseClient
-      .from('users')
-      .insert({
-        id: targetUserId,
-        email: userEmail,
-        full_name: userEmail ? userEmail.split('@')[0] : null, // Use email prefix as initial name
-        role: null, // No role assigned yet
-        verification_level: 'none',
-        trust_score: 0
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('createUserRecord: Error creating user record:', error);
-      throw error;
-    }
-
-    console.log('createUserRecord: Successfully created user record:', data);
-    return data;
-    
-  } catch (error) {
-    console.error('createUserRecord: Error:', error);
-    throw error;
-  }
-};
-
-// Debug functions - can be called from browser console
-if (typeof window !== 'undefined') {
-  window.debugUserRoleStatus = async () => {
-    try {
-      console.log('=== DEBUG getUserRoleStatus ===');
-      const result = await getUserRoleStatus();
-      console.log('Result:', result);
-      return result;
-    } catch (error) {
-      console.error('Debug error:', error);
-      return error;
-    }
-  };
-  
-  window.debugAuth = async () => {
-    try {
-      console.log('=== DEBUG AUTH STATE ===');
-      const { data: { user }, error } = await supabaseClient.auth.getUser();
-      console.log('Auth user:', user);
-      console.log('Auth error:', error);
-      return { user, error };
-    } catch (error) {
-      console.error('Debug auth error:', error);
-      return error;
-    }
-  };
-  
-  window.debugCreateUser = async () => {
-    try {
-      console.log('=== DEBUG CREATE USER ===');
-      const result = await createUserRecord();
-      console.log('Create user result:', result);
-      return result;
-    } catch (error) {
-      console.error('Debug create user error:', error);
-      return error;
-    }
-  };
-  
-  window.testDirectQuery = async () => {
-    try {
-      console.log('=== DIRECT DATABASE QUERY TEST ===');
-      const userId = '08a623b6-4482-4dd3-a01f-7191dd4e624a';
-      
-      const { data: userData, error: userError } = await supabaseClient
-        .from('users')
-        .select('role, full_name, email')
-        .eq('id', userId)
-        .single();
-      
-      console.log('Direct query result - userData:', userData, 'error:', userError);
-      
-      if (!userError) {
-        const status = {
-          hasRole: !!userData?.role,
-          role: userData?.role ?? null,
-          isKYCVerified: userData?.role === 'investor' ? true : false,
-          companyData: null,
-          success: true
-        };
-        console.log('Expected status:', status);
-        return status;
-      }
-      return { error: userError };
-    } catch (error) {
-      console.error('Direct query test error:', error);
-      return error;
-    }
-  };
-}
-
-// =============================================================================
-// KYC / COMPANY MANAGEMENT
-// =============================================================================
-
-/**
- * Submit KYC form data
- */
-export const submitKYC = async (formData) => {
-  try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-
-    const basePayload = {
-      owner_id: user.id,
-      name: formData.companyName,
-      registration_number: formData.registrationNumber || null,
-      country: formData.country,
-      website: formData.website || null,
-      verified: false,
-      verification_notes: JSON.stringify({
-        businessDescription: formData.businessDescription,
-        owner: formData.ownerInfo,
-        team: formData.teamInfo
-      })
-    };
-
-    const { data: existingCompany, error: existingError } = await supabaseClient
-      .from('companies')
-      .select('id')
-      .eq('owner_id', user.id)
-      .maybeSingle();
-
-    if (existingError && existingError.code !== 'PGRST116') {
-      throw existingError;
-    }
-
-    let response;
-    if (existingCompany) {
-      response = await supabaseClient
-        .from('companies')
-        .update(basePayload)
-        .eq('id', existingCompany.id)
-        .select()
-        .single();
-    } else {
-      response = await supabaseClient
-        .from('companies')
-        .insert(basePayload)
-        .select()
-        .single();
-    }
-
-    const { data, error } = response;
-    if (error) throw error;
-
-    return { success: true, data };
-  } catch (error) {
-    console.error('Error submitting KYC:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// =============================================================================
-// PROJECT MANAGEMENT
-// =============================================================================
-
-/**
- * Create project with milestones
- */
-export const createProjectWithMilestones = async (projectData, milestones) => {
-  try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-
-    // Get user's company
-    const { data: company, error: companyError } = await supabaseClient
-      .from('companies')
-      .select('id')
-      .eq('owner_id', user.id)
-      .eq('verified', true)
-      .single();
-
-    if (companyError) throw new Error('Verified company required to create projects');
-
-    // Create project
-    const { data: project, error: projectError } = await supabaseClient
-      .from('projects')
-      .insert({
-        creator_id: user.id,
-        company_id: company.id,
-        title: projectData.title,
-        slug: projectData.slug,
-        summary: projectData.summary,
-        description: projectData.description,
-        category: projectData.category,
-        goal_amount: projectData.goalAmount,
-        deadline: projectData.deadline,
-        image_url: projectData.imageUrl
-      })
-      .select()
-      .single();
-
-    if (projectError) throw projectError;
-
-    // Create milestones
-    const milestonesWithProjectId = milestones.map((milestone, index) => ({
-      project_id: project.id,
-      milestone_index: index + 1,
-      name: milestone.name,
-      description: milestone.description,
-      payout_percentage: milestone.payoutPercentage,
-      target_amount: (projectData.goalAmount * milestone.payoutPercentage) / 100
-    }));
-
-    const { data: milestonesData, error: milestonesError } = await supabaseClient
-      .from('project_milestones')
-      .insert(milestonesWithProjectId)
-      .select();
-
-    if (milestonesError) throw milestonesError;
-
-    return {
-      success: true,
-      data: {
-        project,
-        milestones: milestonesData
-      }
-    };
-  } catch (error) {
-    console.error('Error creating project:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-/**
- * Get public projects (for explore page)
- */
-export const getPublicProjects = async (filters = {}) => {
-  try {
-    let query = supabaseClient
-      .from('public_projects')
-      .select('*');
-
-    // Apply filters
-    if (filters.category) {
-      query = query.eq('category', filters.category);
-    }
-
-    if (filters.status) {
-      query = query.eq('status', filters.status);
-    }
-
-    // Default ordering
-    query = query.order('created_at', { ascending: false });
-
-    const { data, error } = await query;
-
-    if (error) throw error;
+    const data = await projectApi.getUserProjects(); // Get all projects (public)
     return { success: true, data };
   } catch (error) {
     console.error('Error getting public projects:', error);
-    return { success: false, error: error.message };
+    return { success: false, data: [], error: error.message };
   }
 };
 
-/**
- * Get project by slug with milestones
- */
-export const getProjectBySlug = async (slug) => {
+export const getUserProjects = async (userId) => {
   try {
-    const { data, error } = await supabaseClient
-      .from('projects')
-      .select(`
-        *,
-        companies(name, verified),
-        users(full_name, avatar_url),
-        project_milestones(*)
-      `)
-      .eq('slug', slug)
-      .single();
-
-    if (error) throw error;
-
+    const data = await projectApi.getUserProjects(userId);
     return { success: true, data };
   } catch (error) {
-    console.error('Error getting project by slug:', error);
-    return { success: false, error: error.message };
+    console.error('Error getting user projects:', error);
+    return { success: false, data: [], error: error.message };
   }
 };
 
-/**
- * Create investment in project
- */
-export const createInvestment = async (projectId, amount) => {
+export const getUserInvestments = async (userId) => {
   try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-
-    const { data, error } = await supabaseClient
-      .from('project_investments')
-      .insert({
-        project_id: projectId,
-        investor_id: user.id,
-        amount: amount,
-        status: 'initiated'
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
+    const { data } = await investmentApi.getUserInvestments(userId);
     return { success: true, data };
   } catch (error) {
-    console.error('Error creating investment:', error);
-    return { success: false, error: error.message };
+    console.error('Error getting user investments:', error);
+    return { success: false, data: [], error: error.message };
   }
 };
 
-/**
- * Complete investment (simulate payment completion)
- */
-export const completeInvestment = async (investmentId) => {
+export const getUserCampaigns = async (userId) => {
   try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-
-    const { data, error } = await supabaseClient
-      .from('project_investments')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString()
-      })
-      .eq('id', investmentId)
-      .eq('investor_id', user.id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return { success: true, data };
+    const res = await campaignApi.getUserCampaigns(userId);
+    return res?.success ? res : { success: true, data: res?.data || [] };
   } catch (error) {
-    console.error('Error completing investment:', error);
-    return { success: false, error: error.message };
+    console.error('Error getting user campaigns:', error);
+    return { success: false, data: [], error: error.message };
   }
 };
 
-// =============================================================================
-// UTILITY FUNCTIONS
-// =============================================================================
-
-/**
- * Generate unique slug from title
- */
-export const generateSlug = (title) => {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9 -]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .trim();
-};
-
-/**
- * Validate milestone percentages sum to 100%
- */
-export const validateMilestones = (milestones) => {
-  const total = milestones.reduce((sum, m) => sum + parseFloat(m.payoutPercentage || 0), 0);
-  return Math.abs(total - 100) < 0.01; // Allow for small floating point errors
-};
-
-/**
- * Format currency
- */
-export const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(amount);
-};
-
-// =============================================================================
-// USER PROJECT MANAGEMENT
-// =============================================================================
-
-/**
- * Get user's projects (for creators)
- */
-export const getUserProjects = async (userId = null) => {
+export const createProjectWithMilestones = async (projectData, milestones = []) => {
   try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    const targetUserId = userId || user?.id;
-    
-    if (!targetUserId) throw new Error('User not authenticated');
+    // Create campaign first (pending review)
+    let creatorId = projectData.creator_id; // optional, we will infer from auth if not provided elsewhere
+    if (!creatorId) {
+      const { data: authData } = await supabase.auth.getUser();
+      creatorId = authData?.user?.id || null;
+    }
+    const result = await campaignApi.createCampaign({
+      title: projectData.title,
+      slug: projectData.slug,
+      description: projectData.description,
+      summary: projectData.summary,
+      category: projectData.category,
+      goalAmount: projectData.goalAmount,
+      deadline: projectData.deadline,
+      imageUrl: projectData.imageUrl,
+  }, creatorId || null);
+    if (!result.success) return result;
 
-    const { data, error } = await supabaseClient
-      .from('projects')
-      .select(`
-        *,
-        project_milestones (
-          id,
-          name,
-          description,
-          payout_percentage,
-          is_completed,
-          completed_at
-        ),
-        project_investments (
-          id,
-          amount,
-          status,
-          created_at
-        )
-      `)
-      .eq('creator_id', targetUserId)
-      .order('created_at', { ascending: false });
+    const campaign = result.data;
 
-    if (error) throw error;
-
-    // Calculate aggregated stats for each project
-    const projectsWithStats = data?.map(project => {
-      const investments = project.project_investments || [];
-      const totalRaised = investments
-        .filter(inv => inv.status === 'completed')
-        .reduce((sum, inv) => sum + inv.amount, 0);
-      
-      const totalInvestors = new Set(
-        investments
-          .filter(inv => inv.status === 'completed')
-          .map(inv => inv.investor_id)
-      ).size;
-
-      const fundingProgress = project.goal_amount > 0 
-        ? (totalRaised / project.goal_amount) * 100 
-        : 0;
-
-      return {
-        ...project,
-        total_raised: totalRaised,
-        total_investors: totalInvestors,
-        funding_progress: Math.min(fundingProgress, 100),
-        milestones: project.project_milestones || [],
-        investments: investments
-      };
-    });
-
-    return { success: true, data: projectsWithStats || [] };
-  } catch (error) {
-    console.error('Error fetching user projects:', error);
-    return { success: false, error: error.message, data: [] };
-  }
-};
-
-/**
- * Get user's investments (for investors)
- */
-export const getUserInvestments = async (userId = null) => {
-  try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    const targetUserId = userId || user?.id;
-    
-    if (!targetUserId) throw new Error('User not authenticated');
-
-    const { data, error } = await supabaseClient
-      .from('project_investments')
-      .select(`
-        *,
-        projects (
-          id,
-          title,
-          slug,
-          summary,
-          description,
-          category,
-          goal_amount,
-          deadline,
-          image_url,
-          status,
-          created_at
-        )
-      `)
-      .eq('investor_id', targetUserId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    return { success: true, data: data || [] };
-  } catch (error) {
-    console.error('Error fetching user investments:', error);
-    return { success: false, error: error.message, data: [] };
-  }
-};
-
-/**
- * Update project details
- */
-export const updateProject = async (projectId, updates) => {
-  try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-
-    const { data, error } = await supabaseClient
-      .from('projects')
-      .update({
-        ...updates,
+    // Insert milestones mapped to campaigns.milestones
+    if (Array.isArray(milestones) && milestones.length > 0) {
+      const rows = milestones.map((m, idx) => ({
+        campaign_id: campaign.id,
+        title: m.name || `Milestone ${idx + 1}`,
+        description: m.description || '',
+        target_amount: projectData.goalAmount && m.payoutPercentage
+          ? (Number(projectData.goalAmount) * Number(m.payoutPercentage) / 100)
+          : null,
+        order_index: idx + 1,
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      })
-      .eq('id', projectId)
-      .eq('creator_id', user.id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return { success: true, data };
-  } catch (error) {
-    console.error('Error updating project:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-/**
- * Delete project (and associated data)
- */
-export const deleteProject = async (projectId) => {
-  try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-
-    // Check if project has any completed investments
-    const { data: investments } = await supabaseClient
-      .from('project_investments')
-      .select('status')
-      .eq('project_id', projectId)
-      .eq('status', 'completed');
-
-    if (investments && investments.length > 0) {
-      throw new Error('Cannot delete project with completed investments');
+      }));
+      const { error: mErr } = await supabase.from('milestones').insert(rows);
+      if (mErr) {
+        console.warn('Milestones insert warning:', mErr.message);
+      }
     }
 
-    // Delete in order: milestones, investments, then project
-    await supabaseClient
-      .from('project_milestones')
-      .delete()
-      .eq('project_id', projectId);
-
-    await supabaseClient
-      .from('project_investments')
-      .delete()
-      .eq('project_id', projectId);
-
-    const { error } = await supabaseClient
-      .from('projects')
-      .delete()
-      .eq('id', projectId)
-      .eq('creator_id', user.id);
-
-    if (error) throw error;
-    return { success: true };
+    return { success: true, data: campaign };
   } catch (error) {
-    console.error('Error deleting project:', error);
+    console.error('Error creating campaign with milestones:', error);
     return { success: false, error: error.message };
   }
+};
+
+export const generateSlug = (title) => {
+  const baseSlug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+  
+  // Add timestamp to ensure uniqueness
+  const timestamp = Date.now().toString(36);
+  return `${baseSlug}-${timestamp}`;
+};
+
+export const validateMilestones = (milestones) => {
+  if (!Array.isArray(milestones) || milestones.length === 0) {
+    return { isValid: false, error: 'At least one milestone is required' };
+  }
+
+  let totalPct = 0;
+  for (let i = 0; i < milestones.length; i++) {
+    const m = milestones[i];
+    if (!m.name?.trim()) {
+      return { isValid: false, error: `Milestone ${i + 1}: Name is required` };
+    }
+    if (!m.description?.trim()) {
+      return { isValid: false, error: `Milestone ${i + 1}: Description is required` };
+    }
+    const pct = Number(m.payoutPercentage);
+    if (!Number.isFinite(pct) || pct <= 0) {
+      return { isValid: false, error: `Milestone ${i + 1}: Payout percentage must be > 0` };
+    }
+    totalPct += pct;
+  }
+
+  if (Math.abs(totalPct - 100) > 0.01) {
+    return { isValid: false, error: 'Total payout percentages across milestones must equal 100%' };
+  }
+
+  return { isValid: true };
+};
+
+// =============================================================================
+// EXPORTS
+// =============================================================================
+// =============================================================================
+// ADMIN API - approvals
+// =============================================================================
+export const adminApi = {
+  async approveCampaign(campaignId) {
+    try {
+      const { data, error } = await supabase
+        .from('campaigns')
+        .update({ status: 'active', verified: true, updated_at: new Date().toISOString() })
+        .eq('id', campaignId)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('💥 Approve campaign error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+  async rejectCampaign(campaignId, reason = null) {
+    try {
+      const update = { status: 'cancelled', verified: false, updated_at: new Date().toISOString() };
+      if (reason) update.external_links = { review_reason: reason };
+      const { data, error } = await supabase
+        .from('campaigns')
+        .update(update)
+        .eq('id', campaignId)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('💥 Reject campaign error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+};
+
+// =============================================================================
+// EXPORTS
+// =============================================================================
+export default {
+  userApi,
+  kycApi,
+  companyApi,
+  projectApi,
+  campaignApi,
+  adminApi,
+  investmentApi,
+  walletApi,
+  notificationApi
 };

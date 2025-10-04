@@ -71,8 +71,12 @@ const CreateProject = () => {
 
   const validateStep2 = () => {
     const validMilestones = milestones.every(m => m.name && m.description && m.payoutPercentage);
-    const validPercentages = validateMilestones(milestones);
-    return validMilestones && validPercentages;
+    const { isValid, error } = validateMilestones(milestones);
+    if (!isValid && !error) return false;
+    if (!isValid && error) {
+      setError(error);
+    }
+    return validMilestones && isValid;
   };
 
   const nextStep = () => {
@@ -111,7 +115,7 @@ const CreateProject = () => {
       );
 
       if (result.success) {
-        navigate('/dashboard');
+        navigate('/dashboard', { state: { campaignSubmitted: true } });
       } else {
         setError(result.error || 'Failed to create project');
       }
