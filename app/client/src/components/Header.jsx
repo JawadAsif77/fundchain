@@ -106,7 +106,11 @@ const Header = () => {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="desktop-nav">
+          <nav className="desktop-nav" style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2rem'
+          }}>
             <Link 
               to="/explore" 
               style={{
@@ -121,12 +125,10 @@ const Header = () => {
               Opportunities
             </Link>
             
-            {/* Navigation Links - always visible */}
-            <a 
-              href={location.pathname === '/' ? "#how-it-works" : "/#how-it-works"}
-              onClick={location.pathname === '/' ? (e) => handleAnchorClick(e, 'how-it-works') : undefined}
+            <Link 
+              to="/how-it-works"
               style={{
-                color: 'var(--color-text)',
+                color: isActiveLink('/how-it-works') ? 'var(--color-primary)' : 'var(--color-text)',
                 fontWeight: 'var(--font-semibold)',
                 padding: 'var(--space-2) 0',
                 textDecoration: 'none',
@@ -134,33 +136,33 @@ const Header = () => {
               }}
             >
               How it Works
-            </a>
-            <a 
-              href="#governance"
+            </Link>
+            
+            <Link 
+              to="/governance"
               style={{
-                color: 'var(--color-text)',
+                color: isActiveLink('/governance') ? 'var(--color-primary)' : 'var(--color-text)',
                 fontWeight: 'var(--font-semibold)',
                 padding: 'var(--space-2) 0',
                 textDecoration: 'none',
-                transition: 'var(--transition-default)',
-                cursor: 'pointer'
+                transition: 'var(--transition-default)'
               }}
             >
               Governance
-            </a>
-            <a 
-              href="#analytics"
+            </Link>
+            
+            <Link 
+              to="/analytics"
               style={{
-                color: 'var(--color-text)',
+                color: isActiveLink('/analytics') ? 'var(--color-primary)' : 'var(--color-text)',
                 fontWeight: 'var(--font-semibold)',
                 padding: 'var(--space-2) 0',
                 textDecoration: 'none',
-                transition: 'var(--transition-default)',
-                cursor: 'pointer'
+                transition: 'var(--transition-default)'
               }}
             >
               Analytics
-            </a>
+            </Link>
             
             {user && (
               <Link
@@ -176,20 +178,7 @@ const Header = () => {
                 Dashboard
               </Link>
             )}
-            {user && (
-              <Link
-                to="/wallet"
-                style={{
-                  color: isActiveLink('/wallet') ? 'var(--color-primary)' : 'var(--color-text)',
-                  fontWeight: 'var(--font-semibold)',
-                  padding: 'var(--space-2) 0',
-                  textDecoration: 'none',
-                  transition: 'var(--transition-default)'
-                }}
-              >
-                Wallet
-              </Link>
-            )}
+            
             {user && profile?.role === 'admin' && (
               <Link
                 to="/admin"
@@ -204,20 +193,6 @@ const Header = () => {
                 Admin
               </Link>
             )}
-            {user && (
-              <Link
-                to="/profile"
-                style={{
-                  color: isActiveLink('/profile') ? 'var(--color-primary)' : 'var(--color-text)',
-                  fontWeight: 'var(--font-semibold)',
-                  padding: 'var(--space-2) 0',
-                  textDecoration: 'none',
-                  transition: 'var(--transition-default)'
-                }}
-              >
-                👤 Profile
-              </Link>
-            )}
           </nav>
 
           {/* Auth Actions */}
@@ -228,40 +203,39 @@ const Header = () => {
           }}>
             {user ? (
               <>
-                <span style={{
-                  fontSize: 'var(--text-sm)',
-                  color: 'var(--color-muted)',
-                  display: 'none'
-                }} className="md:block">
-                  Welcome, {user.displayName}
-                </span>
-                <Link
-                  to="/profile"
-                  className="btn btn--ghost btn--sm"
-                  onClick={closeMobileMenu}
-                >
-                  👤 Profile
-                </Link>
                 <Link
                   to="/wallet"
                   className="btn btn--ghost btn--sm"
                   onClick={closeMobileMenu}
+                  style={{ display: 'none' }}
+                  data-desktop-only="true"
                 >
                   💼 Wallet
+                </Link>
+                <Link
+                  to="/profile"
+                  className="btn btn--ghost btn--sm"
+                  onClick={closeMobileMenu}
+                  style={{ display: 'none' }}
+                  data-desktop-only="true"
+                >
+                  � Profile
                 </Link>
                 <button
                   onClick={handleLogout}
                   className="btn btn--ghost btn--sm"
+                  style={{ display: 'none' }}
+                  data-desktop-only="true"
                 >
                   Logout
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" className="btn btn--ghost btn--sm">
+                <Link to="/login" className="btn btn--ghost btn--sm" style={{ display: 'none' }} data-desktop-only="true">
                   Login
                 </Link>
-                <Link to="/register" className="btn btn--gradient btn--sm">
+                <Link to="/register" className="btn btn--gradient btn--sm" style={{ display: 'none' }} data-desktop-only="true">
                   Sign Up
                 </Link>
               </>
@@ -278,7 +252,8 @@ const Header = () => {
                 color: 'var(--color-text)',
                 cursor: 'pointer',
                 borderRadius: 'var(--radius-md)',
-                transition: 'var(--transition-default)'
+                transition: 'var(--transition-default)',
+                display: 'none'
               }}
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -313,8 +288,9 @@ const Header = () => {
             <nav style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: 'var(--space-4)'
+              gap: 'var(--space-3)'
             }}>
+              {/* Main Navigation */}
               <Link 
                 to="/explore" 
                 onClick={closeMobileMenu}
@@ -330,14 +306,10 @@ const Header = () => {
               >
                 Opportunities
               </Link>
-              <a 
-                href={location.pathname === '/' ? "#how-it-works" : "/#how-it-works"}
-                onClick={(e) => {
-                  closeMobileMenu();
-                  if (location.pathname === '/') {
-                    handleAnchorClick(e, 'how-it-works');
-                  }
-                }}
+              
+              <Link 
+                to="/how-it-works"
+                onClick={closeMobileMenu}
                 style={{
                   padding: 'var(--space-3) 0',
                   borderBottom: '1px solid var(--color-border-light)',
@@ -349,9 +321,10 @@ const Header = () => {
                 }}
               >
                 How it Works
-              </a>
-              <a 
-                href="#governance"
+              </Link>
+              
+              <Link 
+                to="/governance"
                 onClick={closeMobileMenu}
                 style={{
                   padding: 'var(--space-3) 0',
@@ -360,14 +333,14 @@ const Header = () => {
                   textDecoration: 'none',
                   fontSize: 'var(--text-md)',
                   fontWeight: 'var(--font-semibold)',
-                  transition: 'var(--transition-default)',
-                  cursor: 'pointer'
+                  transition: 'var(--transition-default)'
                 }}
               >
                 Governance
-              </a>
-              <a 
-                href="#analytics"
+              </Link>
+              
+              <Link 
+                to="/analytics"
                 onClick={closeMobileMenu}
                 style={{
                   padding: 'var(--space-3) 0',
@@ -376,86 +349,90 @@ const Header = () => {
                   textDecoration: 'none',
                   fontSize: 'var(--text-md)',
                   fontWeight: 'var(--font-semibold)',
-                  transition: 'var(--transition-default)',
-                  cursor: 'pointer'
+                  transition: 'var(--transition-default)'
                 }}
               >
                 Analytics
-              </a>
+              </Link>
+
+              {/* User-specific Navigation */}
               {user && (
-                <Link
-                  to="/dashboard"
-                  onClick={closeMobileMenu}
-                  style={{
-                    padding: 'var(--space-3) 0',
-                    borderBottom: '1px solid var(--color-border-light)',
-                    color: 'var(--color-text)',
-                    textDecoration: 'none',
-                    fontSize: 'var(--text-md)',
-                    fontWeight: 'var(--font-semibold)',
-                    transition: 'var(--transition-default)'
-                  }}
-                >
-                  Dashboard
-                </Link>
-              )}
-              {user && (
-                <Link
-                  to="/wallet"
-                  onClick={closeMobileMenu}
-                  style={{
-                    padding: 'var(--space-3) 0',
-                    borderBottom: '1px solid var(--color-border-light)',
-                    color: 'var(--color-text)',
-                    textDecoration: 'none',
-                    fontSize: 'var(--text-md)',
-                    fontWeight: 'var(--font-semibold)',
-                    transition: 'var(--transition-default)'
-                  }}
-                >
-                  💼 Wallet
-                </Link>
-              )}
-              {user && profile?.role === 'admin' && (
-                <Link
-                  to="/admin"
-                  onClick={closeMobileMenu}
-                  style={{
-                    padding: 'var(--space-3) 0',
-                    borderBottom: '1px solid var(--color-border-light)',
-                    color: 'var(--color-text)',
-                    textDecoration: 'none',
-                    fontSize: 'var(--text-md)',
-                    fontWeight: 'var(--font-semibold)',
-                    transition: 'var(--transition-default)'
-                  }}
-                >
-                  Admin
-                </Link>
-              )}
-              {user && (
-                <Link
-                  to="/profile"
-                  onClick={closeMobileMenu}
-                  style={{
-                    padding: 'var(--space-3) 0',
-                    borderBottom: '1px solid var(--color-border-light)',
-                    color: 'var(--color-text)',
-                    textDecoration: 'none',
-                    fontSize: 'var(--text-md)',
-                    fontWeight: 'var(--font-semibold)',
-                    transition: 'var(--transition-default)'
-                  }}
-                >
-                  👤 Profile
-                </Link>
+                <>
+                  <Link
+                    to="/dashboard"
+                    onClick={closeMobileMenu}
+                    style={{
+                      padding: 'var(--space-3) 0',
+                      borderBottom: '1px solid var(--color-border-light)',
+                      color: 'var(--color-text)',
+                      textDecoration: 'none',
+                      fontSize: 'var(--text-md)',
+                      fontWeight: 'var(--font-semibold)',
+                      transition: 'var(--transition-default)'
+                    }}
+                  >
+                    Dashboard
+                  </Link>
+                  
+                  <Link
+                    to="/wallet"
+                    onClick={closeMobileMenu}
+                    style={{
+                      padding: 'var(--space-3) 0',
+                      borderBottom: '1px solid var(--color-border-light)',
+                      color: 'var(--color-text)',
+                      textDecoration: 'none',
+                      fontSize: 'var(--text-md)',
+                      fontWeight: 'var(--font-semibold)',
+                      transition: 'var(--transition-default)'
+                    }}
+                  >
+                    💼 Wallet
+                  </Link>
+                  
+                  <Link
+                    to="/profile"
+                    onClick={closeMobileMenu}
+                    style={{
+                      padding: 'var(--space-3) 0',
+                      borderBottom: '1px solid var(--color-border-light)',
+                      color: 'var(--color-text)',
+                      textDecoration: 'none',
+                      fontSize: 'var(--text-md)',
+                      fontWeight: 'var(--font-semibold)',
+                      transition: 'var(--transition-default)'
+                    }}
+                  >
+                    👤 Profile
+                  </Link>
+                  
+                  {profile?.role === 'admin' && (
+                    <Link
+                      to="/admin"
+                      onClick={closeMobileMenu}
+                      style={{
+                        padding: 'var(--space-3) 0',
+                        borderBottom: '1px solid var(--color-border-light)',
+                        color: 'var(--color-text)',
+                        textDecoration: 'none',
+                        fontSize: 'var(--text-md)',
+                        fontWeight: 'var(--font-semibold)',
+                        transition: 'var(--transition-default)'
+                      }}
+                    >
+                      Admin
+                    </Link>
+                  )}
+                </>
               )}
               
+              {/* Auth Actions */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 'var(--space-3)',
-                paddingTop: 'var(--space-2)'
+                paddingTop: 'var(--space-4)',
+                borderTop: '1px solid var(--color-border-light)'
               }}>
                 {user ? (
                   <button

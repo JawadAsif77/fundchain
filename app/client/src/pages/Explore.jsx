@@ -9,7 +9,7 @@ const Explore = () => {
   const [filters, setFilters] = useState({
     search: '',
     category: '',
-    status: '',
+    status: 'active',
     sort: 'newest'
   });
   const [currentPage, setCurrentPage] = useState(1);
@@ -24,7 +24,11 @@ const Explore = () => {
     const load = async () => {
       try {
         setLoading(true);
-        const { data } = await campaignApi.getCampaigns({ category: filters.category, search: filters.search });
+        const { data } = await campaignApi.getCampaigns({ 
+          category: filters.category, 
+          search: filters.search,
+          status: filters.status 
+        });
         if (cancelled) return;
         // Map DB campaigns to CampaignCard shape
         const mapped = (data || []).map((c) => ({
@@ -53,13 +57,13 @@ const Explore = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, [filters.category, filters.search]);
+  }, [filters.category, filters.search, filters.status]);
 
-  // Filter and sort campaigns based on current filters (status and sort client-side)
+  // Filter and sort campaigns based on current filters (sort client-side, status handled by API)
   const filteredAndSortedCampaigns = useMemo(() => {
     let filtered = [...allCampaigns];
 
-    // Apply search filter
+    // Apply search filter (additional client-side filtering if needed)
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(campaign => 
@@ -68,15 +72,12 @@ const Explore = () => {
       );
     }
 
-    // Apply category filter
+    // Apply category filter (additional client-side filtering if needed)
     if (filters.category) {
       filtered = filtered.filter(campaign => campaign.category === filters.category);
     }
 
-    // Apply status filter
-    if (filters.status) {
-      filtered = filtered.filter(campaign => campaign.status === filters.status);
-    }
+    // Status filtering is handled by the API, so we don't need it here
 
     // Apply sorting
     switch (filters.sort) {

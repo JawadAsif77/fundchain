@@ -474,8 +474,13 @@ export const campaignApi = {
         .select(`
           *,
           categories(name, icon)
-        `)
-        .eq('status', 'active'); // Only show active campaigns
+        `);
+
+      // Apply status filter - default to active if not specified
+      const status = filters.status || 'active';
+      if (status && status !== '') {
+        query = query.eq('status', status);
+      }
 
       // Apply filters
       if (filters.category) {
@@ -621,19 +626,78 @@ export const investmentApi = {
   // Get user investments
   async getUserInvestments(userId) {
     try {
+      console.log('💰 API: Fetching investments for user:', userId);
+      
+      // First check if there are ANY investments for this user
+      const { data: basicData, error: basicError } = await supabase
+        .from('investments')
+        .select('id, investor_id, campaign_id, amount, status, investment_date')
+        .eq('investor_id', userId);
+        
+      console.log('💰 API: Basic investment check result:', basicData);
+      console.log('💰 API: Basic investment check error:', basicError);
+      
+      if (basicError) {
+        console.error('❌ Failed basic investment check:', basicError);
+        return { data: [], count: 0 };
+      }
+      
+      if (!basicData || basicData.length === 0) {
+        console.log('💰 API: No investments found for user');
+        return { data: [], count: 0 };
+      }
+      
+      // If we have investments, try to get them with campaign data
       const { data, error } = await supabase
         .from('investments')
         .select(`
-          *,
-          campaigns(title, slug, image_url, status)
+          id,
+          investor_id,
+          campaign_id,
+          amount,
+          status,
+          investment_date,
+          created_at,
+          campaigns!inner(
+            id,
+            title,
+            slug,
+            short_description,
+            image_url,
+            status,
+            funding_goal,
+            current_funding,
+            end_date
+          )
         `)
         .eq('investor_id', userId)
         .order('investment_date', { ascending: false });
         
       if (error) {
-        console.error('❌ Failed to fetch investments:', error);
-        return { data: [], count: 0 };
+        console.warn('💰 API: Join query failed, using basic data:', error.message);
+        
+        // Fallback: manually join the data
+        const enrichedData = await Promise.all(
+          basicData.map(async (investment) => {
+            const { data: campaign } = await supabase
+              .from('campaigns')
+              .select('id, title, slug, short_description, image_url, status, funding_goal, current_funding, end_date')
+              .eq('id', investment.campaign_id)
+              .single();
+              
+            return {
+              ...investment,
+              campaigns: campaign
+            };
+          })
+        );
+        
+        console.log('✅ Investments enriched manually:', enrichedData.length);
+        return { data: enrichedData, count: enrichedData.length };
       }
+      
+      console.log('✅ Investments fetched with join:', data?.length || 0, 'investments');
+      console.log('💰 API: Sample investment data:', data?.[0]);
       
       return { data: data || [], count: data?.length || 0 };
     } catch (error) {
@@ -904,10 +968,15 @@ export const getUserProjects = async (userId) => {
 
 export const getUserInvestments = async (userId) => {
   try {
-    const { data } = await investmentApi.getUserInvestments(userId);
-    return { success: true, data };
+    console.log('🔧 getUserInvestments wrapper: Starting for userId:', userId);
+    const result = await investmentApi.getUserInvestments(userId);
+    console.log('🔧 getUserInvestments wrapper: investmentApi returned:', result);
+    
+    const response = { success: true, data: result.data || [] };
+    console.log('🔧 getUserInvestments wrapper: Final response:', response);
+    return response;
   } catch (error) {
-    console.error('Error getting user investments:', error);
+    console.error('🔧 getUserInvestments wrapper: Error caught:', error);
     return { success: false, data: [], error: error.message };
   }
 };

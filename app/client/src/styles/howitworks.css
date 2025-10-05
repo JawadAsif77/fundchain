@@ -1,0 +1,827 @@
+/* =============================================================================
+   HOW IT WORKS PAGE STYLES
+   ============================================================================= */
+
+.how-it-works {
+  min-height: 100vh;
+  background-color: #ffffff;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* =============================================================================
+   HERO SECTION
+   ============================================================================= */
+
+.hero-section {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 50%, #ccfbf1 100%);
+  padding: 120px 0 80px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-section .container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+}
+
+.hero-content {
+  z-index: 2;
+}
+
+.hero-title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: #0B132B;
+  line-height: 1.2;
+  margin-bottom: 24px;
+}
+
+.hero-subtitle {
+  font-size: 1.25rem;
+  color: #6b7280;
+  line-height: 1.6;
+  margin-bottom: 40px;
+}
+
+.hero-buttons {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 16px 32px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.btn-primary {
+  background-color: #29C7AC;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #22a894;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(41, 199, 172, 0.3);
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: #29C7AC;
+  border: 2px solid #29C7AC;
+}
+
+.btn-secondary:hover {
+  background-color: #29C7AC;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(41, 199, 172, 0.2);
+}
+
+.btn-large {
+  padding: 20px 40px;
+  font-size: 1.1rem;
+}
+
+/* Hero Illustration */
+.hero-illustration {
+  position: relative;
+  height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.blockchain-nodes {
+  position: relative;
+  width: 300px;
+  height: 300px;
+}
+
+.node {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #29C7AC, #22a894);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  animation: pulse 2s infinite;
+  box-shadow: 0 8px 32px rgba(41, 199, 172, 0.3);
+}
+
+.node-1 {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  animation-delay: 0s;
+}
+
+.node-2 {
+  bottom: 0;
+  left: 0;
+  animation-delay: 0.7s;
+}
+
+.node-3 {
+  bottom: 0;
+  right: 0;
+  animation-delay: 1.4s;
+}
+
+.connection {
+  position: absolute;
+  height: 3px;
+  background: linear-gradient(90deg, #29C7AC, #22a894);
+  border-radius: 2px;
+  animation: flow 3s infinite;
+}
+
+.connection-1 {
+  top: 40px;
+  left: 40px;
+  width: 120px;
+  transform: rotate(45deg);
+}
+
+.connection-2 {
+  top: 40px;
+  right: 40px;
+  width: 120px;
+  transform: rotate(-45deg);
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@keyframes flow {
+  0% { opacity: 0.3; }
+  50% { opacity: 1; }
+  100% { opacity: 0.3; }
+}
+
+/* =============================================================================
+   PLATFORM OVERVIEW
+   ============================================================================= */
+
+.platform-overview {
+  padding: 100px 0;
+  background-color: #fafafa;
+}
+
+.section-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #0B132B;
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.section-subtitle {
+  font-size: 1.5rem;
+  color: #6b7280;
+  text-align: center;
+  margin-bottom: 60px;
+  font-style: italic;
+}
+
+.pillars-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 40px;
+}
+
+.pillar-card {
+  background: white;
+  padding: 40px 30px;
+  border-radius: 16px;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  border: 1px solid #f3f4f6;
+}
+
+.pillar-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px rgba(41, 199, 172, 0.1);
+  border-color: #29C7AC;
+}
+
+.pillar-icon {
+  font-size: 3rem;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.pillar-card h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #0B132B;
+  margin-bottom: 16px;
+}
+
+.pillar-card p {
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+/* =============================================================================
+   CREATORS & INVESTORS SECTIONS
+   ============================================================================= */
+
+.creators-section {
+  padding: 100px 0;
+  background-color: white;
+}
+
+.investors-section {
+  padding: 100px 0;
+  background-color: #fafafa;
+}
+
+.section-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+
+.section-content.reverse {
+  grid-template-columns: 1fr 1fr;
+}
+
+.section-content.reverse .content-illustration {
+  order: 1;
+}
+
+.section-content.reverse .content-text {
+  order: 2;
+}
+
+/* Timeline */
+.timeline {
+  margin: 40px 0;
+}
+
+.timeline-item {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  position: relative;
+}
+
+.timeline-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 24px;
+  top: 50px;
+  width: 2px;
+  height: 32px;
+  background-color: #e5e7eb;
+}
+
+.timeline-icon {
+  width: 48px;
+  height: 48px;
+  background-color: #29C7AC;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  margin-right: 20px;
+  flex-shrink: 0;
+}
+
+.timeline-content h4 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #0B132B;
+  margin-bottom: 8px;
+}
+
+.timeline-content p {
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+/* Benefits and Perks */
+.why-creators-love,
+.investor-perks {
+  margin-top: 60px;
+}
+
+.why-creators-love h3,
+.investor-perks h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #0B132B;
+  margin-bottom: 24px;
+}
+
+.benefits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.benefit-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background-color: #f0fdfa;
+  border-radius: 8px;
+  border: 1px solid #ccfbf1;
+}
+
+.benefit-icon {
+  font-size: 1.2rem;
+}
+
+.perks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.perk-card {
+  background: white;
+  padding: 24px 20px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border: 1px solid #f3f4f6;
+}
+
+.perk-icon {
+  font-size: 2rem;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.perk-card h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #0B132B;
+  margin-bottom: 8px;
+}
+
+.perk-card p {
+  color: #6b7280;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+/* Illustrations */
+.content-illustration {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.creator-workflow {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.workflow-step {
+  text-align: center;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 2px solid #f3f4f6;
+  min-width: 120px;
+}
+
+.step-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.step-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0B132B;
+}
+
+.workflow-arrow {
+  font-size: 1.5rem;
+  color: #29C7AC;
+  font-weight: bold;
+}
+
+/* Investor Dashboard Illustration */
+.investor-dashboard {
+  background: white;
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid #f3f4f6;
+  min-width: 300px;
+}
+
+.dashboard-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.dashboard-header h4 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #0B132B;
+  margin-bottom: 8px;
+}
+
+.portfolio-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #29C7AC;
+}
+
+.investment-card {
+  padding: 16px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.investment-card:last-child {
+  border-bottom: none;
+}
+
+.investment-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.company {
+  font-weight: 600;
+  color: #0B132B;
+}
+
+.amount {
+  font-weight: 600;
+  color: #29C7AC;
+}
+
+.progress-bar {
+  height: 8px;
+  background-color: #f3f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress {
+  height: 100%;
+  background-color: #29C7AC;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* =============================================================================
+   SAFETY SECTION
+   ============================================================================= */
+
+.safety-section {
+  padding: 100px 0;
+  background-color: white;
+}
+
+.safety-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 30px;
+}
+
+.safety-card {
+  background: #f0fdfa;
+  padding: 40px 30px;
+  border-radius: 16px;
+  text-align: center;
+  border: 2px solid #ccfbf1;
+  transition: all 0.3s ease;
+}
+
+.safety-card:hover {
+  transform: translateY(-4px);
+  border-color: #29C7AC;
+  box-shadow: 0 12px 32px rgba(41, 199, 172, 0.1);
+}
+
+.safety-icon {
+  font-size: 3rem;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.safety-card h3 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #0B132B;
+  margin-bottom: 16px;
+}
+
+.safety-card p {
+  color: #6b7280;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.card-link {
+  color: #29C7AC;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  display: inline-block;
+}
+
+.card-link:hover {
+  color: #22a386;
+  transform: translateX(4px);
+}
+
+/* =============================================================================
+   WORKFLOW DIAGRAM
+   ============================================================================= */
+
+.workflow-section {
+  padding: 100px 0;
+  background-color: #fafafa;
+}
+
+.workflow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 60px;
+}
+
+.workflow-step-large {
+  background: white;
+  padding: 40px 30px;
+  border-radius: 16px;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 2px solid #f3f4f6;
+  min-width: 180px;
+  transition: all 0.3s ease;
+}
+
+.workflow-step-large:hover {
+  transform: translateY(-4px);
+  border-color: #29C7AC;
+  box-shadow: 0 12px 32px rgba(41, 199, 172, 0.1);
+}
+
+.step-icon-large {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.workflow-step-large h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #0B132B;
+  margin-bottom: 12px;
+  line-height: 1.3;
+}
+
+.workflow-step-large p {
+  color: #6b7280;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.workflow-arrow-large {
+  font-size: 2rem;
+  color: #29C7AC;
+  font-weight: bold;
+  margin: 0 10px;
+}
+
+/* =============================================================================
+   TESTIMONIALS
+   ============================================================================= */
+
+.testimonials-section {
+  padding: 100px 0;
+  background-color: white;
+}
+
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 40px;
+  margin-top: 60px;
+}
+
+.testimonial-card {
+  background: #f0fdfa;
+  padding: 32px;
+  border-radius: 16px;
+  border: 1px solid #ccfbf1;
+  transition: all 0.3s ease;
+}
+
+.testimonial-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(41, 199, 172, 0.1);
+  border-color: #29C7AC;
+}
+
+.testimonial-content {
+  margin-bottom: 24px;
+}
+
+.testimonial-content p {
+  font-size: 1.1rem;
+  color: #0B132B;
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.testimonial-author {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.author-avatar {
+  width: 50px;
+  height: 50px;
+  background-color: #29C7AC;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.author-info h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0B132B;
+  margin-bottom: 4px;
+}
+
+.author-info span {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+/* =============================================================================
+   CTA SECTION
+   ============================================================================= */
+
+.cta-section {
+  padding: 100px 0;
+  background: linear-gradient(135deg, #0B132B 0%, #1e293b 100%);
+  color: white;
+}
+
+.cta-content {
+  text-align: center;
+}
+
+.cta-content h2 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.cta-content p {
+  font-size: 1.2rem;
+  color: #cbd5e1;
+  margin-bottom: 40px;
+}
+
+.cta-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* =============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================= */
+
+@media (max-width: 768px) {
+  .hero-section .container {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    text-align: center;
+  }
+  
+  .hero-title {
+    font-size: 2.5rem;
+  }
+  
+  .section-content {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  
+  .section-content.reverse {
+    grid-template-columns: 1fr;
+  }
+  
+  .section-content.reverse .content-illustration {
+    order: 1;
+  }
+  
+  .section-content.reverse .content-text {
+    order: 2;
+  }
+  
+  .workflow-diagram {
+    flex-direction: column;
+  }
+  
+  .workflow-arrow-large {
+    transform: rotate(90deg);
+    margin: 10px 0;
+  }
+  
+  .creator-workflow {
+    flex-direction: column;
+  }
+  
+  .workflow-arrow {
+    transform: rotate(90deg);
+  }
+  
+  .benefits-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .perks-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+  
+  .cta-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .btn {
+    width: 100%;
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0 16px;
+  }
+  
+  .hero-title {
+    font-size: 2rem;
+  }
+  
+  .section-title {
+    font-size: 2rem;
+  }
+  
+  .pillars-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .safety-features {
+    grid-template-columns: 1fr;
+  }
+  
+  .testimonials-grid {
+    grid-template-columns: 1fr;
+  }
+}

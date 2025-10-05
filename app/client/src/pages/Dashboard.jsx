@@ -19,7 +19,6 @@ const Dashboard = () => {
   const location = useLocation();
   const [showApprovalBanner, setShowApprovalBanner] = useState(Boolean(location.state?.campaignSubmitted));
 
-  // Reduced debug logging for better performance
   const debugLog = process.env.NODE_ENV === 'development';
   
   if (debugLog) {
@@ -181,42 +180,81 @@ const Dashboard = () => {
     return projects || [];
   }, [projects, roleStatus]);
 
+  // Memoized calculation for total raised across all user projects
+  const totalRaised = useMemo(() => {
+    console.log('🔧 Dashboard: Calculating total raised from projects:', userProjects);
+    const total = userProjects.reduce((sum, project) => {
+      const projectRaised = project.current_funding || 0;
+      console.log(`🔧 Dashboard: Project ${project.title} - current_funding: ${projectRaised}`);
+      return sum + projectRaised;
+    }, 0);
+    console.log('🔧 Dashboard: Total raised calculated:', total);
+    return total;
+  }, [userProjects]);
+
   // Adapter function to convert database campaign to CampaignCard format
-  const adaptProjectForCard = (c) => ({
-    id: c.id,
-    slug: c.slug || `campaign-${c.id}`,
-    title: c.title || 'Untitled Campaign',
-    summary: c.summary || c.short_description || c.description?.substring(0, 100) || 'No description available',
-    category: c.category || c.categories?.name || 'General',
-    goalAmount: c.goal_amount ?? Number(c.funding_goal || 0),
-    raisedAmount: c.total_raised ?? Number(c.current_funding || 0),
-    status: c.status || 'draft',
-    deadlineISO: c.deadline || c.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now as fallback
-    imageUrl: c.image_url || null,
-    creatorId: c.creator_id,
-    fundingProgress: c.funding_progress || 0,
-    riskScore: c.risk_level ? Math.min(100, Math.max(0, Number(c.risk_level) * 20)) : 50,
-    region: c.location || 'Not specified'
-  });
+  const adaptProjectForCard = (c) => {
+    console.log('🔧 Dashboard: adaptProjectForCard input:', c);
+    
+    const adapted = {
+      id: c.id,
+      slug: c.slug || `campaign-${c.id}`,
+      title: c.title || 'Untitled Campaign',
+      summary: c.summary || c.short_description || c.description?.substring(0, 100) || 'No description available',
+      category: c.category || c.categories?.name || 'General',
+      goalAmount: c.goal_amount ?? Number(c.funding_goal || 0),
+      raisedAmount: c.total_raised ?? Number(c.current_funding || 0),
+      status: c.status || 'draft',
+      deadlineISO: c.deadline || c.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now as fallback
+      imageUrl: c.image_url || null,
+      creatorId: c.creator_id,
+      fundingProgress: c.funding_progress || 0,
+      riskScore: c.risk_level ? Math.min(100, Math.max(0, Number(c.risk_level) * 20)) : 50,
+      region: c.location || 'Not specified'
+    };
+    
+    console.log('🔧 Dashboard: adaptProjectForCard output:', adapted);
+    console.log('🔧 Dashboard: goalAmount:', adapted.goalAmount, 'raisedAmount:', adapted.raisedAmount);
+    
+    return adapted;
+  };
 
   // Adapter function to convert database investment to display format
-  const adaptInvestmentForCard = (investment) => ({
-    id: investment.id,
-    amount: investment.amount,
-    status: investment.status,
-    created_at: investment.created_at,
-    projects: investment.campaigns ? {
-      id: investment.campaigns.id,
-      slug: investment.campaigns.slug,
-      title: investment.campaigns.title,
-      summary: investment.campaigns.short_description || investment.campaigns.summary,
-      category: investment.campaigns.category || 'General',
-      goalAmount: investment.campaigns.goal_amount || investment.campaigns.funding_goal,
-      status: investment.campaigns.status,
-      deadlineISO: investment.campaigns.deadline || investment.campaigns.end_date,
-      imageUrl: investment.campaigns.image_url
-    } : null
-  });
+  const adaptInvestmentForCard = (investment) => {
+    console.log('💰 Dashboard: adaptInvestmentForCard input:', investment);
+    
+    const campaign = investment.campaigns;
+    if (!campaign) {
+      console.warn('💰 Dashboard: No campaign data in investment:', investment);
+      return null;
+    }
+
+    const adapted = {
+      id: campaign.id,
+      slug: campaign.slug || `campaign-${campaign.id}`,
+      title: campaign.title || 'Untitled Campaign',
+      summary: campaign.summary || campaign.short_description || campaign.description?.substring(0, 100) || 'No description available',
+      category: campaign.category || campaign.categories?.name || 'General',
+      goalAmount: Number(campaign.funding_goal || 0),
+      raisedAmount: Number(campaign.current_funding || 0),
+      status: campaign.status || 'draft',
+      deadlineISO: campaign.deadline || campaign.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      imageUrl: campaign.image_url || null,
+      creatorId: campaign.creator_id,
+      fundingProgress: campaign.funding_progress || 0,
+      riskScore: campaign.risk_level ? Math.min(100, Math.max(0, Number(campaign.risk_level) * 20)) : 50,
+      region: campaign.location || 'Not specified',
+      // Investment-specific data
+      investmentAmount: Number(investment.amount || 0),
+      investmentStatus: investment.status,
+      investmentDate: investment.created_at
+    };
+    
+    console.log('💰 Dashboard: adaptInvestmentForCard output:', adapted);
+    console.log('💰 Dashboard: goalAmount:', adapted.goalAmount, 'raisedAmount:', adapted.raisedAmount);
+    
+    return adapted;
+  };
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
@@ -382,6 +420,8 @@ const Dashboard = () => {
           }}>
             {userInvestments.slice(0, 6).map(investment => {
               const adaptedInvestment = adaptInvestmentForCard(investment);
+              if (!adaptedInvestment) return null;
+              
               return (
                 <div key={investment.id} style={{
                   backgroundColor: 'white',
@@ -389,22 +429,20 @@ const Dashboard = () => {
                   overflow: 'hidden',
                   boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
                 }}>
-                  {adaptedInvestment.projects && (
-                    <CampaignCard campaign={adaptedInvestment.projects} />
-                  )}
+                  <CampaignCard campaign={adaptedInvestment} />
                   <div style={{ padding: '16px', borderTop: '1px solid #e5e7eb' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
                       <span style={{ color: '#6b7280' }}>Your Investment:</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(adaptedInvestment.amount)}</span>
+                      <span style={{ fontWeight: '600' }}>{formatCurrency(adaptedInvestment.investmentAmount)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginTop: '4px' }}>
                       <span style={{ color: '#6b7280' }}>Date:</span>
-                      <span>{formatDate(adaptedInvestment.created_at)}</span>
+                      <span>{formatDate(adaptedInvestment.investmentDate)}</span>
                     </div>
                   </div>
                 </div>
               );
-            })}
+            }).filter(Boolean)}
           </div>
         ) : (
           <EmptyState 
@@ -439,7 +477,7 @@ const Dashboard = () => {
             Total Raised
           </h3>
           <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#1f2937' }}>
-            {formatCurrency(userProjects.reduce((sum, project) => sum + (project.total_raised || 0), 0))}
+            {formatCurrency(totalRaised)}
           </p>
         </div>
 

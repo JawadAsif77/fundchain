@@ -11,7 +11,7 @@ export const campaigns = [
     minInvest: 1000,
     maxInvest: 50000,
     deadlineISO: '2024-12-31T23:59:59Z',
-    status: 'live',
+    status: 'active',
     riskScore: 35,
     creatorId: 2
   },
@@ -27,7 +27,7 @@ export const campaigns = [
     minInvest: 2500,
     maxInvest: 100000,
     deadlineISO: '2024-11-15T23:59:59Z',
-    status: 'live',
+    status: 'active',
     riskScore: 42,
     creatorId: 2
   },
@@ -43,7 +43,7 @@ export const campaigns = [
     minInvest: 5000,
     maxInvest: 200000,
     deadlineISO: '2025-02-28T23:59:59Z',
-    status: 'live',
+    status: 'active',
     riskScore: 28,
     creatorId: 2
   },
@@ -59,7 +59,7 @@ export const campaigns = [
     minInvest: 500,
     maxInvest: 25000,
     deadlineISO: '2024-10-30T23:59:59Z',
-    status: 'live',
+    status: 'active',
     riskScore: 55,
     creatorId: 2
   },
@@ -91,7 +91,7 @@ export const campaigns = [
     minInvest: 1000,
     maxInvest: 40000,
     deadlineISO: '2024-08-15T23:59:59Z',
-    status: 'completed',
+    status: 'successful',
     riskScore: 25,
     creatorId: 2
   },
@@ -107,7 +107,7 @@ export const campaigns = [
     minInvest: 25000,
     maxInvest: 1000000,
     deadlineISO: '2025-12-31T23:59:59Z',
-    status: 'live',
+    status: 'active',
     riskScore: 85,
     creatorId: 2
   },
@@ -123,7 +123,7 @@ export const campaigns = [
     minInvest: 500,
     maxInvest: 15000,
     deadlineISO: '2024-09-30T23:59:59Z',
-    status: 'live',
+    status: 'active',
     riskScore: 38,
     creatorId: 2
   }
