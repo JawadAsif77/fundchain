@@ -1,4 +1,5 @@
 import React from 'react';
+import { clearAllAuthArtifacts } from '../utils/authStorage.js';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -45,17 +46,14 @@ class ErrorBoundary extends React.Component {
     }));
   };
 
-  handleReset = () => {
-    // Clear all local storage and session storage
+  handleReset = async () => {
     try {
-      localStorage.clear();
-      sessionStorage.clear();
-      console.log('✅ Cleared all storage data');
+      await clearAllAuthArtifacts();
+      console.log('✅ Cleared authentication storage data');
     } catch (error) {
-      console.warn('Failed to clear storage:', error);
+      console.warn('Failed to clear authentication storage:', error);
     }
-    
-    // Force page reload
+
     window.location.reload();
   };
 

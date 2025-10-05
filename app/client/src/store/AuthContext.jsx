@@ -4,6 +4,7 @@ import { getUserRoleStatus } from '../lib/api.js';
 
 // Import the API functions we need
 import { userApi } from '../lib/api.js';
+import { clearAuthStorage, clearAuthCookies, clearAuthCaches } from '../utils/authStorage.js';
 
 const AuthContext = createContext(null);
 
@@ -24,125 +25,55 @@ const defaultRoleStatus = {
   kycStatus: 'not_started'
 };
 
-const clearSupabaseAuthStorage = () => {
-  if (typeof window === 'undefined') return;
-
-  const clearStorage = (storage) => {
-    if (!storage) return;
-
-    const keysToRemove = [];
-    for (let i = 0; i < storage.length; i += 1) {
-      const key = storage.key(i);
-      if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
-        keysToRemove.push(key);
-      }
-    }
-
-    keysToRemove.forEach((key) => {
-      try {
-        storage.removeItem(key);
-      } catch (removeError) {
-        console.warn('Unable to remove storage key:', key, removeError);
-      }
-    });
-  };
-
-  try {
-    clearStorage(window.localStorage);
-  } catch (storageError) {
-    console.warn('Unable to clear Supabase localStorage keys:', storageError);
-  }
-
-  try {
-    clearStorage(window.sessionStorage);
-  } catch (sessionError) {
-    console.warn('Unable to clear Supabase sessionStorage keys:', sessionError);
-  }
-
-  try {
-    if (typeof document !== 'undefined') {
-      document.cookie.split(';').forEach((cookie) => {
-        const trimmed = cookie.trim();
-        if (!trimmed) return;
-
-        const cookieName = trimmed.split('=')[0];
-        if (cookieName && (cookieName.startsWith('sb-') || cookieName.includes('supabase'))) {
-          document.cookie = `${cookieName}=; Max-Age=0; path=/; SameSite=Lax;`;
-          document.cookie = `${cookieName}=; Max-Age=0; path=/; domain=${window.location.hostname}; SameSite=Lax;`;
-          // Also clear for root domain
-          document.cookie = `${cookieName}=; Max-Age=0; path=/; domain=.${window.location.hostname}; SameSite=Lax;`;
-        }
-      });
-    }
-  } catch (cookieError) {
-    console.warn('Unable to clear Supabase cookies:', cookieError);
-  }
-};
-
 // Enhanced function to clear ALL authentication data
 const clearAllAuthData = async () => {
   if (typeof window === 'undefined') return;
 
-  localStorage.clear();
-  // Clear all localStorage
+  // Remove Supabase/session specific entries while leaving unrelated app data alone
+  clearAuthStorage();
+
+  // Clear any app-managed keys that may hold pending auth data
   try {
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (
-        key.startsWith('sb-') || 
-        key.includes('supabase') || 
-        key === 'pendingUserProfile' ||
-        key === 'fundchain-theme' ||
-        key.includes('auth') ||
-        key.includes('user') ||
-        key.includes('session')
-      )) {
-        keysToRemove.push(key);
+    const appKeys = ['pendingUserProfile', 'fundchain-theme'];
+    appKeys.forEach((key) => {
+      try {
+        window.localStorage.removeItem(key);
+      } catch (storageError) {
+        console.warn('Unable to remove localStorage key:', key, storageError);
       }
-    }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
+    });
   } catch (error) {
-    console.warn('Error clearing localStorage:', error);
+    console.warn('Error clearing application storage keys:', error);
   }
 
-  // Clear all sessionStorage
   try {
-    sessionStorage.clear();
+    clearAuthCookies();
   } catch (error) {
-    console.warn('Error clearing sessionStorage:', error);
+    console.warn('Error clearing authentication cookies:', error);
   }
 
-  // Clear ALL cookies
+  // Clear IndexedDB auth data if the browser supports enumeration
   try {
-    if (typeof document !== 'undefined') {
-      document.cookie.split(';').forEach((cookie) => {
-        const cookieName = cookie.split('=')[0].trim();
-        if (cookieName) {
-          // Clear for multiple domain configurations
-          const domains = ['', `domain=${window.location.hostname}`, `domain=.${window.location.hostname}`];
-          if (window.location.hostname === 'localhost') {
-            domains.push('domain=localhost');
-          }
-          
-          domains.forEach(domain => {
-            document.cookie = `${cookieName}=; Max-Age=0; path=/; ${domain}; SameSite=Lax;`;
-          });
-        }
-      });
+    if ('indexedDB' in window) {
+      const databases = await indexedDB.databases();
+      await Promise.all(databases.map((db) => {
+        if (!db?.name) return null;
+        return new Promise((resolve) => {
+          const request = indexedDB.deleteDatabase(db.name);
+          request.onerror = () => resolve();
+          request.onsuccess = () => resolve();
+          request.onblocked = () => resolve();
+        });
+      }));
     }
   } catch (error) {
-    console.warn('Error clearing cookies:', error);
+    console.warn('Error clearing IndexedDB auth data:', error);
   }
 
-  // Clear caches (for PWA/service workers)
   try {
-    if ('caches' in window) {
-      const cacheNames = await caches.keys();
-      await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
-    }
+    await clearAuthCaches();
   } catch (error) {
-    console.warn('Error clearing caches:', error);
+    console.warn('Error clearing authentication caches:', error);
   }
 };
 
@@ -503,18 +434,15 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
       setRoleStatus(null);
       
-      // Clear ALL authentication data thoroughly
-      await clearAllAuthData();
-      
       // Sign out from Supabase
       console.log('🔐 Signing out from Supabase...');
       const { error } = await supabase.auth.signOut({ scope: 'global' });
       if (error) {
         console.warn('⚠️ Supabase logout warning:', error.message);
       }
-      
-      // Additional cleanup for any remaining Supabase data
-      clearSupabaseAuthStorage();
+
+      // Clear ALL authentication data thoroughly after sign-out attempt
+      await clearAllAuthData();
       
       console.log('✅ Logout complete, redirecting...');
       
@@ -529,7 +457,6 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
       setRoleStatus(null);
       await clearAllAuthData();
-      clearSupabaseAuthStorage();
       window.location.replace('/');
     }
   };
