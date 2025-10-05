@@ -9,11 +9,12 @@ import { getPublicProjects, getUserProjects, getUserInvestments, getUserCampaign
 
 const Dashboard = () => {
   // ALL HOOKS MUST BE DECLARED FIRST - BEFORE ANY RETURNS OR CONDITIONS
-  const { user, profile, roleStatus, isFullyOnboarded, loading: authLoading } = useAuth();
+  const { user, profile, roleStatus, isFullyOnboarded, loading: authLoading, sessionVersion } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [projects, setProjects] = useState([]);
   const [investments, setInvestments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
   const [showApprovalBanner, setShowApprovalBanner] = useState(Boolean(location.state?.campaignSubmitted));
@@ -147,7 +148,16 @@ const Dashboard = () => {
       mounted = false;
       clearTimeout(timeout);
     };
-  }, [roleStatus, authLoading, isFullyOnboarded, role, user?.id]);
+  }, [roleStatus, authLoading, isFullyOnboarded, role, user?.id, sessionVersion, refreshKey]);
+
+  // Refresh when tab becomes visible to avoid stale summaries after idle periods
+  useEffect(() => {
+    const onVisibility = () => {
+      if (!document.hidden) setRefreshKey((k) => k + 1);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
 
   // Clear navigation state after first render to prevent banner reappearing on refresh
   useEffect(() => {
@@ -195,16 +205,16 @@ const Dashboard = () => {
     amount: investment.amount,
     status: investment.status,
     created_at: investment.created_at,
-    projects: investment.projects ? {
-      id: investment.projects.id,
-      slug: investment.projects.slug,
-      title: investment.projects.title,
-      summary: investment.projects.summary,
-      category: investment.projects.category,
-      goalAmount: investment.projects.goal_amount,
-      status: investment.projects.status,
-      deadlineISO: investment.projects.deadline,
-      imageUrl: investment.projects.image_url
+    projects: investment.campaigns ? {
+      id: investment.campaigns.id,
+      slug: investment.campaigns.slug,
+      title: investment.campaigns.title,
+      summary: investment.campaigns.short_description || investment.campaigns.summary,
+      category: investment.campaigns.category || 'General',
+      goalAmount: investment.campaigns.goal_amount || investment.campaigns.funding_goal,
+      status: investment.campaigns.status,
+      deadlineISO: investment.campaigns.deadline || investment.campaigns.end_date,
+      imageUrl: investment.campaigns.image_url
     } : null
   });
 
@@ -320,7 +330,7 @@ const Dashboard = () => {
             Active Investments
           </h3>
           <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#1f2937' }}>
-            {userInvestments.filter(inv => inv.projects?.status === 'active').length}
+            {userInvestments.filter(inv => inv.campaigns?.status === 'active').length}
           </p>
         </div>
 

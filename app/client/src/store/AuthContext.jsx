@@ -153,6 +153,8 @@ export const AuthProvider = ({ children }) => {
   const [roleStatus, setRoleStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Increment this whenever auth/session refreshes so views can refetch
+  const [sessionVersion, setSessionVersion] = useState(0);
 
   // Load initial session and set up auth listener
   useEffect(() => {
@@ -223,6 +225,8 @@ export const AuthProvider = ({ children }) => {
           setUser(session.user);
           // Don't reload profile on token refresh to avoid unnecessary calls
         }
+        // Bump session version so consumers can refetch protected data
+        setSessionVersion(v => v + 1);
         setLoading(false);
         return;
       }
@@ -233,6 +237,7 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
         setProfile(null);
         setRoleStatus(null);
+        setSessionVersion(v => v + 1);
         setLoading(false);
         return;
       }
@@ -240,6 +245,7 @@ export const AuthProvider = ({ children }) => {
       if (session?.user) {
         console.log('AuthContext: Setting user from auth change:', session.user.id);
         setUser(session.user);
+        setSessionVersion(v => v + 1);
         
         try {
           console.log('AuthContext: Loading user profile...');
@@ -734,6 +740,7 @@ export const AuthProvider = ({ children }) => {
     user: getCurrentUser(),
     profile,
     roleStatus,
+    sessionVersion,
     login,
     register,
     logout,

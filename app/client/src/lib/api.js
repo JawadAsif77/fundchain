@@ -560,7 +560,36 @@ export const campaignApi = {
         if (!campaign) throw new Error('Campaign not found');
         return { data: campaign };
       }
-      
+      // Try to fetch authoritative stats via RPC (if deployed)
+      try {
+        const { data: stats, error: statsErr } = await supabase.rpc('get_campaign_stats', { campaign_id: data.id });
+        if (!statsErr && stats && (typeof stats.current_funding !== 'undefined')) {
+          // Merge stats onto row
+          return { data: { ...data, current_funding: stats.current_funding, investor_count: stats.investor_count } };
+        }
+      } catch (_) {
+        // Ignore if RPC not available; fall back to row values
+      }
+      // Fallback: compute from investments if triggers are not active
+      try {
+        const { data: invs, error: invErr } = await supabase
+          .from('investments')
+          .select('amount, investor_id, status')
+          .eq('campaign_id', data.id)
+          .eq('status', 'confirmed');
+        if (!invErr && Array.isArray(invs)) {
+          const current = Number(
+            invs.reduce((sum, row) => sum + Number(row.amount || 0), 0)
+          );
+          const uniqueInvestors = new Set(invs.map(r => r.investor_id)).size;
+          const merged = {
+            ...data,
+            current_funding: (Number(data.current_funding || 0) > 0) ? Number(data.current_funding) : current,
+            investor_count: (Number(data.investor_count || 0) > 0) ? Number(data.investor_count) : uniqueInvestors
+          };
+          return { data: merged };
+        }
+      } catch (_) {}
       return { data };
     } catch (error) {
       console.error('💥 Get campaign error:', error);

@@ -8,40 +8,24 @@ const Header = () => {
   const { user, profile, logout, validateSession } = useAuth();
   const location = useLocation();
 
-  // Session health monitor - optimized to prevent interference
+  // Session health monitor - do not auto-logout; Supabase client already refreshes tokens
   useEffect(() => {
     if (!user) return;
-
-    // Check session health every 10 minutes (reduced frequency)
     const sessionCheck = setInterval(async () => {
       try {
-        // Only check if tab is visible to prevent unnecessary API calls
         if (document.hidden) return;
-        
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error || !session) {
-          console.warn('Header: Session invalid, logging out user');
-          logout();
-          return;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          // Attempt a gentle refresh; avoid logging user out automatically
+          await supabase.auth.refreshSession();
         }
-        
-        // Refresh only when expired; avoid proactive refresh races
-        const expiresAt = session.expires_at * 1000;
-        if (expiresAt <= Date.now()) {
-          console.log('Header: Token expired, attempting refresh...');
-          const { error: refreshError } = await supabase.auth.refreshSession();
-          if (refreshError) {
-            console.error('Header: Token refresh failed:', refreshError);
-          }
-        }
-      } catch (error) {
-        console.error('Header: Session check failed:', error);
+      } catch (err) {
+        // Log and continue; do not clear auth
+        console.warn('Header: session check warning:', err?.message || err);
       }
-    }, 10 * 60 * 1000); // Check every 10 minutes (reduced frequency)
-
+    }, 10 * 60 * 1000);
     return () => clearInterval(sessionCheck);
-  }, [user, logout]);
+  }, [user]);
 
   const isActiveLink = (path) => {
     if (path === '/') {
