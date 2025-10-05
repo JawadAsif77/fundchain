@@ -1,10 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { auth, db, supabase } from '../lib/supabase.js';
 import { getUserRoleStatus } from '../lib/api.js';
 
 // Import the API functions we need
 import { userApi } from '../lib/api.js';
-import { clearAuthStorage, clearAuthCookies, clearAuthCaches } from '../utils/authStorage.js';
+import { clearAllAuthArtifacts, forceClearSupabaseSession } from '../utils/authStorage.js';
 
 const AuthContext = createContext(null);
 
@@ -29,27 +29,16 @@ const defaultRoleStatus = {
 const clearAllAuthData = async () => {
   if (typeof window === 'undefined') return;
 
-  // Remove Supabase/session specific entries while leaving unrelated app data alone
-  clearAuthStorage();
+  const appManagedKeys = ['pendingUserProfile', 'fundchain-theme'];
 
-  // Clear any app-managed keys that may hold pending auth data
   try {
-    const appKeys = ['pendingUserProfile', 'fundchain-theme'];
-    appKeys.forEach((key) => {
-      try {
-        window.localStorage.removeItem(key);
-      } catch (storageError) {
-        console.warn('Unable to remove localStorage key:', key, storageError);
-      }
+    await clearAllAuthArtifacts({
+      additionalStorageKeys: appManagedKeys,
+      additionalCookieNames: appManagedKeys,
+      additionalCacheKeys: appManagedKeys
     });
   } catch (error) {
-    console.warn('Error clearing application storage keys:', error);
-  }
-
-  try {
-    clearAuthCookies();
-  } catch (error) {
-    console.warn('Error clearing authentication cookies:', error);
+    console.warn('Error clearing authentication artifacts:', error);
   }
 
   // Clear IndexedDB auth data if the browser supports enumeration
@@ -70,10 +59,35 @@ const clearAllAuthData = async () => {
     console.warn('Error clearing IndexedDB auth data:', error);
   }
 
+};
+
+const ensureSupabaseSessionDestroyed = async () => {
   try {
-    await clearAuthCaches();
-  } catch (error) {
-    console.warn('Error clearing authentication caches:', error);
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session?.user) {
+      return;
+    }
+
+    console.warn('AuthContext: Residual Supabase session detected after cleanup, forcing purge.');
+    await forceClearSupabaseSession();
+
+    try {
+      const { data: { session: postClearSession } } = await supabase.auth.getSession();
+      if (postClearSession?.user) {
+        console.warn('AuthContext: Supabase session persisted after forced cleanup attempt, retrying local sign-out.');
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+        } catch (signOutError) {
+          console.warn('AuthContext: Local Supabase sign-out retry failed:', signOutError);
+        }
+      }
+    } catch (verificationError) {
+      console.warn('AuthContext: Unable to verify Supabase session after forced cleanup:', verificationError);
+    }
+  } catch (verificationError) {
+    console.warn('AuthContext: Unable to verify Supabase session before cleanup:', verificationError);
+    await forceClearSupabaseSession();
   }
 };
 
@@ -129,8 +143,8 @@ export const AuthProvider = ({ children }) => {
           console.log('AuthContext: Setting loading to false');
           setLoading(false);
         }
-      }
-    };
+    }
+  };
 
     // Add timeout to prevent infinite loading - reduce to 3 seconds for snappier UX
     const timeout = setTimeout(() => {
@@ -443,9 +457,10 @@ export const AuthProvider = ({ children }) => {
 
       // Clear ALL authentication data thoroughly after sign-out attempt
       await clearAllAuthData();
-      
+      await ensureSupabaseSessionDestroyed();
+
       console.log('✅ Logout complete, redirecting...');
-      
+
       // Use replace to prevent back button issues
       window.location.replace('/');
       
@@ -457,6 +472,7 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
       setRoleStatus(null);
       await clearAllAuthData();
+      await ensureSupabaseSessionDestroyed();
       window.location.replace('/');
     }
   };
