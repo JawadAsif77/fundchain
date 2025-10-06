@@ -88,37 +88,20 @@ export const userApi = {
       
       console.log('✅ Mapped to database format:', updateData);
       
-      // Perform update with minimal return to avoid RLS issues on SELECT after UPDATE
-      const { error: updateError } = await supabase
+      // Perform update and return updated data in one query
+      const { data, error } = await supabase
         .from('users')
         .update(updateData)
-        .eq('id', userId);
-
-      if (updateError) {
-        console.error('❌ Database update failed:', updateError);
-        throw new Error(`Failed to update profile: ${updateError.message}`);
-      }
-
-      console.log('✅ Update applied, fetching fresh profile...');
-      const { data, error: fetchError } = await supabase
-        .from('users')
-        .select(`
-          id, email, username, full_name, avatar_url, role,
-          linkedin_url, twitter_url, instagram_url, is_verified,
-          created_at, updated_at, bio, location, phone, date_of_birth,
-          social_links, preferences, verification_level, trust_score,
-          referral_code, last_active_at, followers_count, following_count,
-          is_accredited_investor, total_invested, total_campaigns_backed
-        `)
         .eq('id', userId)
+        .select('*')
         .single();
 
-      if (fetchError) {
-        console.error('⚠️ Profile fetch after update failed:', fetchError);
-        throw new Error(`Profile updated but fetch failed: ${fetchError.message}`);
+      if (error) {
+        console.error('❌ Database update failed:', error);
+        throw new Error(`Failed to update profile: ${error.message}`);
       }
 
-      console.log('🎉 Profile updated and fetched successfully');
+      console.log('🎉 Profile updated successfully:', data);
       // Normalize return shape for callers expecting { data, error }
       return { data, error: null };
       
@@ -132,16 +115,21 @@ export const userApi = {
   // Create new user record
   async createUser(userData) {
     try {
-      console.log('🆕 API: Creating user record');
+      console.log('🆕 API: Creating user record', userData);
       
       const userRecord = {
         id: userData.id,
         email: userData.email,
-        full_name: userData.user_metadata?.full_name || userData.email?.split('@')[0],
-        role: 'investor', // Default role
+        full_name: userData.full_name || userData.user_metadata?.full_name || userData.email?.split('@')[0],
+        username: userData.username || userData.user_metadata?.username || null,
+        role: userData.role || userData.user_metadata?.role || 'investor',
+        avatar_url: userData.avatar_url || userData.user_metadata?.avatar_url || null,
+        is_verified: userData.is_verified || 'no',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
+      
+      console.log('🆕 API: Inserting user record:', userRecord);
       
       const { data, error } = await supabase
         .from('users')
@@ -154,8 +142,8 @@ export const userApi = {
         throw new Error(`Failed to create user: ${error.message}`);
       }
       
-      console.log('✅ User created successfully');
-      return data;
+      console.log('✅ User created successfully:', data);
+      return { data, error: null };
     } catch (error) {
       console.error('💥 Create user error:', error);
       throw error;
@@ -715,11 +703,19 @@ export const walletApi = {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth?.user?.id;
     if (!uid) return { success: false, balance: 0, error: 'Not authenticated' };
+    
     const { data, error } = await supabase
       .from('users')
       .select('preferences')
       .eq('id', uid)
       .single();
+    
+    // If user profile doesn't exist yet, return 0 balance instead of error
+    if (error && error.code === 'PGRST116') {
+      console.log('User profile not found, returning 0 balance');
+      return { success: true, balance: 0 };
+    }
+    
     if (error) return { success: false, balance: 0, error: error.message };
     const balance = Number(data?.preferences?.wallet_balance || 0);
     return { success: true, balance };
@@ -730,13 +726,39 @@ export const walletApi = {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth?.user?.id;
     if (!uid) return { success: false, error: 'Not authenticated' };
+    
     // Read current preferences
     const { data: current, error: readErr } = await supabase
       .from('users')
       .select('preferences')
       .eq('id', uid)
       .single();
+    
+    // If user profile doesn't exist, create a basic one first
+    if (readErr && readErr.code === 'PGRST116') {
+      console.log('User profile not found for topUp, creating basic profile...');
+      const basicProfile = {
+        id: uid,
+        email: auth.user.email,
+        full_name: auth.user.user_metadata?.full_name || auth.user.email?.split('@')[0] || '',
+        username: auth.user.user_metadata?.username || null,
+        role: auth.user.user_metadata?.role || 'investor',
+        is_verified: 'no',
+        preferences: { wallet_balance: Number(amount) },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      const { error: insertErr } = await supabase
+        .from('users')
+        .insert(basicProfile);
+        
+      if (insertErr) return { success: false, error: insertErr.message };
+      return { success: true, balance: Number(amount) };
+    }
+    
     if (readErr) return { success: false, error: readErr.message };
+    
     const prefs = current?.preferences || {};
     const nextBalance = Number(prefs.wallet_balance || 0) + Number(amount);
     const nextPrefs = { ...prefs, wallet_balance: nextBalance };
@@ -831,6 +853,12 @@ export const walletApi = {
       .select('preferences')
       .eq('id', uid)
       .single();
+    
+    // If user profile doesn't exist, we have a problem - they shouldn't be able to invest without a profile
+    if (readErr && readErr.code === 'PGRST116') {
+      return { success: false, error: 'User profile not found. Please refresh and try again.' };
+    }
+    
     if (readErr) return { success: false, error: readErr.message };
     const prefs = current?.preferences || {};
     const nextBalance = Math.max(0, Number(prefs.wallet_balance || 0) - Number(amount));
@@ -899,7 +927,10 @@ export const getUserRoleStatus = async (userId) => {
     
     // Check if user has a valid role set (investor and creator are both valid)
     const validRoles = ['investor', 'creator', 'admin'];
-    const hasRole = !!(data?.role && validRoles.includes(data.role));
+    // Normalize role, defaulting to investor if missing
+    const normalizedRole = validRoles.includes(data?.role) ? data.role : 'investor';
+    // Treat default investor as a valid role so investors aren't gated on role selection
+    const hasRole = !!(data?.role && validRoles.includes(data.role)) || normalizedRole === 'investor';
     
     // For creators, check if they have KYC verification or company data
   let companyData = null;
@@ -923,8 +954,8 @@ export const getUserRoleStatus = async (userId) => {
     
     return {
       hasRole,
-      // Normalize to a valid role with investor as safe default
-      role: validRoles.includes(data?.role) ? data.role : 'investor',
+      // Use normalized role with investor as safe default
+      role: normalizedRole,
       isVerified: data?.is_verified === 'yes',
       verificationLevel: data?.verification_level || 'basic',
       companyData,
@@ -936,7 +967,8 @@ export const getUserRoleStatus = async (userId) => {
   } catch (error) {
     console.error('Error getting user role status:', error);
     return { 
-      hasRole: false,
+      // On errors, allow investor flow by default
+      hasRole: true,
       role: 'investor', 
       isVerified: false, 
       verificationLevel: 'basic',

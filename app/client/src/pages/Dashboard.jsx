@@ -49,8 +49,9 @@ const Dashboard = () => {
         return;
       }
 
-      if (!roleStatus?.hasRole) {
-        if (debugLog) console.log('User has no role, redirecting to profile for role selection...');
+      // Only enforce role selection for non-investors; investors are valid by default
+      if (!roleStatus?.hasRole && (role !== 'investor')) {
+        if (debugLog) console.log('User has no creator/admin role, redirecting to profile for role selection...');
         navigate('/profile', { replace: true });
         return;
       }
@@ -69,7 +70,7 @@ const Dashboard = () => {
           return;
         }
         
-        // If KYC submission pending or missing, we keep the banner but do not block dashboard
+        // If KYC submission pending or missing, we keep the banner but do not block dashboard for creators
       }
 
     // Both investors and creators can access dashboard (creators may see KYC prompts)

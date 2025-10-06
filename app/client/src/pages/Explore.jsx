@@ -103,7 +103,7 @@ const Explore = () => {
     }
 
     return filtered;
-  }, [filters]);
+  }, [filters, allCampaigns]);
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredAndSortedCampaigns.length / itemsPerPage);
@@ -186,7 +186,7 @@ const Explore = () => {
               message="Try adjusting your search terms or filters to find more results."
               action={
                 <button 
-                  onClick={() => handleFiltersChange({ search: '', category: '', status: '', sort: 'newest' })}
+                  onClick={() => handleFiltersChange({ search: '', category: '', status: 'active', sort: 'newest' })}
                   className="btn-primary"
                 >
                   Clear All Filters

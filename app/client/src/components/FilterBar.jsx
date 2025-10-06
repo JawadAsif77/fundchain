@@ -81,14 +81,16 @@ const FilterBar = ({ onFiltersChange }) => {
     const resetFilters = {
       search: '',
       category: '',
-      status: '',
+      status: 'active',
       sort: 'newest'
     };
     
     setFilters(resetFilters);
     
-    // Clear URL parameters
-    setSearchParams(new URLSearchParams(), { replace: true });
+    // Clear URL parameters but keep default status active
+    const params = new URLSearchParams();
+    params.set('status', 'active');
+    setSearchParams(params, { replace: true });
   };
 
   return (
