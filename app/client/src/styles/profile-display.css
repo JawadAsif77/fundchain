@@ -1,19 +1,22 @@
+@import './tokens.css';
+@import './theme.css';
+
 /* Profile Display Page Styles */
 .profile-display-container {
   max-width: 1000px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: var(--space-5);
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--gradient-hero);
 }
 
 /* Header Section */
 .profile-header {
-  background: white;
-  border-radius: 20px;
-  padding: 2rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  box-shadow: var(--shadow-card);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -22,7 +25,7 @@
 
 .profile-avatar-section {
   display: flex;
-  gap: 1.5rem;
+  gap: var(--space-4);
   align-items: center;
 }
 
@@ -31,8 +34,8 @@
   height: 120px;
   border-radius: 50%;
   overflow: hidden;
-  border: 4px solid #667eea;
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+  border: 4px solid var(--color-primary);
+  box-shadow: var(--shadow-glow);
 }
 
 .profile-avatar img {
@@ -44,24 +47,24 @@
 .avatar-placeholder {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: var(--gradient-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 3rem;
-  font-weight: bold;
-  color: white;
+  font-weight: 700;
+  color: var(--color-primary-ink);
 }
 
 .profile-basic-info h1 {
   margin: 0 0 0.5rem 0;
   font-size: 2.5rem;
-  color: #2d3748;
+  color: var(--color-text);
   font-weight: 700;
 }
 
 .username {
-  color: #667eea;
+  color: var(--color-primary);
   font-size: 1.2rem;
   margin: 0 0 1rem 0;
   font-weight: 500;
@@ -75,59 +78,59 @@
 
 .role-badge {
   padding: 0.5rem 1rem;
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   font-size: 0.9rem;
   font-weight: 600;
-  color: white;
+  color: var(--color-primary-ink);
 }
 
 .role-badge.creator {
-  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  background: var(--gradient-accent);
 }
 
 .role-badge.investor {
-  background: linear-gradient(135deg, #4ecdc4, #44bd87);
+  background: var(--gradient-primary);
 }
 
 .verified-badge {
-  background: linear-gradient(135deg, #feca57, #ff9ff3);
-  color: white;
+  background: var(--color-success-bg);
+  color: var(--color-success);
   padding: 0.5rem 1rem;
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   font-size: 0.9rem;
   font-weight: 600;
 }
 
 .edit-profile-btn {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
+  background: var(--gradient-primary);
+  color: var(--color-primary-ink);
   border: none;
   padding: 0.75rem 1.5rem;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  box-shadow: var(--shadow-card);
 }
 
 .edit-profile-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: var(--shadow-lg);
 }
 
 /* Main Content */
 .profile-content {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--space-3);
 }
 
 .profile-section {
-  background: white;
-  border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-soft);
   transition: transform 0.3s ease;
 }
 
@@ -136,11 +139,11 @@
 }
 
 .profile-section h2 {
-  margin: 0 0 1.5rem 0;
-  color: #2d3748;
+  margin: 0 0 var(--space-3) 0;
+  color: var(--color-text);
   font-size: 1.5rem;
   font-weight: 600;
-  border-bottom: 3px solid #667eea;
+  border-bottom: 3px solid var(--color-primary);
   padding-bottom: 0.5rem;
   display: inline-block;
 }
@@ -148,13 +151,13 @@
 /* About Section */
 .about-content p {
   line-height: 1.6;
-  color: #4a5568;
+  color: var(--color-text-light);
   font-size: 1.1rem;
   margin: 0;
 }
 
 .empty-state {
-  color: #a0aec0;
+  color: var(--color-muted);
   font-style: italic;
 }
 
@@ -162,7 +165,7 @@
 .info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .info-item {
@@ -173,49 +176,45 @@
 
 .info-item label {
   font-weight: 600;
-  color: #4a5568;
+  color: var(--color-text-light);
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .info-item span {
-  color: #2d3748;
+  color: var(--color-text);
   font-size: 1.1rem;
   padding: 0.5rem 0;
-  border-bottom: 2px solid #f7fafc;
+  border-bottom: 2px solid var(--color-bg-elev);
 }
 
 /* Social Links */
 .social-links {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
 .social-link {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-3);
   padding: 0.75rem 1.25rem;
-  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-  border-radius: 12px;
+  background: linear-gradient(135deg, var(--color-bg-elev), var(--color-bg));
+  border-radius: var(--radius-md);
   text-decoration: none;
-  color: #495057;
+  color: var(--color-text-light);
   font-weight: 500;
   transition: all 0.3s ease;
   border: 2px solid transparent;
 }
 
 .social-link:hover {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
+  background: var(--gradient-primary);
+  color: var(--color-primary-ink);
   transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-}
-
-.social-icon {
-  font-size: 1.2rem;
+  box-shadow: var(--shadow-card);
 }
 
 /* Stats Grid */
@@ -229,34 +228,34 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1.5rem;
-  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-  border-radius: 12px;
+  padding: var(--space-4);
+  background: linear-gradient(135deg, var(--color-bg-elev), var(--color-bg));
+  border-radius: var(--radius-md);
   transition: all 0.3s ease;
   border: 2px solid transparent;
 }
 
 .stat-item:hover {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
+  background: var(--gradient-primary);
+  color: var(--color-primary-ink);
   transform: translateY(-3px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 .stat-number {
   font-size: 2rem;
-  font-weight: bold;
-  color: #2d3748;
+  font-weight: 700;
+  color: var(--color-text);
   transition: color 0.3s ease;
 }
 
 .stat-item:hover .stat-number {
-  color: white;
+  color: var(--color-primary-ink);
 }
 
 .stat-label {
   font-size: 0.9rem;
-  color: #6c757d;
+  color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-top: 0.5rem;
@@ -274,24 +273,24 @@
 
 /* Profile Error */
 .profile-error {
-  background: white;
-  border-radius: 16px;
-  padding: 3rem;
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
   text-align: center;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-card);
 }
 
 .profile-error h2 {
-  color: #e53e3e;
-  margin-bottom: 1rem;
+  color: var(--color-danger);
+  margin-bottom: var(--space-3);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
+  background: var(--gradient-primary);
+  color: var(--color-primary-ink);
   border: none;
   padding: 0.75rem 1.5rem;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -302,44 +301,44 @@
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: var(--shadow-lg);
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
   .profile-display-container {
-    padding: 1rem;
+    padding: var(--space-4);
   }
-  
+
   .profile-header {
     flex-direction: column;
-    gap: 1.5rem;
+    gap: var(--space-4);
     align-items: center;
     text-align: center;
   }
-  
+
   .profile-avatar-section {
     flex-direction: column;
     text-align: center;
   }
-  
+
   .profile-avatar {
     width: 100px;
     height: 100px;
   }
-  
+
   .profile-basic-info h1 {
     font-size: 2rem;
   }
-  
+
   .info-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .social-links {
     justify-content: center;
   }

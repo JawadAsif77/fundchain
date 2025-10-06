@@ -287,8 +287,8 @@ const Dashboard = () => {
           <div style={{
             width: '40px',
             height: '40px',
-            border: '4px solid #e5e7eb',
-            borderTop: '4px solid #3b82f6',
+            border: '4px solid var(--color-bg-elev)',
+            borderTop: '4px solid var(--color-primary)',
             borderRadius: '50%',
             animation: 'spin 1s linear infinite',
             margin: '0 auto 16px'
@@ -323,8 +323,8 @@ const Dashboard = () => {
           <div style={{
             width: '40px',
             height: '40px',
-            border: '4px solid #e5e7eb',
-            borderTop: '4px solid #3b82f6',
+            border: '4px solid var(--color-bg-elev)',
+            borderTop: '4px solid var(--color-primary)',
             borderRadius: '50%',
             animation: 'spin 1s linear infinite',
             margin: '0 auto 16px'
@@ -346,43 +346,43 @@ const Dashboard = () => {
         marginBottom: '32px'
       }}>
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: 'var(--color-white)',
           padding: '24px',
           borderRadius: '12px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+          boxShadow: 'var(--shadow-sm)'
         }}>
-          <h3 style={{ fontSize: '14px', fontWeight: '500', color: '#6b7280', marginBottom: '8px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '500', color: 'var(--color-muted)', marginBottom: '8px' }}>
             Total Invested
           </h3>
-          <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#1f2937' }}>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--color-text)' }}>
             {formatCurrency(userInvestments.reduce((sum, inv) => sum + (inv.amount || 0), 0))}
           </p>
         </div>
 
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: 'var(--color-white)',
           padding: '24px',
           borderRadius: '12px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+          boxShadow: 'var(--shadow-sm)'
         }}>
-          <h3 style={{ fontSize: '14px', fontWeight: '500', color: '#6b7280', marginBottom: '8px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '500', color: 'var(--color-muted)', marginBottom: '8px' }}>
             Active Investments
           </h3>
-          <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#1f2937' }}>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--color-text)' }}>
             {userInvestments.filter(inv => inv.campaigns?.status === 'active').length}
           </p>
         </div>
 
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: 'var(--color-white)',
           padding: '24px',
           borderRadius: '12px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+          boxShadow: 'var(--shadow-sm)'
         }}>
-          <h3 style={{ fontSize: '14px', fontWeight: '500', color: '#6b7280', marginBottom: '8px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '500', color: 'var(--color-muted)', marginBottom: '8px' }}>
             Portfolio Projects
           </h3>
-          <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#1f2937' }}>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--color-text)' }}>
             {userInvestments.length}
           </p>
         </div>
@@ -401,8 +401,8 @@ const Dashboard = () => {
             to="/explore" 
             style={{
               padding: '8px 16px',
-              backgroundColor: '#3b82f6',
-              color: 'white',
+              backgroundColor: 'var(--color-primary)',
+              color: 'var(--color-primary-ink)',
               textDecoration: 'none',
               borderRadius: '6px',
               fontSize: '14px',
@@ -425,19 +425,19 @@ const Dashboard = () => {
               
               return (
                 <div key={investment.id} style={{
-                  backgroundColor: 'white',
+                  backgroundColor: 'var(--color-white)',
                   borderRadius: '12px',
                   overflow: 'hidden',
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                  boxShadow: 'var(--shadow-sm)'
                 }}>
                   <CampaignCard campaign={adaptedInvestment} />
-                  <div style={{ padding: '16px', borderTop: '1px solid #e5e7eb' }}>
+                  <div style={{ padding: '16px', borderTop: '1px solid var(--color-border)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
-                      <span style={{ color: '#6b7280' }}>Your Investment:</span>
+                      <span style={{ color: 'var(--color-muted)' }}>Your Investment:</span>
                       <span style={{ fontWeight: '600' }}>{formatCurrency(adaptedInvestment.investmentAmount)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginTop: '4px' }}>
-                      <span style={{ color: '#6b7280' }}>Date:</span>
+                      <span style={{ color: 'var(--color-muted)' }}>Date:</span>
                       <span>{formatDate(adaptedInvestment.investmentDate)}</span>
                     </div>
                   </div>
@@ -469,43 +469,43 @@ const Dashboard = () => {
         marginBottom: '32px'
       }}>
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: 'var(--color-white)',
           padding: '24px',
           borderRadius: '12px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+          boxShadow: 'var(--shadow-sm)'
         }}>
-          <h3 style={{ fontSize: '14px', fontWeight: '500', color: '#6b7280', marginBottom: '8px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '500', color: 'var(--color-muted)', marginBottom: '8px' }}>
             Total Raised
           </h3>
-          <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#1f2937' }}>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--color-text)' }}>
             {formatCurrency(totalRaised)}
           </p>
         </div>
 
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: 'var(--color-white)',
           padding: '24px',
           borderRadius: '12px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+          boxShadow: 'var(--shadow-sm)'
         }}>
-          <h3 style={{ fontSize: '14px', fontWeight: '500', color: '#6b7280', marginBottom: '8px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '500', color: 'var(--color-muted)', marginBottom: '8px' }}>
             Active Projects
           </h3>
-          <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#1f2937' }}>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--color-text)' }}>
             {userProjects.filter(p => p.status === 'active').length}
           </p>
         </div>
 
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: 'var(--color-white)',
           padding: '24px',
           borderRadius: '12px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+          boxShadow: 'var(--shadow-sm)'
         }}>
-          <h3 style={{ fontSize: '14px', fontWeight: '500', color: '#6b7280', marginBottom: '8px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '500', color: 'var(--color-muted)', marginBottom: '8px' }}>
             Total Projects
           </h3>
-          <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#1f2937' }}>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--color-text)' }}>
             {userProjects.length}
           </p>
         </div>
@@ -514,8 +514,8 @@ const Dashboard = () => {
       {/* KYC Status */}
       {!isVerified && (
         <div style={{
-          backgroundColor: '#fef3c7',
-          border: '1px solid #f59e0b',
+          backgroundColor: 'var(--color-warning-bg)',
+          border: '1px solid var(--color-warning)',
           borderRadius: '8px',
           padding: '16px',
           marginBottom: '24px'
@@ -523,10 +523,10 @@ const Dashboard = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '20px' }}>⚠️</span>
             <div>
-              <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#92400e' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-warning)' }}>
                 Tell us about your business
               </h3>
-              <p style={{ fontSize: '13px', color: '#92400e', margin: '4px 0' }}>
+              <p style={{ fontSize: '13px', color: 'var(--color-warning)', margin: '4px 0' }}>
                 Complete your verification to unlock project creation and fundraising tools.
               </p>
               <Link
@@ -535,8 +535,8 @@ const Dashboard = () => {
                   display: 'inline-block',
                   marginTop: '8px',
                   padding: '6px 12px',
-                  backgroundColor: '#f59e0b',
-                  color: 'white',
+                  backgroundColor: 'var(--color-warning)',
+                  color: 'var(--color-white)',
                   textDecoration: 'none',
                   borderRadius: '4px',
                   fontSize: '12px',
@@ -566,8 +566,8 @@ const Dashboard = () => {
               }}
               style={{
                 padding: '8px 16px',
-                backgroundColor: '#10b981',
-                color: 'white',
+                backgroundColor: 'var(--color-success)',
+                color: 'var(--color-white)',
                 border: 'none',
                 borderRadius: '6px',
                 fontSize: '14px',
@@ -580,7 +580,7 @@ const Dashboard = () => {
           ) : (
             <span style={{
               fontSize: '12px',
-              color: '#6b7280',
+              color: 'var(--color-muted)',
               fontStyle: 'italic'
             }}>
               Complete verification to create projects
@@ -635,9 +635,9 @@ const Dashboard = () => {
           marginBottom: '24px',
           padding: '16px',
           borderRadius: '12px',
-          backgroundColor: '#ecfeff',
-          border: '1px solid #67e8f9',
-          color: '#0e7490',
+          backgroundColor: 'var(--color-info-bg)',
+          border: '1px solid rgba(59,130,246,0.12)',
+          color: 'var(--color-info)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -652,9 +652,9 @@ const Dashboard = () => {
             style={{
               padding: '6px 12px',
               backgroundColor: 'transparent',
-              border: '1px solid #67e8f9',
+              border: '1px solid var(--color-info)',
               borderRadius: '6px',
-              color: '#0e7490',
+              color: 'var(--color-info)',
               cursor: 'pointer',
               fontSize: '12px'
             }}
@@ -665,26 +665,26 @@ const Dashboard = () => {
       )}
 
       {/* Show banner if user has any campaigns pending review */}
-      {role === 'creator' && userProjects.some(p => p.status === 'pending_review') && (
+          {role === 'creator' && userProjects.some(p => p.status === 'pending_review') && (
         <div style={{
           marginBottom: '24px',
           padding: '16px',
           borderRadius: '12px',
-          backgroundColor: '#fffbeb',
-          border: '1px solid #fde68a',
-          color: '#92400e'
+          backgroundColor: 'var(--color-warning-bg)',
+          border: '1px solid rgba(245,158,11,0.12)',
+          color: 'var(--color-warning)'
         }}>
           You have campaigns awaiting admin approval. They’ll appear publicly once approved.
         </div>
       )}
-      {showKYCPendingBanner && (
+          {showKYCPendingBanner && (
         <div style={{
           marginBottom: '24px',
           padding: '16px',
           borderRadius: '12px',
-          backgroundColor: '#fff7ed',
-          border: '1px solid #fdba74',
-          color: '#9a3412',
+          backgroundColor: 'var(--color-warning-bg)',
+          border: '1px solid rgba(250, 204, 21, 0.12)',
+          color: 'var(--color-warning)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -698,8 +698,8 @@ const Dashboard = () => {
             to="/kyc"
             style={{
               padding: '8px 16px',
-              backgroundColor: '#f97316',
-              color: 'white',
+              backgroundColor: 'var(--color-warning)',
+              color: 'var(--color-white)',
               borderRadius: '6px',
               textDecoration: 'none',
               fontSize: '14px',
@@ -724,36 +724,36 @@ const Dashboard = () => {
           <h1 style={{ 
             fontSize: '32px', 
             fontWeight: 'bold', 
-            color: '#1f2937',
+            color: 'var(--color-text)',
             marginBottom: '8px'
           }}>
         {role === 'investor' ? 'Investor Dashboard' : 'Creator Dashboard'}
           </h1>
           <p style={{ 
             fontSize: '16px', 
-            color: '#6b7280' 
+            color: 'var(--color-muted)' 
           }}>
             Welcome back, {user?.displayName || user?.full_name || user?.email}
           </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <span style={{
-            padding: '4px 12px',
-            backgroundColor: isInvestor ? '#dbeafe' : '#dcfce7',
-            color: isInvestor ? '#1e40af' : '#166534',
-            borderRadius: '20px',
-            fontSize: '12px',
-            fontWeight: '500'
-          }}>
-            {isInvestor ? '💰 Investor' : '🚀 Creator'}
-          </span>
-
+          <Link
+            to="/kyc"
+            style={{
+              padding: '8px 16px',
+              backgroundColor: 'var(--color-warning)',
+              color: 'var(--color-white)',
+              borderRadius: '6px',
+              textDecoration: 'none',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            Update details
+          </Link>
           {isCreator && (
             <span style={{
               padding: '4px 12px',
-              backgroundColor: roleStatus?.isKYCVerified ? '#dcfce7' : '#fee2e2',
-              color: roleStatus?.isKYCVerified ? '#166534' : '#991b1b',
+              backgroundColor: roleStatus?.isKYCVerified ? 'var(--color-success-bg)' : 'var(--color-danger-bg)',
+              color: roleStatus?.isKYCVerified ? 'var(--color-success)' : 'var(--color-danger)',
               borderRadius: '20px',
               fontSize: '12px',
               fontWeight: '500'

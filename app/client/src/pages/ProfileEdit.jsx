@@ -313,18 +313,18 @@ const Profile = () => {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundColor: '#f8fafc',
+      backgroundColor: 'var(--color-bg-elev)',
       padding: '2rem 0' 
     }}>
       <div className="container" style={{ maxWidth: '1000px' }}>
         
         {/* Header Section */}
         <div style={{
-          background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-          borderRadius: '1rem',
-          padding: '3rem 2rem',
-          marginBottom: '2rem',
-          color: 'white',
+          background: 'var(--gradient-primary)',
+          borderRadius: 'var(--radius-lg)',
+          padding: 'var(--space-6) var(--space-4)',
+          marginBottom: 'var(--space-4)',
+          color: 'var(--color-primary-ink)',
           textAlign: 'center'
         }}>
           <div style={{
@@ -380,22 +380,22 @@ const Profile = () => {
 
         {/* Main Content */}
         <div style={{
-          backgroundColor: 'white',
-          borderRadius: '1rem',
-          padding: '2rem',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
-          border: '1px solid #e5e7eb'
+          backgroundColor: 'var(--color-white)',
+          borderRadius: 'var(--radius-lg)',
+          padding: 'var(--space-4)',
+          boxShadow: 'var(--shadow-card)',
+          border: '1px solid var(--color-border)'
         }}>
           
           {/* Status Messages */}
-          {needsProfileCompletion && needsProfileCompletion() && (
+            {needsProfileCompletion && needsProfileCompletion() && (
             <div style={{
               padding: '1rem 1.5rem',
-              backgroundColor: '#fef3cd',
-              color: '#856404',
+              backgroundColor: 'var(--color-warning-bg)',
+              color: 'var(--color-warning)',
               borderRadius: '0.75rem',
-              marginBottom: '2rem',
-              border: '1px solid #faebcd',
+              marginBottom: 'var(--space-4)',
+              border: '1px solid rgba(249, 115, 22, 0.12)',
               display: 'flex',
               alignItems: 'center'
             }}>
@@ -407,11 +407,11 @@ const Profile = () => {
           {message && (
             <div style={{
               padding: '1rem 1.5rem',
-              backgroundColor: '#d1edff',
-              color: '#0969da',
+              backgroundColor: 'var(--color-info-bg)',
+              color: 'var(--color-info)',
               borderRadius: '0.75rem',
-              marginBottom: '2rem',
-              border: '1px solid #b6e3ff',
+              marginBottom: 'var(--space-4)',
+              border: '1px solid rgba(3, 105, 161, 0.08)',
               display: 'flex',
               alignItems: 'center'
             }}>
@@ -423,11 +423,11 @@ const Profile = () => {
           {error && (
             <div style={{
               padding: '1rem 1.5rem',
-              backgroundColor: '#ffebe9',
-              color: '#d1242f',
+              backgroundColor: 'var(--color-danger-bg)',
+              color: 'var(--color-danger)',
               borderRadius: '0.75rem',
-              marginBottom: '2rem',
-              border: '1px solid #ffbdba',
+              marginBottom: 'var(--space-4)',
+              border: '1px solid rgba(239, 68, 68, 0.08)',
               display: 'flex',
               alignItems: 'center'
             }}>
@@ -442,13 +442,13 @@ const Profile = () => {
               
               {/* Basic Information */}
               <div>
-                <h3 style={{ marginBottom: '1rem', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '0.5rem' }}>
+                <h3 style={{ marginBottom: '1rem', color: 'var(--color-text)', borderBottom: '2px solid var(--color-bg-elev)', paddingBottom: '0.5rem' }}>
                   Basic Information
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
                   
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: 'var(--color-text)' }}>
                       Full Name *
                     </label>
                     <input
@@ -460,17 +460,17 @@ const Profile = () => {
                       style={{
                         width: '100%',
                         padding: '0.75rem',
-                        border: '1px solid #d1d5db',
+                        border: '1px solid var(--color-border)',
                         borderRadius: '0.5rem',
                         fontSize: '1rem',
-                        backgroundColor: '#fff'
+                        backgroundColor: 'var(--color-white)'
                       }}
                       placeholder="Enter your full name"
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: 'var(--color-text)' }}>
                       Username *
                     </label>
                     <input
@@ -482,17 +482,17 @@ const Profile = () => {
                       style={{
                         width: '100%',
                         padding: '0.75rem',
-                        border: '1px solid #d1d5db',
+                        border: '1px solid var(--color-border)',
                         borderRadius: '0.5rem',
                         fontSize: '1rem',
-                        backgroundColor: '#fff'
+                        backgroundColor: 'var(--color-white)'
                       }}
                       placeholder="Choose a unique username"
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: 'var(--color-text)' }}>
                       Email
                     </label>
                     <input
@@ -504,17 +504,17 @@ const Profile = () => {
                       style={{
                         width: '100%',
                         padding: '0.75rem',
-                        border: '1px solid #d1d5db',
+                        border: '1px solid var(--color-border)',
                         borderRadius: '0.5rem',
                         fontSize: '1rem',
-                        backgroundColor: '#f3f4f6',
-                        color: '#6b7280'
+                        backgroundColor: 'var(--color-bg-elev)',
+                        color: 'var(--color-muted)'
                       }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: 'var(--color-text-light)' }}>
                       Role
                     </label>
                     <div style={{
@@ -522,16 +522,16 @@ const Profile = () => {
                       alignItems: 'center',
                       gap: '0.5rem',
                       padding: '0.5rem 0.75rem',
-                      border: '1px solid #d1d5db',
+                      border: '1px solid var(--color-border)',
                       borderRadius: '9999px',
-                      backgroundColor: '#f9fafb',
-                      color: '#374151',
+                      backgroundColor: 'var(--color-bg-elev)',
+                      color: 'var(--color-text-light)',
                       width: 'fit-content'
                     }}>
                       <span style={{ fontSize: '0.9rem' }}>
                         {roleStatus?.role === 'creator' || formData.role === 'creator' ? '🚀 Creator' : '💰 Investor'}
                       </span>
-                      <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>(locked)</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>(locked)</span>
                     </div>
                   </div>
 
@@ -540,13 +540,13 @@ const Profile = () => {
 
               {/* Additional Information */}
               <div>
-                <h3 style={{ marginBottom: '1rem', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '0.5rem' }}>
+                <h3 style={{ marginBottom: '1rem', color: 'var(--color-text-light)', borderBottom: '2px solid var(--color-border)', paddingBottom: '0.5rem' }}>
                   Additional Information
                 </h3>
                 <div style={{ display: 'grid', gap: '1rem' }}>
                   
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: 'var(--color-text-light)' }}>
                       Bio
                     </label>
                     <textarea
@@ -557,10 +557,10 @@ const Profile = () => {
                       style={{
                         width: '100%',
                         padding: '0.75rem',
-                        border: '1px solid #d1d5db',
+                        border: '1px solid var(--color-border)',
                         borderRadius: '0.5rem',
                         fontSize: '1rem',
-                        backgroundColor: '#fff',
+                        backgroundColor: 'var(--color-white)',
                         resize: 'vertical'
                       }}
                       placeholder="Tell us about yourself..."
@@ -570,7 +570,7 @@ const Profile = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
                     
                     <div>
-                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: 'var(--color-text-light)' }}>
                         Location
                       </label>
                       <input
@@ -581,17 +581,17 @@ const Profile = () => {
                         style={{
                           width: '100%',
                           padding: '0.75rem',
-                          border: '1px solid #d1d5db',
+                          border: '1px solid var(--color-border)',
                           borderRadius: '0.5rem',
                           fontSize: '1rem',
-                          backgroundColor: '#fff'
+                          backgroundColor: 'var(--color-white)'
                         }}
                         placeholder="City, Country"
                       />
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: 'var(--color-text-light)' }}>
                         Phone
                       </label>
                       <input
@@ -602,17 +602,17 @@ const Profile = () => {
                         style={{
                           width: '100%',
                           padding: '0.75rem',
-                          border: '1px solid #d1d5db',
+                          border: '1px solid var(--color-border)',
                           borderRadius: '0.5rem',
                           fontSize: '1rem',
-                          backgroundColor: '#fff'
+                          backgroundColor: 'var(--color-white)'
                         }}
                         placeholder="+1 (555) 123-4567"
                       />
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: 'var(--color-text-light)' }}>
                         Date of Birth
                       </label>
                       <input
@@ -623,16 +623,16 @@ const Profile = () => {
                         style={{
                           width: '100%',
                           padding: '0.75rem',
-                          border: '1px solid #d1d5db',
+                          border: '1px solid var(--color-border)',
                           borderRadius: '0.5rem',
                           fontSize: '1rem',
-                          backgroundColor: '#fff'
+                          backgroundColor: 'var(--color-white)'
                         }}
                       />
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: 'var(--color-text-light)' }}>
                         Avatar URL
                       </label>
                       <input
@@ -643,10 +643,10 @@ const Profile = () => {
                         style={{
                           width: '100%',
                           padding: '0.75rem',
-                          border: '1px solid #d1d5db',
+                          border: '1px solid var(--color-border)',
                           borderRadius: '0.5rem',
                           fontSize: '1rem',
-                          backgroundColor: '#fff'
+                          backgroundColor: 'var(--color-white)'
                         }}
                         placeholder="https://example.com/avatar.jpg"
                       />
@@ -658,14 +658,14 @@ const Profile = () => {
 
               {/* Social Links */}
               <div>
-                <h3 style={{ marginBottom: '1rem', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '0.5rem' }}>
+                <h3 style={{ marginBottom: '1rem', color: 'var(--color-text-light)', borderBottom: '2px solid var(--color-border)', paddingBottom: '0.5rem' }}>
                   Social Links
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
                   
                   {Object.keys(EMPTY_SOCIAL_LINKS).map(platform => (
                     <div key={platform}>
-                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151', textTransform: 'capitalize' }}>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: 'var(--color-text-light)', textTransform: 'capitalize' }}>
                         {platform}
                       </label>
                       <input
@@ -676,10 +676,10 @@ const Profile = () => {
                         style={{
                           width: '100%',
                           padding: '0.75rem',
-                          border: '1px solid #d1d5db',
+                          border: '1px solid var(--color-border)',
                           borderRadius: '0.5rem',
                           fontSize: '1rem',
-                          backgroundColor: '#fff'
+                          backgroundColor: 'var(--color-white)'
                         }}
                         placeholder={`https://${platform}.com/yourprofile`}
                       />
@@ -696,7 +696,7 @@ const Profile = () => {
                 gap: '1rem',
                 justifyContent: 'space-between',
                 paddingTop: '2rem',
-                borderTop: '1px solid #e5e7eb'
+                borderTop: '1px solid var(--color-border)'
               }}>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                   <button
@@ -705,8 +705,8 @@ const Profile = () => {
                     style={{
                       padding: '0.75rem 1.5rem',
                       backgroundColor: 'transparent',
-                      color: '#6b7280',
-                      border: '1px solid #d1d5db',
+                      color: 'var(--color-muted)',
+                      border: '1px solid var(--color-border)',
                       borderRadius: '0.5rem',
                       fontSize: '1rem',
                       cursor: 'pointer',
@@ -724,8 +724,8 @@ const Profile = () => {
                     style={{
                       padding: '0.75rem 1.5rem',
                       backgroundColor: 'transparent',
-                      color: '#6b7280',
-                      border: '1px solid #d1d5db',
+                      color: 'var(--color-muted)',
+                      border: '1px solid var(--color-border)',
                       borderRadius: '0.5rem',
                       fontSize: '1rem',
                       cursor: isSubmitting ? 'not-allowed' : 'pointer',
@@ -738,10 +738,10 @@ const Profile = () => {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    style={{
+                      style={{
                       padding: '0.75rem 2rem',
-                      backgroundColor: '#4f46e5',
-                      color: 'white',
+                      backgroundColor: 'var(--color-primary)',
+                      color: 'var(--color-primary-ink)',
                       border: 'none',
                       borderRadius: '0.5rem',
                       fontSize: '1rem',
@@ -758,8 +758,8 @@ const Profile = () => {
                     onClick={() => navigate('/profile')}
                     style={{
                       padding: '0.75rem 1.5rem',
-                      backgroundColor: '#6b7280',
-                      color: 'white',
+                      backgroundColor: 'var(--color-muted)',
+                      color: 'var(--color-white)',
                       border: 'none',
                       borderRadius: '0.5rem',
                       fontSize: '1rem',
@@ -775,8 +775,8 @@ const Profile = () => {
                     onClick={handleContinue}
                     style={{
                       padding: '0.75rem 1.5rem',
-                      backgroundColor: '#059669',
-                      color: 'white',
+                      backgroundColor: 'var(--color-success)',
+                      color: 'var(--color-white)',
                       border: 'none',
                       borderRadius: '0.5rem',
                       fontSize: '1rem',
@@ -795,7 +795,7 @@ const Profile = () => {
 
           {/* Account Insights */}
           <div style={{ marginTop: '3rem' }}>
-            <h3 style={{ marginBottom: '1.5rem', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '0.5rem' }}>
+            <h3 style={{ marginBottom: '1.5rem', color: 'var(--color-text-light)', borderBottom: '2px solid var(--color-border)', paddingBottom: '0.5rem' }}>
               Account Insights
             </h3>
             <div style={{
@@ -805,45 +805,45 @@ const Profile = () => {
             }}>
               <div style={{
                 padding: '1.5rem',
-                backgroundColor: '#f8fafc',
+                backgroundColor: 'var(--color-bg-elev)',
                 borderRadius: '0.75rem',
-                border: '1px solid #e5e7eb'
+                border: '1px solid var(--color-border)'
               }}>
-                <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem', fontWeight: '500' }}>Total Invested</p>
-                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: '#111827' }}>
+                <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.875rem', fontWeight: '500' }}>Total Invested</p>
+                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: 'var(--color-text)' }}>
                   ${Number(profileMeta.total_invested || 0).toLocaleString()}
                 </p>
               </div>
               <div style={{
                 padding: '1.5rem',
-                backgroundColor: '#f8fafc',
+                backgroundColor: 'var(--color-bg-elev)',
                 borderRadius: '0.75rem',
-                border: '1px solid #e5e7eb'
+                border: '1px solid var(--color-border)'
               }}>
-                <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem', fontWeight: '500' }}>Campaigns Backed</p>
-                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: '#111827' }}>
+                <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.875rem', fontWeight: '500' }}>Campaigns Backed</p>
+                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: 'var(--color-text)' }}>
                   {profileMeta.total_campaigns_backed}
                 </p>
               </div>
               <div style={{
                 padding: '1.5rem',
-                backgroundColor: '#f8fafc',
+                backgroundColor: 'var(--color-bg-elev)',
                 borderRadius: '0.75rem',
-                border: '1px solid #e5e7eb'
+                border: '1px solid var(--color-border)'
               }}>
-                <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem', fontWeight: '500' }}>Verification Level</p>
-                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: '#111827' }}>
+                <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.875rem', fontWeight: '500' }}>Verification Level</p>
+                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: 'var(--color-text)' }}>
                   {profileMeta.verification_level}/5
                 </p>
               </div>
               <div style={{
                 padding: '1.5rem',
-                backgroundColor: '#f8fafc',
+                backgroundColor: 'var(--color-bg-elev)',
                 borderRadius: '0.75rem',
-                border: '1px solid #e5e7eb'
+                border: '1px solid var(--color-border)'
               }}>
-                <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem', fontWeight: '500' }}>Trust Score</p>
-                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: '#111827' }}>
+                <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.875rem', fontWeight: '500' }}>Trust Score</p>
+                <p style={{ margin: '0.5rem 0 0', fontWeight: '700', fontSize: '1.5rem', color: 'var(--color-text)' }}>
                   {profileMeta.trust_score}%
                 </p>
               </div>
