@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { useAuth } from '../store/AuthContext';
 import { walletApi } from '../lib/api.js';
 
 const Wallet = () => {
+  const { sessionVersion } = useAuth();
   const [balance, setBalance] = useState(0);
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(true);
@@ -21,7 +23,7 @@ const Wallet = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [sessionVersion]);
 
   const topUp = async (e) => {
     e.preventDefault();

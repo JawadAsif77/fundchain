@@ -88,37 +88,20 @@ export const userApi = {
       
       console.log('✅ Mapped to database format:', updateData);
       
-      // Perform update with minimal return to avoid RLS issues on SELECT after UPDATE
-      const { error: updateError } = await supabase
+      // Perform update and return updated data in one query
+      const { data, error } = await supabase
         .from('users')
         .update(updateData)
-        .eq('id', userId);
-
-      if (updateError) {
-        console.error('❌ Database update failed:', updateError);
-        throw new Error(`Failed to update profile: ${updateError.message}`);
-      }
-
-      console.log('✅ Update applied, fetching fresh profile...');
-      const { data, error: fetchError } = await supabase
-        .from('users')
-        .select(`
-          id, email, username, full_name, avatar_url, role,
-          linkedin_url, twitter_url, instagram_url, is_verified,
-          created_at, updated_at, bio, location, phone, date_of_birth,
-          social_links, preferences, verification_level, trust_score,
-          referral_code, last_active_at, followers_count, following_count,
-          is_accredited_investor, total_invested, total_campaigns_backed
-        `)
         .eq('id', userId)
+        .select('*')
         .single();
 
-      if (fetchError) {
-        console.error('⚠️ Profile fetch after update failed:', fetchError);
-        throw new Error(`Profile updated but fetch failed: ${fetchError.message}`);
+      if (error) {
+        console.error('❌ Database update failed:', error);
+        throw new Error(`Failed to update profile: ${error.message}`);
       }
 
-      console.log('🎉 Profile updated and fetched successfully');
+      console.log('🎉 Profile updated successfully:', data);
       // Normalize return shape for callers expecting { data, error }
       return { data, error: null };
       
@@ -132,16 +115,21 @@ export const userApi = {
   // Create new user record
   async createUser(userData) {
     try {
-      console.log('🆕 API: Creating user record');
+      console.log('🆕 API: Creating user record', userData);
       
       const userRecord = {
         id: userData.id,
         email: userData.email,
-        full_name: userData.user_metadata?.full_name || userData.email?.split('@')[0],
-        role: 'investor', // Default role
+        full_name: userData.full_name || userData.user_metadata?.full_name || userData.email?.split('@')[0],
+        username: userData.username || userData.user_metadata?.username || null,
+        role: userData.role || userData.user_metadata?.role || 'investor',
+        avatar_url: userData.avatar_url || userData.user_metadata?.avatar_url || null,
+        is_verified: userData.is_verified || 'no',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
+      
+      console.log('🆕 API: Inserting user record:', userRecord);
       
       const { data, error } = await supabase
         .from('users')
@@ -154,8 +142,8 @@ export const userApi = {
         throw new Error(`Failed to create user: ${error.message}`);
       }
       
-      console.log('✅ User created successfully');
-      return data;
+      console.log('✅ User created successfully:', data);
+      return { data, error: null };
     } catch (error) {
       console.error('💥 Create user error:', error);
       throw error;
@@ -474,8 +462,13 @@ export const campaignApi = {
         .select(`
           *,
           categories(name, icon)
-        `)
-        .eq('status', 'active'); // Only show active campaigns
+        `);
+
+      // Apply status filter - default to active if not specified
+      const status = filters.status || 'active';
+      if (status && status !== '') {
+        query = query.eq('status', status);
+      }
 
       // Apply filters
       if (filters.category) {
@@ -560,7 +553,36 @@ export const campaignApi = {
         if (!campaign) throw new Error('Campaign not found');
         return { data: campaign };
       }
-      
+      // Try to fetch authoritative stats via RPC (if deployed)
+      try {
+        const { data: stats, error: statsErr } = await supabase.rpc('get_campaign_stats', { campaign_id: data.id });
+        if (!statsErr && stats && (typeof stats.current_funding !== 'undefined')) {
+          // Merge stats onto row
+          return { data: { ...data, current_funding: stats.current_funding, investor_count: stats.investor_count } };
+        }
+      } catch (_) {
+        // Ignore if RPC not available; fall back to row values
+      }
+      // Fallback: compute from investments if triggers are not active
+      try {
+        const { data: invs, error: invErr } = await supabase
+          .from('investments')
+          .select('amount, investor_id, status')
+          .eq('campaign_id', data.id)
+          .eq('status', 'confirmed');
+        if (!invErr && Array.isArray(invs)) {
+          const current = Number(
+            invs.reduce((sum, row) => sum + Number(row.amount || 0), 0)
+          );
+          const uniqueInvestors = new Set(invs.map(r => r.investor_id)).size;
+          const merged = {
+            ...data,
+            current_funding: (Number(data.current_funding || 0) > 0) ? Number(data.current_funding) : current,
+            investor_count: (Number(data.investor_count || 0) > 0) ? Number(data.investor_count) : uniqueInvestors
+          };
+          return { data: merged };
+        }
+      } catch (_) {}
       return { data };
     } catch (error) {
       console.error('💥 Get campaign error:', error);
@@ -592,19 +614,78 @@ export const investmentApi = {
   // Get user investments
   async getUserInvestments(userId) {
     try {
+      console.log('💰 API: Fetching investments for user:', userId);
+      
+      // First check if there are ANY investments for this user
+      const { data: basicData, error: basicError } = await supabase
+        .from('investments')
+        .select('id, investor_id, campaign_id, amount, status, investment_date')
+        .eq('investor_id', userId);
+        
+      console.log('💰 API: Basic investment check result:', basicData);
+      console.log('💰 API: Basic investment check error:', basicError);
+      
+      if (basicError) {
+        console.error('❌ Failed basic investment check:', basicError);
+        return { data: [], count: 0 };
+      }
+      
+      if (!basicData || basicData.length === 0) {
+        console.log('💰 API: No investments found for user');
+        return { data: [], count: 0 };
+      }
+      
+      // If we have investments, try to get them with campaign data
       const { data, error } = await supabase
         .from('investments')
         .select(`
-          *,
-          campaigns(title, slug, image_url, status)
+          id,
+          investor_id,
+          campaign_id,
+          amount,
+          status,
+          investment_date,
+          created_at,
+          campaigns!inner(
+            id,
+            title,
+            slug,
+            short_description,
+            image_url,
+            status,
+            funding_goal,
+            current_funding,
+            end_date
+          )
         `)
         .eq('investor_id', userId)
         .order('investment_date', { ascending: false });
         
       if (error) {
-        console.error('❌ Failed to fetch investments:', error);
-        return { data: [], count: 0 };
+        console.warn('💰 API: Join query failed, using basic data:', error.message);
+        
+        // Fallback: manually join the data
+        const enrichedData = await Promise.all(
+          basicData.map(async (investment) => {
+            const { data: campaign } = await supabase
+              .from('campaigns')
+              .select('id, title, slug, short_description, image_url, status, funding_goal, current_funding, end_date')
+              .eq('id', investment.campaign_id)
+              .single();
+              
+            return {
+              ...investment,
+              campaigns: campaign
+            };
+          })
+        );
+        
+        console.log('✅ Investments enriched manually:', enrichedData.length);
+        return { data: enrichedData, count: enrichedData.length };
       }
+      
+      console.log('✅ Investments fetched with join:', data?.length || 0, 'investments');
+      console.log('💰 API: Sample investment data:', data?.[0]);
       
       return { data: data || [], count: data?.length || 0 };
     } catch (error) {
@@ -622,11 +703,19 @@ export const walletApi = {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth?.user?.id;
     if (!uid) return { success: false, balance: 0, error: 'Not authenticated' };
+    
     const { data, error } = await supabase
       .from('users')
       .select('preferences')
       .eq('id', uid)
       .single();
+    
+    // If user profile doesn't exist yet, return 0 balance instead of error
+    if (error && error.code === 'PGRST116') {
+      console.log('User profile not found, returning 0 balance');
+      return { success: true, balance: 0 };
+    }
+    
     if (error) return { success: false, balance: 0, error: error.message };
     const balance = Number(data?.preferences?.wallet_balance || 0);
     return { success: true, balance };
@@ -637,13 +726,39 @@ export const walletApi = {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth?.user?.id;
     if (!uid) return { success: false, error: 'Not authenticated' };
+    
     // Read current preferences
     const { data: current, error: readErr } = await supabase
       .from('users')
       .select('preferences')
       .eq('id', uid)
       .single();
+    
+    // If user profile doesn't exist, create a basic one first
+    if (readErr && readErr.code === 'PGRST116') {
+      console.log('User profile not found for topUp, creating basic profile...');
+      const basicProfile = {
+        id: uid,
+        email: auth.user.email,
+        full_name: auth.user.user_metadata?.full_name || auth.user.email?.split('@')[0] || '',
+        username: auth.user.user_metadata?.username || null,
+        role: auth.user.user_metadata?.role || 'investor',
+        is_verified: 'no',
+        preferences: { wallet_balance: Number(amount) },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      const { error: insertErr } = await supabase
+        .from('users')
+        .insert(basicProfile);
+        
+      if (insertErr) return { success: false, error: insertErr.message };
+      return { success: true, balance: Number(amount) };
+    }
+    
     if (readErr) return { success: false, error: readErr.message };
+    
     const prefs = current?.preferences || {};
     const nextBalance = Number(prefs.wallet_balance || 0) + Number(amount);
     const nextPrefs = { ...prefs, wallet_balance: nextBalance };
@@ -738,6 +853,12 @@ export const walletApi = {
       .select('preferences')
       .eq('id', uid)
       .single();
+    
+    // If user profile doesn't exist, we have a problem - they shouldn't be able to invest without a profile
+    if (readErr && readErr.code === 'PGRST116') {
+      return { success: false, error: 'User profile not found. Please refresh and try again.' };
+    }
+    
     if (readErr) return { success: false, error: readErr.message };
     const prefs = current?.preferences || {};
     const nextBalance = Math.max(0, Number(prefs.wallet_balance || 0) - Number(amount));
@@ -806,7 +927,10 @@ export const getUserRoleStatus = async (userId) => {
     
     // Check if user has a valid role set (investor and creator are both valid)
     const validRoles = ['investor', 'creator', 'admin'];
-    const hasRole = !!(data?.role && validRoles.includes(data.role));
+    // Normalize role, defaulting to investor if missing
+    const normalizedRole = validRoles.includes(data?.role) ? data.role : 'investor';
+    // Treat default investor as a valid role so investors aren't gated on role selection
+    const hasRole = !!(data?.role && validRoles.includes(data.role)) || normalizedRole === 'investor';
     
     // For creators, check if they have KYC verification or company data
   let companyData = null;
@@ -830,8 +954,8 @@ export const getUserRoleStatus = async (userId) => {
     
     return {
       hasRole,
-      // Normalize to a valid role with investor as safe default
-      role: validRoles.includes(data?.role) ? data.role : 'investor',
+      // Use normalized role with investor as safe default
+      role: normalizedRole,
       isVerified: data?.is_verified === 'yes',
       verificationLevel: data?.verification_level || 'basic',
       companyData,
@@ -843,7 +967,8 @@ export const getUserRoleStatus = async (userId) => {
   } catch (error) {
     console.error('Error getting user role status:', error);
     return { 
-      hasRole: false,
+      // On errors, allow investor flow by default
+      hasRole: true,
       role: 'investor', 
       isVerified: false, 
       verificationLevel: 'basic',
@@ -875,10 +1000,15 @@ export const getUserProjects = async (userId) => {
 
 export const getUserInvestments = async (userId) => {
   try {
-    const { data } = await investmentApi.getUserInvestments(userId);
-    return { success: true, data };
+    console.log('🔧 getUserInvestments wrapper: Starting for userId:', userId);
+    const result = await investmentApi.getUserInvestments(userId);
+    console.log('🔧 getUserInvestments wrapper: investmentApi returned:', result);
+    
+    const response = { success: true, data: result.data || [] };
+    console.log('🔧 getUserInvestments wrapper: Final response:', response);
+    return response;
   } catch (error) {
-    console.error('Error getting user investments:', error);
+    console.error('🔧 getUserInvestments wrapper: Error caught:', error);
     return { success: false, data: [], error: error.message };
   }
 };

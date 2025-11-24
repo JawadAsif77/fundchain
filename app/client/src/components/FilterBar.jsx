@@ -7,7 +7,7 @@ const FilterBar = ({ onFiltersChange }) => {
   const [filters, setFilters] = useState({
     search: searchParams.get('search') || '',
     category: searchParams.get('category') || '',
-    status: searchParams.get('status') || '',
+    status: searchParams.get('status') || 'active',
     sort: searchParams.get('sort') || 'newest'
   });
 
@@ -23,9 +23,12 @@ const FilterBar = ({ onFiltersChange }) => {
 
   const statusOptions = [
     { value: '', label: 'All Status' },
-    { value: 'live', label: 'Live' },
+    { value: 'active', label: 'Active' },
     { value: 'draft', label: 'Draft' },
-    { value: 'completed', label: 'Completed' }
+    { value: 'pending_review', label: 'Pending Review' },
+    { value: 'successful', label: 'Successful' },
+    { value: 'failed', label: 'Failed' },
+    { value: 'cancelled', label: 'Cancelled' }
   ];
 
   const sortOptions = [
@@ -45,7 +48,7 @@ const FilterBar = ({ onFiltersChange }) => {
     const urlFilters = {
       search: searchParams.get('search') || '',
       category: searchParams.get('category') || '',
-      status: searchParams.get('status') || '',
+      status: searchParams.get('status') || 'active',
       sort: searchParams.get('sort') || 'newest'
     };
 
@@ -78,14 +81,16 @@ const FilterBar = ({ onFiltersChange }) => {
     const resetFilters = {
       search: '',
       category: '',
-      status: '',
+      status: 'active',
       sort: 'newest'
     };
     
     setFilters(resetFilters);
     
-    // Clear URL parameters
-    setSearchParams(new URLSearchParams(), { replace: true });
+    // Clear URL parameters but keep default status active
+    const params = new URLSearchParams();
+    params.set('status', 'active');
+    setSearchParams(params, { replace: true });
   };
 
   return (

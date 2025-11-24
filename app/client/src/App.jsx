@@ -21,6 +21,9 @@ import AdminPanel from './pages/AdminPanel';
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Wallet from './pages/Wallet';
+import HowItWorks from './pages/HowItWorks';
+import Governance from './pages/Governance';
+import Analytics from './pages/Analytics';
 
 // Temporary simple components - all real components are now imported
 // Campaign component is now imported from './pages/Campaign'
@@ -64,6 +67,9 @@ function App() {
                       {/* Public routes */}
                       <Route path="/" element={<Home />} />
                       <Route path="/explore" element={<Explore />} />
+                      <Route path="/how-it-works" element={<HowItWorks />} />
+                      <Route path="/governance" element={<Governance />} />
+                      <Route path="/analytics" element={<Analytics />} />
                       <Route path="/campaign/:slug" element={<Campaign />} />
                       <Route path="/login" element={<Login />} />
                       <Route path="/register" element={<Register />} />

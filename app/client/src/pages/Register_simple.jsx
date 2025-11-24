@@ -64,7 +64,7 @@ const Register = () => {
           data: {
             full_name: formData.fullName,
             username: formData.username,
-            role: selectedRole
+            role: selectedRole || 'investor'
           }
         }
       });
@@ -75,6 +75,20 @@ const Register = () => {
       }
 
       console.log('Step 1 Complete: Auth user created:', authData.user?.id);
+
+      // Store pending profile info locally to ensure immediate profile creation/fetch on first session
+      try {
+        const pending = {
+          id: authData.user?.id,
+          email: formData.email,
+          username: formData.username,
+          full_name: formData.fullName,
+          role: selectedRole || 'investor'
+        };
+        localStorage.setItem('pendingUserProfile', JSON.stringify(pending));
+      } catch (e) {
+        console.warn('Failed to store pendingUserProfile:', e);
+      }
 
       if (!authData.user) {
         throw new Error('No user returned from signup');
@@ -146,11 +160,17 @@ const Register = () => {
       console.log('Step 3: Handling navigation...');
       
       if (authData.session) {
-        // Route to profile page for role selection and basic profile completion
-        console.log('Session available, redirecting to profile page for role selection...');
-        setStatusMessage(prev => prev + ' Redirecting to profile setup...');
-        // Immediate redirect
-        navigate('/profile', { replace: true });
+        // Route based on role: investors -> dashboard, creators -> profile/KYC
+        const nextRole = selectedRole || 'investor';
+        if (nextRole === 'investor') {
+          console.log('Session available, investor role detected, redirecting to dashboard...');
+          setStatusMessage(prev => prev + ' Redirecting to your dashboard...');
+          navigate('/dashboard', { replace: true });
+        } else {
+          console.log('Session available, creator role detected, redirecting to profile setup...');
+          setStatusMessage(prev => prev + ' Redirecting to profile setup...');
+          navigate('/profile', { replace: true });
+        }
       } else {
         console.log('No session - email confirmation required, redirecting to login...');
         setStatusMessage('Please check your email to confirm your account.');
