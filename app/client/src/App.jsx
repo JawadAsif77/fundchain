@@ -9,7 +9,7 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import Explore from './pages/Explore';
 import Campaign from './pages/Campaign';
-import Login from './pages/Login_simple';
+import Login from './pages/Login';
 import Register from './pages/Register_simple';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/ProfileDisplay';
