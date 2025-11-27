@@ -31,165 +31,99 @@ const Register = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    if (!selectedRole) {
-      setError('Please select a role');
-      return;
-    }
+  if (formData.password !== formData.confirmPassword) {
+    setError('Passwords do not match');
+    return;
+  }
 
-    setIsSubmitting(true);
-    setStatusMessage('Creating your account...');
-    setError('');
-    
-    try {
-      console.log('Starting registration process...', { 
-        email: formData.email, 
-        username: formData.username, 
-        role: selectedRole 
-      });
-      
-      // Step 1: Create auth user
-      console.log('Step 1: Creating auth user...');
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.fullName,
-            username: formData.username,
-            role: selectedRole || 'investor'
-          }
-        }
-      });
+  if (!selectedRole) {
+    setError('Please select a role');
+    return;
+  }
 
-      if (authError) {
-        console.error('Auth signup error:', authError);
-        throw authError;
-      }
+  setIsSubmitting(true);
+  setStatusMessage('Creating your account...');
+  setError('');
 
-      console.log('Step 1 Complete: Auth user created:', authData.user?.id);
+  try {
+    console.log("Starting registration...", {
+      email: formData.email,
+      username: formData.username,
+      role: selectedRole,
+    });
 
-      // Store pending profile info locally to ensure immediate profile creation/fetch on first session
-      try {
-        const pending = {
-          id: authData.user?.id,
-          email: formData.email,
-          username: formData.username,
+    // STEP 1 — Create auth user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: {
           full_name: formData.fullName,
-          role: selectedRole || 'investor'
-        };
-        localStorage.setItem('pendingUserProfile', JSON.stringify(pending));
-      } catch (e) {
-        console.warn('Failed to store pendingUserProfile:', e);
-      }
-
-      if (!authData.user) {
-        throw new Error('No user returned from signup');
-      }
-
-      // Step 2: Create profile immediately using RPC function
-      console.log('Step 2: Creating profile via RPC function...');
-      
-      try {
-        const { data: profileData, error: profileError } = await supabase
-          .rpc('create_user_profile', {
-            user_id: authData.user.id,
-            user_email: formData.email,
-            user_username: formData.username,
-            user_full_name: formData.fullName,
-            user_role: selectedRole,
-            user_verified: 'no'
-          });
-
-        console.log('RPC Response Details:', { 
-          profileData, 
-          profileError,
-          userId: authData.user.id,
-          email: formData.email,
           username: formData.username,
-          role: selectedRole
-        });
-
-        if (profileError) {
-          console.error('RPC Profile creation failed:', profileError);
-          
-          // Try fallback method - direct insert
-          console.log('Trying fallback: direct insert...');
-          const { data: insertData, error: insertError } = await supabase
-            .from('users')
-            .insert({
-              id: authData.user.id,
-              email: formData.email,
-              username: formData.username,
-              full_name: formData.fullName,
-              role: selectedRole,
-              is_verified: 'no'
-            })
-            .select();
-
-          if (insertError) {
-            console.error('Direct insert also failed:', insertError);
-            console.log('Profile creation failed, but continuing with registration...');
-            setStatusMessage('Account created! Profile will be completed on first login.');
-          } else {
-            console.log('Profile created via direct insert:', insertData);
-            setStatusMessage('Account created successfully!');
-          }
-        } else if (profileData?.error) {
-          console.error('RPC returned error:', profileData);
-          console.log('RPC error occurred, but continuing with registration...');
-          setStatusMessage('Account created! Profile will be completed on first login.');
-        } else {
-          console.log('Step 2 Complete: Profile created successfully via RPC!', profileData);
-          setStatusMessage('Account created successfully!');
+          role: selectedRole,
         }
-      } catch (profileErr) {
-        console.error('Profile creation attempt failed:', profileErr);
-        console.log('Continuing with registration despite profile creation failure...');
-        setStatusMessage('Account created! Profile will be completed on first login.');
       }
+    });
 
-      // Step 3: Handle navigation - ALWAYS navigate regardless of profile creation success
-      console.log('Step 3: Handling navigation...');
-      
-      if (authData.session) {
-        // Route based on role: investors -> dashboard, creators -> profile/KYC
-        const nextRole = selectedRole || 'investor';
-        if (nextRole === 'investor') {
-          console.log('Session available, investor role detected, redirecting to dashboard...');
-          setStatusMessage(prev => prev + ' Redirecting to your dashboard...');
-          navigate('/dashboard', { replace: true });
-        } else {
-          console.log('Session available, creator role detected, redirecting to profile setup...');
-          setStatusMessage(prev => prev + ' Redirecting to profile setup...');
-          navigate('/profile', { replace: true });
-        }
-      } else {
-        console.log('No session - email confirmation required, redirecting to login...');
-        setStatusMessage('Please check your email to confirm your account.');
-        // Immediate redirect
-        navigate('/login', {
-          replace: true,
-          state: {
-            message: 'Please check your email and click the confirmation link to complete your registration.'
-          }
-        });
-      }
-    } catch (err) {
-      console.error('Registration error:', err);
-      setError(err.message || 'An error occurred during registration');
-      setStatusMessage('');
-    } finally {
-      setIsSubmitting(false);
+    if (authError) {
+      console.error("Auth signup error:", authError);
+      throw authError;
     }
-  };
+
+    const userId = authData.user?.id;
+    console.log("Auth user created:", userId);
+
+    if (!userId) throw new Error("No user returned from signup");
+
+    // Store pending profile for AuthContext first load
+    localStorage.setItem(
+      "pendingUserProfile",
+      JSON.stringify({
+        id: userId,
+        email: formData.email,
+        username: formData.username,
+        full_name: formData.fullName,
+        role: selectedRole,
+      })
+    );
+
+    // STEP 2 — REMOVE RPC / REMOVE DIRECT INSERT
+    // ---------------------------------------------------
+    // Your AuthContext will automatically:
+    // - detect no profile
+    // - create profile through api.js
+    // So we do NOTHING here.
+    // ---------------------------------------------------
+
+    setStatusMessage("Account created successfully!");
+
+    // STEP 3 — Routing
+    if (authData.session) {
+      if (selectedRole === "investor") {
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate("/profile", { replace: true });
+      }
+    } else {
+      navigate("/login", {
+        replace: true,
+        state: {
+          message:
+            "Please check your email and click the confirmation link to complete your registration.",
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Registration error:", err);
+    setError(err.message || "An error occurred during registration");
+    setStatusMessage("");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const handleBackToRole = () => {
     setStep('role');

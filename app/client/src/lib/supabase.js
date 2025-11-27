@@ -61,8 +61,17 @@ export const auth = {
   // Sign out
   signOut: async () => {
     try {
+      // Clear session from Supabase
       const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+
+      // HARD RESET: remove local storage keys created by Supabase
+      localStorage.removeItem('sb-' + supabaseUrl.split('.')[0] + '-auth-token');
+      localStorage.removeItem('sb-' + supabaseUrl.split('.')[0] + '-auth-token.0');
+      localStorage.removeItem('sb-' + supabaseUrl.split('.')[0] + '-auth-token.1');
+
+      // Force app to re-render
+      window.location.reload();
+
       return { error: null };
     } catch (error) {
       return { error };
