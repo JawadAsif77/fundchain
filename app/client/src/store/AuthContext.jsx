@@ -6,7 +6,7 @@ import React, {
   useMemo,
   useCallback
 } from 'react';
-import { auth, db, supabase } from '../lib/supabase.js';
+import { auth, authStorageKeys, db, supabase } from '../lib/supabase.js';
 import { getUserRoleStatus, userApi } from '../lib/api.js';
 
 const AuthContext = createContext(null);
@@ -35,11 +35,10 @@ const clearSupabaseStorage = () => {
     const keysToRemove = [];
     for (let i = 0; i < storage.length; i += 1) {
       const key = storage.key(i);
+      const isAuthKey = authStorageKeys.includes(key);
       if (
         key &&
-        (key.startsWith('sb-') ||
-          key.includes('supabase') ||
-          key === 'pendingUserProfile')
+        (isAuthKey || key.includes('supabase') || key === 'pendingUserProfile')
       ) {
         keysToRemove.push(key);
       }

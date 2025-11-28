@@ -4,6 +4,24 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Derive the project ref used by Supabase to store auth tokens in localStorage
+// Keys follow the pattern `sb-${projectRef}-auth-token[.*]`
+const supabaseProjectRef = (() => {
+  try {
+    const host = new URL(supabaseUrl).host || '';
+    return host.split('.')[0] || '';
+  } catch (e) {
+    console.warn('[Supabase] Failed to derive project ref from URL', e);
+    return '';
+  }
+})();
+
+export const authStorageKeys = [
+  `sb-${supabaseProjectRef}-auth-token`,
+  `sb-${supabaseProjectRef}-auth-token.0`,
+  `sb-${supabaseProjectRef}-auth-token.1`
+];
+
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables. Please check your .env.local file.');
 }
@@ -62,17 +80,18 @@ export const auth = {
   signOut: async () => {
     try {
       // Clear session from Supabase
-      const { error } = await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
 
-      // HARD RESET: remove local storage keys created by Supabase
-      localStorage.removeItem('sb-' + supabaseUrl.split('.')[0] + '-auth-token');
-      localStorage.removeItem('sb-' + supabaseUrl.split('.')[0] + '-auth-token.0');
-      localStorage.removeItem('sb-' + supabaseUrl.split('.')[0] + '-auth-token.1');
+      // Remove locally cached sessions with the correct project ref
+      authStorageKeys.forEach((key) => {
+        try {
+          localStorage.removeItem(key);
+        } catch (storageErr) {
+          console.warn('[Supabase] Failed to remove auth storage key', key, storageErr);
+        }
+      });
 
-      // Force app to re-render
-      window.location.reload();
-
-      return { error: null };
+      return { error: error || null };
     } catch (error) {
       return { error };
     }
