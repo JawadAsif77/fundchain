@@ -143,7 +143,7 @@ const Dashboard = () => {
       mounted = false;
       clearTimeout(timeout);
     };
-  }, [authLoading, user?.id, role, sessionVersion, refreshKey, isFullyOnboarded, debug]);
+  }, [authLoading, user?.id, role, sessionVersion, refreshKey]); // Removed isFullyOnboarded and debug to prevent loops
 
   // Refresh data after tab was hidden for a while
   useEffect(() => {

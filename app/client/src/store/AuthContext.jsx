@@ -4,7 +4,8 @@ import React, {
   useState,
   useEffect,
   useMemo,
-  useCallback
+  useCallback,
+  useRef
 } from 'react';
 import { auth, db, supabase } from '../lib/supabase.js';
 import { getUserRoleStatus, userApi } from '../lib/api.js';
@@ -26,115 +27,143 @@ const defaultRoleStatus = {
   kycStatus: 'not_started'
 };
 
+// FIXED: More aggressive cache clearing
 const clearAllAuthData = () => {
   if (typeof window === 'undefined') return;
 
-  try {
-    // Clear supabase + app specific localStorage keys
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (
-        key &&
-        (key.startsWith('sb-') ||
-          key.includes('supabase') ||
-          key.startsWith('fundchain-') ||
-          key === 'pendingUserProfile' ||
-          key.includes('auth') ||
-          key.includes('session'))
-      ) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  console.log('🧹 Clearing all auth data...');
 
-    // Clear sessionStorage
+  try {
+    // 1. Clear ALL localStorage (not just specific keys)
+    localStorage.clear();
+    
+    // 2. Clear sessionStorage
     sessionStorage.clear();
 
-    // Clear cookies
-    document.cookie.split(';').forEach((cookie) => {
+    // 3. Clear ALL cookies (more aggressive)
+    const cookies = document.cookie.split(';');
+    cookies.forEach(cookie => {
       const name = cookie.split('=')[0].trim();
       if (!name) return;
 
-      const host = window.location.hostname;
-      const domains = ['', `domain=${host}`, `domain=.${host}`];
+      // Clear for all possible domain/path combinations
+      const domains = [
+        '',
+        `domain=${window.location.hostname}`,
+        `domain=.${window.location.hostname}`,
+        'domain=localhost',
+        'domain=.localhost'
+      ];
 
-      if (host === 'localhost') {
-        domains.push('domain=localhost', 'domain=.localhost');
-      }
+      const paths = ['/', '/login', '/dashboard', '/profile'];
 
-      domains.forEach((domain) => {
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; ${domain}; SameSite=Lax;`;
+      domains.forEach(domain => {
+        paths.forEach(path => {
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${path}; ${domain}; SameSite=Lax;`;
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${path}; ${domain}; SameSite=None; Secure;`;
+        });
       });
     });
 
-    // Clear caches (best-effort)
-    if ('caches' in window) {
-      caches.keys().then((names) => {
-        names.forEach((name) => caches.delete(name));
+    // 4. Clear IndexedDB (Supabase uses this)
+    if (window.indexedDB) {
+      indexedDB.databases().then(databases => {
+        databases.forEach(db => {
+          if (db.name && (db.name.includes('supabase') || db.name.includes('sb-'))) {
+            indexedDB.deleteDatabase(db.name);
+          }
+        });
+      }).catch(err => {
+        console.warn('IndexedDB clear failed:', err);
       });
     }
+
+    // 5. Clear all caches
+    if ('caches' in window) {
+      caches.keys().then(names => {
+        names.forEach(name => caches.delete(name));
+      }).catch(err => {
+        console.warn('Cache clear failed:', err);
+      });
+    }
+
+    console.log('✅ Auth data cleared');
   } catch (e) {
     console.warn('[Auth] clearAllAuthData error:', e);
   }
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);             // Supabase auth user
-  const [profile, setProfile] = useState(null);       // Users table row
-  const [roleStatus, setRoleStatus] = useState(null); // getUserRoleStatus result
-  const [loading, setLoading] = useState(true);       // Auth bootstrap + initial profile/role loading
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [roleStatus, setRoleStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sessionVersion, setSessionVersion] = useState(0); // Forces consumers to re-run effects on session changes
+  const [sessionVersion, setSessionVersion] = useState(0);
 
   const debug = process.env.NODE_ENV === 'development';
 
+  // Refs to prevent race conditions
+  const initializationRef = useRef(null);
+  const profileLoadRef = useRef(null);
+  const roleLoadRef = useRef(null);
+  const logoutRef = useRef(false);
+
+  // FIXED: Load user profile without state dependencies
   const loadUserProfile = useCallback(
     async (userId, sessionUser = null) => {
       if (!userId) return null;
 
-      try {
-        const { data, error } = await db.users.getProfile(userId);
+      // Prevent concurrent profile loads
+      if (profileLoadRef.current) {
+        return profileLoadRef.current;
+      }
 
-        if (!error && data) {
-          setProfile(data);
-          return data;
-        }
+      profileLoadRef.current = (async () => {
+        try {
+          const { data, error } = await db.users.getProfile(userId);
 
-        // Profile missing: create a new one
-        if (error && error.code === 'PGRST116') {
-          if (debug) console.log('[Auth] No profile, creating default profile...');
-
-          const baseUser = sessionUser || user;
-
-          const newProfile = {
-            id: userId,
-            email: baseUser?.email || '',
-            full_name: baseUser?.user_metadata?.full_name || '',
-            username: baseUser?.user_metadata?.username || null,
-            role: baseUser?.user_metadata?.role || 'investor',
-            avatar_url: baseUser?.user_metadata?.avatar_url || null,
-            is_verified: 'no'
-          };
-
-          const result = await userApi.createUser(newProfile);
-          if (result?.error) {
-            console.error('[Auth] createUser error:', result.error);
-            return null;
+          if (!error && data) {
+            setProfile(data);
+            return data;
           }
 
-          const created = result.data || result;
-          setProfile(created);
-          return created;
-        }
+          if (error && error.code === 'PGRST116') {
+            if (debug) console.log('[Auth] No profile, creating...');
 
-        return null;
-      } catch (e) {
-        console.error('[Auth] loadUserProfile exception:', e);
-        return null;
-      }
+            const newProfile = {
+              id: userId,
+              email: sessionUser?.email || '',
+              full_name: sessionUser?.user_metadata?.full_name || '',
+              username: sessionUser?.user_metadata?.username || null,
+              role: sessionUser?.user_metadata?.role || 'investor',
+              avatar_url: sessionUser?.user_metadata?.avatar_url || null,
+              is_verified: 'no'
+            };
+
+            const result = await userApi.createUser(newProfile);
+            if (result?.error) {
+              console.error('[Auth] createUser error:', result.error);
+              return null;
+            }
+
+            const created = result.data || result;
+            setProfile(created);
+            return created;
+          }
+
+          return null;
+        } catch (e) {
+          console.error('[Auth] loadUserProfile exception:', e);
+          return null;
+        } finally {
+          profileLoadRef.current = null;
+        }
+      })();
+
+      return profileLoadRef.current;
     },
-    [user, debug]
+    [debug]
   );
 
   const loadUserRoleStatus = useCallback(async (userId) => {
@@ -143,96 +172,141 @@ export const AuthProvider = ({ children }) => {
       return defaultRoleStatus;
     }
 
-    try {
-      const status = await getUserRoleStatus(userId);
-      if (status && typeof status === 'object') {
-        const merged = { ...defaultRoleStatus, ...status };
-        setRoleStatus(merged);
-        return merged;
-      }
-      setRoleStatus(defaultRoleStatus);
-      return defaultRoleStatus;
-    } catch (e) {
-      console.error('[Auth] loadUserRoleStatus error:', e);
-      setRoleStatus(defaultRoleStatus);
-      return defaultRoleStatus;
+    if (roleLoadRef.current) {
+      return roleLoadRef.current;
     }
+
+    roleLoadRef.current = (async () => {
+      try {
+        const status = await getUserRoleStatus(userId);
+        if (status && typeof status === 'object') {
+          const merged = { ...defaultRoleStatus, ...status };
+          setRoleStatus(merged);
+          return merged;
+        }
+        setRoleStatus(defaultRoleStatus);
+        return defaultRoleStatus;
+      } catch (e) {
+        console.error('[Auth] loadUserRoleStatus error:', e);
+        setRoleStatus(defaultRoleStatus);
+        return defaultRoleStatus;
+      } finally {
+        roleLoadRef.current = null;
+      }
+    })();
+
+    return roleLoadRef.current;
   }, []);
 
-  // Bootstrap session
+  // FIXED: Bootstrap session with better error handling
   useEffect(() => {
     let mounted = true;
 
     const initSession = async () => {
-      try {
-        if (debug) console.log('[Auth] Initializing session...');
-
-        // Best-effort: clear stale caches on app start
-        if ('caches' in window) {
-          try {
-            const cacheNames = await caches.keys();
-            await Promise.all(cacheNames.map((name) => caches.delete(name)));
-          } catch (e) {
-            console.warn('[Auth] Cache clear failed:', e);
-          }
-        }
-
-        const {
-          data: { session },
-          error
-        } = await supabase.auth.getSession();
-
-        if (error) throw error;
-
-        if (session?.user) {
-          // Double-check session validity
-          const { data: userData, error: userError } = await supabase.auth.getUser();
-          if (userError || !userData?.user) {
-            console.warn('[Auth] Invalid session on init, signing out + cleanup');
-            try {
-              await supabase.auth.signOut();
-            } catch (_) {}
-
-            clearAllAuthData();
-            if (mounted) {
-              setUser(null);
-              setProfile(null);
-              setRoleStatus(null);
-              setLoading(false);
-            }
-            return;
-          }
-
-          if (debug) console.log('[Auth] Valid session for user:', session.user.id);
-
-          if (mounted) setUser(session.user);
-
-          await Promise.all([
-            loadUserProfile(session.user.id, session.user),
-            loadUserRoleStatus(session.user.id)
-          ]);
-        } else {
-          if (debug) console.log('[Auth] No active session');
-        }
-      } catch (e) {
-        console.error('[Auth] Session init error:', e);
-        clearAllAuthData();
-      } finally {
-        if (mounted) setLoading(false);
+      // Prevent concurrent initializations
+      if (initializationRef.current) {
+        return initializationRef.current;
       }
+
+      initializationRef.current = (async () => {
+        try {
+          if (debug) console.log('[Auth] Initializing session...');
+
+          // Clear stale caches on init
+          if ('caches' in window) {
+            try {
+              const cacheNames = await caches.keys();
+              await Promise.all(cacheNames.map(name => caches.delete(name)));
+            } catch (e) {
+              console.warn('[Auth] Cache clear failed:', e);
+            }
+          }
+
+          // CRITICAL: Get session with timeout
+          const sessionPromise = supabase.auth.getSession();
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Session load timeout')), 5000)
+          );
+
+          const { data: { session }, error } = await Promise.race([
+            sessionPromise,
+            timeoutPromise
+          ]);
+
+          if (error) {
+            console.error('[Auth] Session error:', error);
+            throw error;
+          }
+
+          if (session?.user) {
+            // Verify session is actually valid
+            const { data: userData, error: userError } = await supabase.auth.getUser();
+            
+            if (userError || !userData?.user) {
+              console.warn('[Auth] Invalid session on init, cleaning up');
+              
+              // Sign out from Supabase
+              try {
+                await supabase.auth.signOut();
+              } catch (_) {}
+
+              clearAllAuthData();
+              
+              if (mounted) {
+                setUser(null);
+                setProfile(null);
+                setRoleStatus(null);
+                setLoading(false);
+              }
+              return;
+            }
+
+            if (debug) console.log('[Auth] Valid session for user:', session.user.id);
+
+            if (mounted) setUser(session.user);
+
+            // Load profile first, then role (sequential to avoid races)
+            const profileData = await loadUserProfile(session.user.id, session.user);
+            if (mounted && profileData) {
+              await loadUserRoleStatus(session.user.id);
+            }
+          } else {
+            if (debug) console.log('[Auth] No active session');
+          }
+        } catch (e) {
+          console.error('[Auth] Session init error:', e);
+          
+          // On error, clean everything
+          clearAllAuthData();
+          
+          if (mounted) {
+            setUser(null);
+            setProfile(null);
+            setRoleStatus(null);
+          }
+        } finally {
+          if (mounted) {
+            setLoading(false);
+            initializationRef.current = null;
+          }
+        }
+      })();
+
+      return initializationRef.current;
     };
 
     initSession();
 
+    // FIXED: Handle all auth state changes properly
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
+      if (!mounted || logoutRef.current) return;
 
       if (debug) console.log('[Auth] Auth state changed:', event);
 
+      // Handle signout/deletion
       if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || !session) {
-        if (debug) console.log('[Auth] Signed out / no session, clearing state');
         setUser(null);
         setProfile(null);
         setRoleStatus(null);
@@ -241,12 +315,22 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
+      // FIXED: Handle token refresh without reloading everything
+      if (event === 'TOKEN_REFRESHED' && session?.user) {
+        if (user?.id === session.user.id) {
+          // Same user, just update the user object
+          setUser(session.user);
+          return;
+        }
+      }
+
+      // Handle signin/signup/user change
       if (session?.user) {
         const newUser = session.user;
         const isUserChange = user && user.id !== newUser.id;
 
         if (isUserChange) {
-          if (debug) console.log('[Auth] Account switch detected, resetting profile + role');
+          if (debug) console.log('[Auth] User changed, resetting');
           setProfile(null);
           setRoleStatus(null);
           setSessionVersion((v) => v + 1);
@@ -254,10 +338,13 @@ export const AuthProvider = ({ children }) => {
 
         setUser(newUser);
 
-        await Promise.all([
-          loadUserProfile(newUser.id, newUser),
-          loadUserRoleStatus(newUser.id)
-        ]);
+        // Only reload profile if needed
+        if (isUserChange || !profile) {
+          const profileData = await loadUserProfile(newUser.id, newUser);
+          if (mounted && profileData) {
+            await loadUserRoleStatus(newUser.id);
+          }
+        }
 
         setLoading(false);
       }
@@ -267,7 +354,7 @@ export const AuthProvider = ({ children }) => {
       mounted = false;
       subscription?.unsubscribe();
     };
-  }, [loadUserProfile, loadUserRoleStatus, debug, user]);
+  }, []); // Empty dependencies - only run once
 
   const login = useCallback(async (email, password) => {
     setError(null);
@@ -295,27 +382,58 @@ export const AuthProvider = ({ children }) => {
     return data;
   }, []);
 
+  // FIXED: Logout with aggressive cleanup
   const logout = useCallback(async () => {
+    console.log('🚪 Starting logout process...');
+    
+    // Set logout flag to prevent auth state change handler interference
+    logoutRef.current = true;
+    
     setError(null);
+    setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signOut();
+      // 1. Sign out from Supabase (with timeout)
+      const signOutPromise = supabase.auth.signOut();
+      const timeoutPromise = new Promise((resolve) => 
+        setTimeout(() => {
+          console.warn('[Auth] Signout timeout, continuing with cleanup');
+          resolve({ error: null });
+        }, 3000)
+      );
+
+      const { error } = await Promise.race([signOutPromise, timeoutPromise]);
+      
       if (error) {
-        console.warn('[Auth] supabase signOut error:', error.message || error);
+        console.warn('[Auth] Supabase signOut error:', error.message);
       }
     } catch (e) {
-      console.warn('[Auth] supabase signOut threw:', e);
-    } finally {
-      clearAllAuthData();
-
-      setUser(null);
-      setProfile(null);
-      setRoleStatus(null);
-      setSessionVersion((v) => v + 1);
-      setLoading(false);
-
-      window.location.replace('/');
+      console.warn('[Auth] Supabase signOut threw:', e);
     }
+
+    // 2. Clear ALL auth data (always do this, even if signOut failed)
+    clearAllAuthData();
+
+    // 3. Reset ALL state
+    setUser(null);
+    setProfile(null);
+    setRoleStatus(null);
+    setSessionVersion((v) => v + 1);
+    setLoading(false);
+    
+    // Reset refs
+    initializationRef.current = null;
+    profileLoadRef.current = null;
+    roleLoadRef.current = null;
+
+    console.log('✅ Logout complete, redirecting...');
+
+    // 4. Force hard redirect (don't use react-router)
+    // Use setTimeout to ensure state updates complete
+    setTimeout(() => {
+      logoutRef.current = false;
+      window.location.href = '/';
+    }, 100);
   }, []);
 
   const updateProfile = useCallback(

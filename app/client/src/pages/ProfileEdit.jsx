@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useReducer } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 
@@ -11,53 +11,51 @@ const EMPTY_SOCIAL_LINKS = {
   youtube: ''
 };
 
-const ProfileEdit = () => {
-  const {
-    user,
-    profile,
-    roleStatus,
-    loading,
-    updateProfile,
-    needsProfileCompletion
-  } = useAuth();
-
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const [formData, setFormData] = useState({
-    full_name: '',
-    username: '',
-    email: '',
-    role: 'investor', // display only, immutable here
-    avatar_url: '',
-    bio: '',
-    location: '',
-    phone: '',
-    date_of_birth: '',
-    social_links: { ...EMPTY_SOCIAL_LINKS }
-  });
-
-  const [profileMeta, setProfileMeta] = useState({
-    is_verified: 'no',
-    is_accredited_investor: false,
-    total_invested: 0,
-    total_campaigns_backed: 0,
-    verification_level: 0,
-    trust_score: 0,
-    referral_code: '',
-    last_active_at: '',
-    followers_count: 0,
-    following_count: 0
-  });
-
-  const [preferencesInput, setPreferencesInput] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const applyProfileToState = useCallback(
-    (profileData) => {
-      if (!profileData) return;
+// Reducer for profile state management
+const profileReducer = (state, action) => {
+  switch (action.type) {
+    case 'SET_FORM_DATA':
+      return {
+        ...state,
+        formData: { ...state.formData, ...action.payload }
+      };
+    case 'SET_PROFILE_META':
+      return {
+        ...state,
+        profileMeta: { ...state.profileMeta, ...action.payload }
+      };
+    case 'SET_PREFERENCES':
+      return {
+        ...state,
+        preferencesInput: action.payload
+      };
+    case 'SET_MESSAGE':
+      return {
+        ...state,
+        message: action.payload,
+        error: ''
+      };
+    case 'SET_ERROR':
+      return {
+        ...state,
+        error: action.payload,
+        message: ''
+      };
+    case 'SET_SUBMITTING':
+      return {
+        ...state,
+        isSubmitting: action.payload
+      };
+    case 'RESET_MESSAGES':
+      return {
+        ...state,
+        message: '',
+        error: ''
+      };
+    case 'APPLY_PROFILE_DATA': {
+      const { profileData, user, roleStatus } = action.payload;
+      
+      if (!profileData) return state;
 
       const rawSocialLinks = profileData.social_links;
       const normalizedSocialLinks =
@@ -72,7 +70,7 @@ const ProfileEdit = () => {
         ...normalizedSocialLinks
       };
 
-      // Legacy link columns mapping into social_links if empty
+      // Legacy link columns mapping
       if (profileData.linkedin_url && !socialLinks.linkedin) {
         socialLinks.linkedin = profileData.linkedin_url;
       }
@@ -87,7 +85,7 @@ const ProfileEdit = () => {
         ? String(profileData.date_of_birth).split('T')[0]
         : '';
 
-      setFormData({
+      const newFormData = {
         full_name: profileData.full_name || '',
         username: profileData.username || '',
         email: profileData.email || user?.email || '',
@@ -102,9 +100,9 @@ const ProfileEdit = () => {
         phone: profileData.phone ?? profileData.phone_number ?? '',
         date_of_birth: normalizedDOB,
         social_links: socialLinks
-      });
+      };
 
-      setProfileMeta({
+      const newProfileMeta = {
         is_verified:
           typeof profileData.is_verified === 'string'
             ? profileData.is_verified
@@ -120,16 +118,81 @@ const ProfileEdit = () => {
         last_active_at: profileData.last_active_at || '',
         followers_count: Number(profileData.followers_count || 0),
         following_count: Number(profileData.following_count || 0)
-      });
+      };
 
       const rawPreferences = profileData.preferences;
+      let newPreferencesInput = '';
       if (rawPreferences && typeof rawPreferences === 'object') {
-        setPreferencesInput(JSON.stringify(rawPreferences, null, 2));
+        newPreferencesInput = JSON.stringify(rawPreferences, null, 2);
       } else if (rawPreferences && typeof rawPreferences === 'string') {
-        setPreferencesInput(rawPreferences);
-      } else {
-        setPreferencesInput('');
+        newPreferencesInput = rawPreferences;
       }
+
+      return {
+        ...state,
+        formData: newFormData,
+        profileMeta: newProfileMeta,
+        preferencesInput: newPreferencesInput
+      };
+    }
+    default:
+      return state;
+  }
+};
+
+const initialState = {
+  formData: {
+    full_name: '',
+    username: '',
+    email: '',
+    role: 'investor',
+    avatar_url: '',
+    bio: '',
+    location: '',
+    phone: '',
+    date_of_birth: '',
+    social_links: { ...EMPTY_SOCIAL_LINKS }
+  },
+  profileMeta: {
+    is_verified: 'no',
+    is_accredited_investor: false,
+    total_invested: 0,
+    total_campaigns_backed: 0,
+    verification_level: 0,
+    trust_score: 0,
+    referral_code: '',
+    last_active_at: '',
+    followers_count: 0,
+    following_count: 0
+  },
+  preferencesInput: '',
+  message: '',
+  error: '',
+  isSubmitting: false
+};
+
+const ProfileEdit = () => {
+  const {
+    user,
+    profile,
+    roleStatus,
+    loading,
+    updateProfile,
+    needsProfileCompletion
+  } = useAuth();
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [state, dispatch] = useReducer(profileReducer, initialState);
+  const { formData, profileMeta, preferencesInput, message, error, isSubmitting } = state;
+
+  const applyProfileToState = useCallback(
+    (profileData) => {
+      dispatch({
+        type: 'APPLY_PROFILE_DATA',
+        payload: { profileData, user, roleStatus }
+      });
     },
     [user, roleStatus]
   );
@@ -142,35 +205,38 @@ const ProfileEdit = () => {
 
   useEffect(() => {
     if (location?.state?.message) {
-      setMessage(location.state.message);
+      dispatch({ type: 'SET_MESSAGE', payload: location.state.message });
     }
   }, [location]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
-    setFormData((prev) => ({
-      ...prev,
-      ...(name === 'role' ? {} : { [name]: value }) // role is locked
-    }));
+    if (name !== 'role') { // role is locked
+      dispatch({
+        type: 'SET_FORM_DATA',
+        payload: { [name]: value }
+      });
+    }
   };
 
   const handleSocialLinksChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      social_links: {
-        ...prev.social_links,
-        [name]: value
+    dispatch({
+      type: 'SET_FORM_DATA',
+      payload: {
+        social_links: {
+          ...formData.social_links,
+          [name]: value
+        }
       }
-    }));
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setError('');
-    setMessage('');
+    dispatch({ type: 'SET_SUBMITTING', payload: true });
+    dispatch({ type: 'RESET_MESSAGES' });
 
     let parsedPreferences = null;
 
@@ -178,8 +244,8 @@ const ProfileEdit = () => {
       try {
         parsedPreferences = JSON.parse(preferencesInput);
       } catch {
-        setError('Invalid JSON in preferences field. Please correct the format.');
-        setIsSubmitting(false);
+        dispatch({ type: 'SET_ERROR', payload: 'Invalid JSON in preferences field. Please correct the format.' });
+        dispatch({ type: 'SET_SUBMITTING', payload: false });
         return;
       }
     }
@@ -256,7 +322,7 @@ const ProfileEdit = () => {
       }
 
       applyProfileToState(updatedProfile);
-      setMessage('Profile updated successfully!');
+      dispatch({ type: 'SET_MESSAGE', payload: 'Profile updated successfully!' });
 
       setTimeout(() => {
         navigate('/profile');
@@ -284,10 +350,9 @@ const ProfileEdit = () => {
           'Please check your internet connection and try again.';
       }
 
-      setError(errorMessage);
-      setMessage('');
+      dispatch({ type: 'SET_ERROR', payload: errorMessage });
     } finally {
-      setIsSubmitting(false);
+      dispatch({ type: 'SET_SUBMITTING', payload: false });
     }
   };
 
@@ -295,8 +360,7 @@ const ProfileEdit = () => {
     if (profile) {
       applyProfileToState(profile);
     }
-    setError('');
-    setMessage('');
+    dispatch({ type: 'RESET_MESSAGES' });
   };
 
   const handleContinue = () => {
@@ -898,7 +962,7 @@ const ProfileEdit = () => {
                 </h3>
                 <textarea
                   value={preferencesInput}
-                  onChange={(e) => setPreferencesInput(e.target.value)}
+                  onChange={(e) => dispatch({ type: 'SET_PREFERENCES', payload: e.target.value })}
                   rows={4}
                   placeholder='Optional JSON object, e.g. { "categories": ["DeFi", "Real Estate"] }'
                   style={{
