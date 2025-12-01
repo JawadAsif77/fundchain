@@ -26,90 +26,74 @@ const defaultRoleStatus = {
   kycStatus: 'not_started'
 };
 
-// Minimal targeted cleanup for Supabase auth
-const clearSupabaseStorage = () => {
+const clearAllAuthData = () => {
   if (typeof window === 'undefined') return;
 
-  const safeClear = (storage) => {
-    if (!storage) return;
+  try {
+    // Clear supabase + app specific localStorage keys
     const keysToRemove = [];
-    for (let i = 0; i < storage.length; i += 1) {
-      const key = storage.key(i);
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
       if (
         key &&
         (key.startsWith('sb-') ||
           key.includes('supabase') ||
-          key === 'pendingUserProfile')
+          key.startsWith('fundchain-') ||
+          key === 'pendingUserProfile' ||
+          key.includes('auth') ||
+          key.includes('session'))
       ) {
         keysToRemove.push(key);
       }
     }
-    keysToRemove.forEach((k) => {
-      try {
-        storage.removeItem(k);
-      } catch (_) {}
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+
+    // Clear sessionStorage
+    sessionStorage.clear();
+
+    // Clear cookies
+    document.cookie.split(';').forEach((cookie) => {
+      const name = cookie.split('=')[0].trim();
+      if (!name) return;
+
+      const host = window.location.hostname;
+      const domains = ['', `domain=${host}`, `domain=.${host}`];
+
+      if (host === 'localhost') {
+        domains.push('domain=localhost', 'domain=.localhost');
+      }
+
+      domains.forEach((domain) => {
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; ${domain}; SameSite=Lax;`;
+      });
     });
-  };
 
-  try {
-    safeClear(window.localStorage);
-    safeClear(window.sessionStorage);
-  } catch (_) {}
-
-  try {
-    if (typeof document !== 'undefined') {
-      document.cookie.split(';').forEach((cookie) => {
-        const name = cookie.split('=')[0].trim();
-        if (!name) return;
-
-        const base = `${name}=; Max-Age=0; path=/; SameSite=Lax;`;
-        document.cookie = base;
-        document.cookie = `${base} domain=${window.location.hostname};`;
-        document.cookie = `${base} domain=.${window.location.hostname};`;
+    // Clear caches (best-effort)
+    if ('caches' in window) {
+      caches.keys().then((names) => {
+        names.forEach((name) => caches.delete(name));
       });
     }
-  } catch (_) {}
-};
-
-// Wrapper used by older code paths – keep it simple & safe
-const clearAllAuthData = () => {
-  try {
-    clearSupabaseStorage();
   } catch (e) {
-    console.warn('[Auth] clearAllAuthData error', e);
+    console.warn('[Auth] clearAllAuthData error:', e);
   }
 };
 
 export const AuthProvider = ({ children }) => {
-  console.log('[Auth] Provider mount');
-
-  const [user, setUser] = useState(null); // supabase auth user
-  const [profile, setProfile] = useState(null);
-  const [roleStatus, setRoleStatus] = useState(null);
-  const [loading, setLoading] = useState(true); // only for initial big transitions
+  const [user, setUser] = useState(null);             // Supabase auth user
+  const [profile, setProfile] = useState(null);       // Users table row
+  const [roleStatus, setRoleStatus] = useState(null); // getUserRoleStatus result
+  const [loading, setLoading] = useState(true);       // Auth bootstrap + initial profile/role loading
   const [error, setError] = useState(null);
-  const [sessionVersion, setSessionVersion] = useState(0);
+  const [sessionVersion, setSessionVersion] = useState(0); // Forces consumers to re-run effects on session changes
 
-  // ---------- Helpers to load profile / role ----------
+  const debug = process.env.NODE_ENV === 'development';
 
   const loadUserProfile = useCallback(
     async (userId, sessionUser = null) => {
       if (!userId) return null;
 
-      // PART 5 FIX: Validate userId matches current session
       try {
-        const { data: currentSession } = await supabase.auth.getUser();
-        if (!currentSession?.user || currentSession.user.id !== userId) {
-          console.warn('[Auth] loadUserProfile: userId mismatch with current session, ignoring');
-          return null;
-        }
-      } catch (e) {
-        console.warn('[Auth] loadUserProfile: Failed to validate session, aborting');
-        return null;
-      }
-
-      try {
-        console.log('[Auth] loadUserProfile', userId);
         const { data, error } = await db.users.getProfile(userId);
 
         if (!error && data) {
@@ -117,49 +101,25 @@ export const AuthProvider = ({ children }) => {
           return data;
         }
 
+        // Profile missing: create a new one
         if (error && error.code === 'PGRST116') {
-          console.log('[Auth] profile missing, creating…');
+          if (debug) console.log('[Auth] No profile, creating default profile...');
+
           const baseUser = sessionUser || user;
 
-          let newProfile = null;
-
-          // pending profile from register_simple
-          try {
-            const raw = localStorage.getItem('pendingUserProfile');
-            if (raw) {
-              const pending = JSON.parse(raw);
-              if (pending?.id === userId) {
-                newProfile = {
-                  id: userId,
-                  email: pending.email,
-                  username: pending.username,
-                  full_name: pending.full_name,
-                  role: pending.role || 'investor',
-                  is_verified: 'no'
-                };
-              }
-            }
-            localStorage.removeItem('pendingUserProfile');
-          } catch {
-            localStorage.removeItem('pendingUserProfile');
-          }
-
-          if (!newProfile) {
-            newProfile = {
-              id: userId,
-              email: baseUser?.email || '',
-              full_name: baseUser?.user_metadata?.full_name || '',
-              username: baseUser?.user_metadata?.username || null,
-              role: baseUser?.user_metadata?.role || 'investor',
-              avatar_url: baseUser?.user_metadata?.avatar_url || null,
-              is_verified: 'no'
-            };
-          }
+          const newProfile = {
+            id: userId,
+            email: baseUser?.email || '',
+            full_name: baseUser?.user_metadata?.full_name || '',
+            username: baseUser?.user_metadata?.username || null,
+            role: baseUser?.user_metadata?.role || 'investor',
+            avatar_url: baseUser?.user_metadata?.avatar_url || null,
+            is_verified: 'no'
+          };
 
           const result = await userApi.createUser(newProfile);
           if (result?.error) {
             console.error('[Auth] createUser error:', result.error);
-            setError('Failed to create user profile');
             return null;
           }
 
@@ -168,20 +128,13 @@ export const AuthProvider = ({ children }) => {
           return created;
         }
 
-        if (error) {
-          console.error('[Auth] getProfile error:', error);
-          setError('Failed to load user profile');
-          return null;
-        }
-
         return null;
       } catch (e) {
         console.error('[Auth] loadUserProfile exception:', e);
-        setError('Failed to load user profile');
         return null;
       }
     },
-    [user]
+    [user, debug]
   );
 
   const loadUserRoleStatus = useCallback(async (userId) => {
@@ -189,8 +142,8 @@ export const AuthProvider = ({ children }) => {
       setRoleStatus(defaultRoleStatus);
       return defaultRoleStatus;
     }
+
     try {
-      console.log('[Auth] loadUserRoleStatus', userId);
       const status = await getUserRoleStatus(userId);
       if (status && typeof status === 'object') {
         const merged = { ...defaultRoleStatus, ...status };
@@ -201,241 +154,166 @@ export const AuthProvider = ({ children }) => {
       return defaultRoleStatus;
     } catch (e) {
       console.error('[Auth] loadUserRoleStatus error:', e);
-      const fallback = { ...defaultRoleStatus, success: false, error: e.message };
-      setRoleStatus(fallback);
-      return fallback;
+      setRoleStatus(defaultRoleStatus);
+      return defaultRoleStatus;
     }
   }, []);
 
-  // ---------- Hard session validation to kill ghost sessions ----------
+  // Bootstrap session
+  useEffect(() => {
+    let mounted = true;
 
-  const ensureHealthySession = useCallback(
-    async (session) => {
-      if (!session?.user) return null;
-
+    const initSession = async () => {
       try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error || !data?.user) {
-          console.warn('[Auth] invalid/expired session detected, cleaning up');
+        if (debug) console.log('[Auth] Initializing session...');
+
+        // Best-effort: clear stale caches on app start
+        if ('caches' in window) {
           try {
-            await supabase.auth.signOut();
-          } catch (_) {}
-          clearAllAuthData();
-          setUser(null);
-          setProfile(null);
-          setRoleStatus(null);
-          return null;
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map((name) => caches.delete(name)));
+          } catch (e) {
+            console.warn('[Auth] Cache clear failed:', e);
+          }
         }
-        return data.user;
+
+        const {
+          data: { session },
+          error
+        } = await supabase.auth.getSession();
+
+        if (error) throw error;
+
+        if (session?.user) {
+          // Double-check session validity
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          if (userError || !userData?.user) {
+            console.warn('[Auth] Invalid session on init, signing out + cleanup');
+            try {
+              await supabase.auth.signOut();
+            } catch (_) {}
+
+            clearAllAuthData();
+            if (mounted) {
+              setUser(null);
+              setProfile(null);
+              setRoleStatus(null);
+              setLoading(false);
+            }
+            return;
+          }
+
+          if (debug) console.log('[Auth] Valid session for user:', session.user.id);
+
+          if (mounted) setUser(session.user);
+
+          await Promise.all([
+            loadUserProfile(session.user.id, session.user),
+            loadUserRoleStatus(session.user.id)
+          ]);
+        } else {
+          if (debug) console.log('[Auth] No active session');
+        }
       } catch (e) {
-        console.warn('[Auth] getUser failed, cleaning session', e);
-        try {
-          await supabase.auth.signOut();
-        } catch (_) {}
+        console.error('[Auth] Session init error:', e);
         clearAllAuthData();
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initSession();
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
+      if (debug) console.log('[Auth] Auth state changed:', event);
+
+      if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || !session) {
+        if (debug) console.log('[Auth] Signed out / no session, clearing state');
         setUser(null);
         setProfile(null);
         setRoleStatus(null);
-        return null;
+        setSessionVersion((v) => v + 1);
+        setLoading(false);
+        return;
       }
-    },
-    []
-  );
 
-  // ---------- Initial session + listener ----------
+      if (session?.user) {
+        const newUser = session.user;
+        const isUserChange = user && user.id !== newUser.id;
 
-  useEffect(() => {
-    let alive = true;
-    let timeoutId;
-
-    const init = async () => {
-      try {
-        console.log('[Auth] init getSession');
-        
-        // PART 3 FIX: Add timeout protection
-        timeoutId = setTimeout(() => {
-          if (alive) {
-            console.warn('[Auth] getSession timeout after 2000ms');
-            setLoading(false);
-          }
-        }, 2000);
-
-        const { data, error } = await supabase.auth.getSession();
-        
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-        
-        if (!alive) return;
-
-        if (error) {
-          console.error('[Auth] getSession error:', error);
-          setError(error.message);
-          setLoading(false);
-          return;
-        }
-
-        const session = data?.session;
-        if (!session?.user) {
-          console.log('[Auth] no session at init');
-          setLoading(false);
-          return;
-        }
-
-        // validate that session is actually usable
-        const healthyUser = await ensureHealthySession(session);
-        if (!alive || !healthyUser) {
-          setLoading(false);
-          return;
-        }
-
-        console.log('[Auth] healthy session found', healthyUser.id);
-        setUser(healthyUser);
-
-        await Promise.all([
-          loadUserProfile(healthyUser.id, healthyUser),
-          loadUserRoleStatus(healthyUser.id)
-        ]);
-      } catch (e) {
-        console.error('[Auth] init error:', e);
-        if (alive) setError(e.message);
-      } finally {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-        if (alive) setLoading(false);
-      }
-    };
-
-    init();
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('[Auth] onAuthStateChange', event);
-
-        if (!alive) return;
-        setError(null);
-
-        // PART 2 FIX: Handle logout properly
-        if (event === 'SIGNED_OUT') {
-          setUser(null);
+        if (isUserChange) {
+          if (debug) console.log('[Auth] Account switch detected, resetting profile + role');
           setProfile(null);
           setRoleStatus(null);
           setSessionVersion((v) => v + 1);
-          setLoading(false);
-          return;
         }
 
-        // PART 2 FIX: Don't assume session exists if no session/user
-        if (!session?.user) {
-          setUser(null);
-          setProfile(null);
-          setRoleStatus(null);
-          setLoading(false);
-          return;
-        }
+        setUser(newUser);
 
-        // PART 3 FIX: validate every new session
-        const healthyUser = await ensureHealthySession(session);
-        if (!alive || !healthyUser) {
-          setLoading(false);
-          return;
-        }
-
-        setUser(healthyUser);
-        setSessionVersion((v) => v + 1);
-
-        // PART 4 FIX: Don't block if profile loading fails
-        try {
-          await Promise.all([
-            loadUserProfile(healthyUser.id, healthyUser),
-            loadUserRoleStatus(healthyUser.id)
-          ]);
-        } catch (e) {
-          console.warn('[Auth] Profile loading failed during auth change, continuing...', e);
-        }
+        await Promise.all([
+          loadUserProfile(newUser.id, newUser),
+          loadUserRoleStatus(newUser.id)
+        ]);
 
         setLoading(false);
       }
-    );
+    });
 
     return () => {
-      alive = false;
-      listener?.subscription?.unsubscribe();
+      mounted = false;
+      subscription?.unsubscribe();
     };
-  }, [ensureHealthySession, loadUserProfile, loadUserRoleStatus]);
-
-  // ---------- Actions ----------
+  }, [loadUserProfile, loadUserRoleStatus, debug, user]);
 
   const login = useCallback(async (email, password) => {
     setError(null);
-    console.log('[Auth] login', email);
-
-    // LoginForm controls its own isSubmitting – don’t touch global loading
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     });
-
     if (error) {
-      console.error('[Auth] login error:', error);
       setError(error.message);
       throw error;
     }
-
-    // onAuthStateChange will take care of user/profile/role
     return data;
   }, []);
 
   const register = useCallback(async (email, password, userData = {}) => {
     setError(null);
-    console.log('[Auth] register', email);
-
     const { data, error } = await auth.signUp(email, password, {
       full_name: userData.displayName || userData.fullName || '',
       ...userData
     });
-
     if (error) {
-      console.error('[Auth] register error:', error);
       setError(error.message);
       throw error;
     }
-
     return data;
   }, []);
 
   const logout = useCallback(async () => {
+    setError(null);
+
     try {
-      console.log('[Auth] logout start');
-      setError(null);
-
-      // PART 6 FIX: Correct cleanup sequence
-      // 1. signOut first
-      try {
-        await supabase.auth.signOut();
-      } catch (e) {
-        console.warn('[Auth] signOut warning', e?.message || e);
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.warn('[Auth] supabase signOut error:', error.message || error);
       }
-
-      // 2. Clear storage
+    } catch (e) {
+      console.warn('[Auth] supabase signOut threw:', e);
+    } finally {
       clearAllAuthData();
 
-      // 3. Reset React states
       setUser(null);
       setProfile(null);
       setRoleStatus(null);
       setSessionVersion((v) => v + 1);
       setLoading(false);
 
-      console.log('[Auth] logout done, reloading');
-      
-      // 4. Force page reload
-      window.location.replace('/');
-    } catch (e) {
-      console.error('[Auth] logout fatal', e);
-      clearAllAuthData();
       window.location.replace('/');
     }
   }, []);
@@ -445,17 +323,10 @@ export const AuthProvider = ({ children }) => {
       if (!user) throw new Error('No user logged in');
       setError(null);
 
-      console.log('[Auth] updateProfile', user.id, updates);
       const result = await userApi.updateProfile(user.id, updates);
       const updated = result?.data || result;
 
-      if (!updated) {
-        const err = new Error('Profile update returned no data');
-        setError(err.message);
-        throw err;
-      }
-
-      setProfile(updated);
+      if (updated) setProfile(updated);
       return updated;
     },
     [user]
@@ -470,56 +341,21 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const clearError = () => setError(null);
+  const clearError = useCallback(() => setError(null), []);
 
-  // ---------- Derived state ----------
-
-  const validateSession = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) return false;
-      return !!data?.session?.user;
-    } catch {
-      return false;
-    }
-  }, []);
-
-  const getCurrentUser = useCallback(() => {
+  const currentUser = useMemo(() => {
     if (!user) return null;
-
-    if (!profile) {
-      return {
-        ...user,
-        full_name: user.user_metadata?.full_name || '',
-        username: user.user_metadata?.username || null,
-        role: user.user_metadata?.role || 'investor',
-        displayName:
-          user.user_metadata?.full_name ||
-          user.email?.split('@')[0] ||
-          'User'
-      };
-    }
-
-    const merged = {
+    return {
       ...user,
       ...profile,
-      id: user.id,
-      email: user.email,
-      email_confirmed_at: user.email_confirmed_at,
-      last_sign_in_at: user.last_sign_in_at,
       roleStatus
     };
-
-    const appRole =
-      roleStatus?.role ||
-      profile?.role ||
-      user.user_metadata?.role ||
-      'investor';
-
-    merged.appRole = appRole;
-    merged.role = appRole;
-    return merged;
   }, [user, profile, roleStatus]);
+
+  const needsProfileCompletion = useMemo(() => {
+    if (!user || !profile) return false;
+    return !profile.full_name || !profile.username;
+  }, [user, profile]);
 
   const needsRoleSelection = useMemo(() => {
     if (!user || !roleStatus) return false;
@@ -530,7 +366,7 @@ export const AuthProvider = ({ children }) => {
   const needsKYC = useMemo(() => {
     if (!user || !roleStatus) return false;
     if (roleStatus.role !== 'creator') return false;
-    return !roleStatus.companyData && !roleStatus.hasKycVerification;
+    return !roleStatus.companyData && !roleStatus.isKYCVerified;
   }, [user, roleStatus]);
 
   const isFullyOnboarded = useMemo(() => {
@@ -540,83 +376,47 @@ export const AuthProvider = ({ children }) => {
     return true;
   }, [user, roleStatus]);
 
-  const needsProfileCompletion = useMemo(() => {
-    if (!user || !profile) return false;
-    const required = ['full_name', 'username'];
-    return required.some((field) => {
-      const value = profile[field];
-      return typeof value === 'string' ? value.trim() === '' : !value;
-    });
-  }, [user, profile]);
-
-  const refreshRoleStatus = useCallback(async () => {
-    try {
-      const { data } = await supabase.auth.getUser();
-      const current = data?.user;
-      if (!current) {
-        setRoleStatus(defaultRoleStatus);
-        return defaultRoleStatus;
-      }
-      return await loadUserRoleStatus(current.id);
-    } catch (e) {
-      const fallback = { ...defaultRoleStatus, success: false, error: e.message };
-      setRoleStatus(fallback);
-      return fallback;
-    }
-  }, [loadUserRoleStatus]);
-
-  const refreshUserData = useCallback(async () => {
-    try {
-      const { data } = await supabase.auth.getUser();
-      const current = data?.user;
-      if (!current) return false;
-
-      setUser(current);
-      await Promise.all([
-        loadUserProfile(current.id, current),
-        loadUserRoleStatus(current.id)
-      ]);
-      return true;
-    } catch (e) {
-      console.error('[Auth] refreshUserData error', e);
-      return false;
-    }
-  }, [loadUserProfile, loadUserRoleStatus]);
-
-  const updateRoleStatus = useCallback((updates) => {
-    setRoleStatus((prev) => ({
-      ...(prev || defaultRoleStatus),
-      ...updates
-    }));
-  }, []);
-
-  const value = {
-    user: getCurrentUser(),
-    profile,
-    roleStatus,
-    sessionVersion,
-    loading,
-    error,
-
-    login,
-    register,
-    logout,
-    updateProfile,
-    resetPassword,
-    clearError,
-
-    isAuthenticated: !!user,
-    isEmailConfirmed: !!user?.email_confirmed_at,
-    needsProfileCompletion,
-    needsRoleSelection,
-    needsKYC,
-    isFullyOnboarded,
-
-    validateSession,
-    refreshRoleStatus,
-    updateRoleStatus,
-    refreshUserData
-  };
+  const value = useMemo(
+    () => ({
+      user: currentUser,
+      profile,
+      roleStatus,
+      sessionVersion,
+      loading,
+      error,
+      login,
+      register,
+      logout,
+      updateProfile,
+      resetPassword,
+      clearError,
+      isAuthenticated: !!user,
+      isEmailConfirmed: !!user?.email_confirmed_at,
+      needsProfileCompletion,
+      needsRoleSelection,
+      needsKYC,
+      isFullyOnboarded
+    }),
+    [
+      currentUser,
+      profile,
+      roleStatus,
+      sessionVersion,
+      loading,
+      error,
+      login,
+      register,
+      logout,
+      updateProfile,
+      resetPassword,
+      clearError,
+      user,
+      needsProfileCompletion,
+      needsRoleSelection,
+      needsKYC,
+      isFullyOnboarded
+    ]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

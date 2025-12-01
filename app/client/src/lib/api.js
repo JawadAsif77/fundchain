@@ -7,12 +7,6 @@
 
 import { supabase } from './supabase.js';
 
-// Mock data imports (for fallback during development)
-import { campaigns } from '../mock/campaigns.js';
-import { milestones } from '../mock/milestones.js';
-import { users } from '../mock/users.js';
-import { investments } from '../mock/investments.js';
-
 // Simulate network delay for better UX
 const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -24,7 +18,7 @@ export const userApi = {
   async getProfile(userId) {
     try {
       console.log('🔍 API: Fetching user profile for:', userId);
-      
+
       const { data, error } = await supabase
         .from('users')
         .select(`
@@ -56,10 +50,10 @@ export const userApi = {
     try {
       console.log('🔄 API: Starting profile update for user:', userId);
       console.log('📝 Profile data received:', profileData);
-      
+
       // Map form data to exact database columns
       const updateData = {};
-      
+
       // Basic fields
       if (profileData.full_name !== undefined) updateData.full_name = profileData.full_name;
       if (profileData.username !== undefined) updateData.username = profileData.username;
@@ -68,26 +62,26 @@ export const userApi = {
       if (profileData.phone !== undefined) updateData.phone = profileData.phone;
       if (profileData.date_of_birth !== undefined) updateData.date_of_birth = profileData.date_of_birth;
       if (profileData.avatar_url !== undefined) updateData.avatar_url = profileData.avatar_url;
-      
+
       // Social media (individual columns)
       if (profileData.linkedin_url !== undefined) updateData.linkedin_url = profileData.linkedin_url;
       if (profileData.twitter_url !== undefined) updateData.twitter_url = profileData.twitter_url;
       if (profileData.instagram_url !== undefined) updateData.instagram_url = profileData.instagram_url;
-      
-  // JSONB fields
-  if (profileData.social_links !== undefined) updateData.social_links = profileData.social_links || {};
-  if (profileData.preferences !== undefined) updateData.preferences = profileData.preferences;
-      
+
+      // JSONB fields
+      if (profileData.social_links !== undefined) updateData.social_links = profileData.social_links || {};
+      if (profileData.preferences !== undefined) updateData.preferences = profileData.preferences;
+
       // Role enum (include only on explicit change)
       if (profileData.role && ['investor', 'creator', 'admin'].includes(profileData.role)) {
         updateData.role = profileData.role;
       }
-      
+
       // Always update timestamp
       updateData.updated_at = new Date().toISOString();
-      
+
       console.log('✅ Mapped to database format:', updateData);
-      
+
       // Perform update and return updated data in one query
       const { data, error } = await supabase
         .from('users')
@@ -104,7 +98,7 @@ export const userApi = {
       console.log('🎉 Profile updated successfully:', data);
       // Normalize return shape for callers expecting { data, error }
       return { data, error: null };
-      
+
     } catch (error) {
       console.error('💥 Profile update error:', error);
       // Normalize thrown error shape similar to Supabase helpers
@@ -116,7 +110,7 @@ export const userApi = {
   async createUser(userData) {
     try {
       console.log('🆕 API: Creating user record', userData);
-      
+
       const userRecord = {
         id: userData.id,
         email: userData.email,
@@ -128,20 +122,20 @@ export const userApi = {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-      
+
       console.log('🆕 API: Inserting user record:', userRecord);
-      
+
       const { data, error } = await supabase
         .from('users')
         .insert(userRecord)
         .select('*')
         .single();
-        
+
       if (error) {
         console.error('❌ User creation failed:', error);
         throw new Error(`Failed to create user: ${error.message}`);
       }
-      
+
       console.log('✅ User created successfully:', data);
       return { data, error: null };
     } catch (error) {
@@ -159,7 +153,7 @@ export const kycApi = {
   async submitKyc(kycData) {
     try {
       console.log('🔄 API: Submitting KYC verification');
-      
+
       const verificationData = {
         user_id: kycData.user_id,
         legal_name: kycData.legal_name,
@@ -173,20 +167,20 @@ export const kycApi = {
         verification_status: 'pending',
         submitted_at: new Date().toISOString()
       };
-      
+
       const { data, error } = await supabase
         .from('user_verifications')
-        .upsert(verificationData, { 
+        .upsert(verificationData, {
           onConflict: 'user_id'
         })
         .select('*')
         .single();
-        
+
       if (error) {
         console.error('❌ KYC submission failed:', error);
         throw new Error(`KYC submission failed: ${error.message}`);
       }
-      
+
       console.log('✅ KYC submitted successfully');
       return data;
     } catch (error) {
@@ -203,11 +197,11 @@ export const kycApi = {
         .select('verification_status, verification_type, submitted_at, reviewed_at')
         .eq('user_id', userId)
         .single();
-        
+
       if (error && error.code !== 'PGRST116') {
         throw new Error(`Failed to get KYC status: ${error.message}`);
       }
-      
+
       return data;
     } catch (error) {
       console.error('💥 Get KYC status error:', error);
@@ -224,7 +218,7 @@ export const companyApi = {
   async createCompany(companyData) {
     try {
       console.log('🔄 API: Creating company');
-      
+
       const { data, error } = await supabase
         .from('companies')
         .insert({
@@ -239,12 +233,12 @@ export const companyApi = {
         })
         .select('*')
         .single();
-        
+
       if (error) {
         console.error('❌ Company creation failed:', error);
         throw new Error(`Company creation failed: ${error.message}`);
       }
-      
+
       console.log('✅ Company created successfully');
       return data;
     } catch (error) {
@@ -261,11 +255,11 @@ export const companyApi = {
         .select('*')
         .eq('owner_id', userId)
         .order('created_at', { ascending: false });
-        
+
       if (error) {
         throw new Error(`Failed to get companies: ${error.message}`);
       }
-      
+
       return data || [];
     } catch (error) {
       console.error('💥 Get companies error:', error);
@@ -282,7 +276,7 @@ export const projectApi = {
   async createProject(projectData) {
     try {
       console.log('🔄 API: Creating project');
-      
+
       const { data, error } = await supabase
         .from('projects')
         .insert({
@@ -302,12 +296,12 @@ export const projectApi = {
         })
         .select('*')
         .single();
-        
+
       if (error) {
         console.error('❌ Project creation failed:', error);
         throw new Error(`Project creation failed: ${error.message}`);
       }
-      
+
       console.log('✅ Project created successfully');
       return data;
     } catch (error) {
@@ -328,11 +322,11 @@ export const projectApi = {
         `)
         .eq('status', 'active')
         .order('created_at', { ascending: false });
-        
+
       if (error) {
         throw new Error(`Failed to get projects: ${error.message}`);
       }
-      
+
       return data || [];
     } catch (error) {
       console.error('💥 Get all projects error:', error);
@@ -350,18 +344,18 @@ export const projectApi = {
           companies(name, verified)
         `)
         .order('created_at', { ascending: false });
-      
+
       // If userId is provided, filter by creator, otherwise get all
       if (userId) {
         query = query.eq('creator_id', userId);
       }
-        
+
       const { data, error } = await query;
-        
+
       if (error) {
         throw new Error(`Failed to get projects: ${error.message}`);
       }
-      
+
       return data || [];
     } catch (error) {
       console.error('💥 Get projects error:', error);
@@ -384,7 +378,7 @@ export const campaignApi = {
         .eq('name', name)
         .single();
       if (!selErr && existing) return existing.id;
-    } catch (_) {}
+    } catch (_) { }
     // Insert if not found
     try {
       const { data, error } = await supabase
@@ -486,15 +480,13 @@ export const campaignApi = {
 
       if (error) {
         console.error('❌ Failed to fetch campaigns:', error);
-        // Fallback to mock data
-        return { data: campaigns, count: campaigns.length };
+        return { data: [], count: 0, error: error.message };
       }
 
       return { data: data || [], count: data?.length || 0 };
     } catch (error) {
       console.error('💥 Get campaigns error:', error);
-      // Fallback to mock data
-      return { data: campaigns, count: campaigns.length };
+      return { data: [], count: 0, error: error.message };
     }
   },
 
@@ -518,14 +510,14 @@ export const campaignApi = {
         `)
         .eq('creator_id', uid)
         .order('created_at', { ascending: false });
-      
+
       console.log('📊 API: getUserCampaigns query result. Error:', error, 'Data count:', data?.length);
-      
+
       if (error) {
         console.error('❌ API: getUserCampaigns error:', error);
         throw error;
       }
-      
+
       console.log('✅ API: getUserCampaigns success. Returning', data?.length || 0, 'campaigns');
       return { success: true, data: data || [] };
     } catch (error) {
@@ -545,13 +537,10 @@ export const campaignApi = {
         `)
         .eq('slug', slug)
         .single();
-        
+
       if (error) {
         console.error('❌ Campaign not found:', error);
-        // Fallback to mock data
-        const campaign = campaigns.find(c => c.slug === slug);
-        if (!campaign) throw new Error('Campaign not found');
-        return { data: campaign };
+        throw new Error('Campaign not found');
       }
       // Try to fetch authoritative stats via RPC (if deployed)
       try {
@@ -582,7 +571,7 @@ export const campaignApi = {
           };
           return { data: merged };
         }
-      } catch (_) {}
+      } catch (_) { }
       return { data };
     } catch (error) {
       console.error('💥 Get campaign error:', error);
@@ -615,26 +604,26 @@ export const investmentApi = {
   async getUserInvestments(userId) {
     try {
       console.log('💰 API: Fetching investments for user:', userId);
-      
+
       // First check if there are ANY investments for this user
       const { data: basicData, error: basicError } = await supabase
         .from('investments')
         .select('id, investor_id, campaign_id, amount, status, investment_date')
         .eq('investor_id', userId);
-        
+
       console.log('💰 API: Basic investment check result:', basicData);
       console.log('💰 API: Basic investment check error:', basicError);
-      
+
       if (basicError) {
         console.error('❌ Failed basic investment check:', basicError);
         return { data: [], count: 0 };
       }
-      
+
       if (!basicData || basicData.length === 0) {
         console.log('💰 API: No investments found for user');
         return { data: [], count: 0 };
       }
-      
+
       // If we have investments, try to get them with campaign data
       const { data, error } = await supabase
         .from('investments')
@@ -660,10 +649,10 @@ export const investmentApi = {
         `)
         .eq('investor_id', userId)
         .order('investment_date', { ascending: false });
-        
+
       if (error) {
         console.warn('💰 API: Join query failed, using basic data:', error.message);
-        
+
         // Fallback: manually join the data
         const enrichedData = await Promise.all(
           basicData.map(async (investment) => {
@@ -672,21 +661,21 @@ export const investmentApi = {
               .select('id, title, slug, short_description, image_url, status, funding_goal, current_funding, end_date')
               .eq('id', investment.campaign_id)
               .single();
-              
+
             return {
               ...investment,
               campaigns: campaign
             };
           })
         );
-        
+
         console.log('✅ Investments enriched manually:', enrichedData.length);
         return { data: enrichedData, count: enrichedData.length };
       }
-      
+
       console.log('✅ Investments fetched with join:', data?.length || 0, 'investments');
       console.log('💰 API: Sample investment data:', data?.[0]);
-      
+
       return { data: data || [], count: data?.length || 0 };
     } catch (error) {
       console.error('💥 Get investments error:', error);
@@ -703,19 +692,19 @@ export const walletApi = {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth?.user?.id;
     if (!uid) return { success: false, balance: 0, error: 'Not authenticated' };
-    
+
     const { data, error } = await supabase
       .from('users')
       .select('preferences')
       .eq('id', uid)
       .single();
-    
+
     // If user profile doesn't exist yet, return 0 balance instead of error
     if (error && error.code === 'PGRST116') {
       console.log('User profile not found, returning 0 balance');
       return { success: true, balance: 0 };
     }
-    
+
     if (error) return { success: false, balance: 0, error: error.message };
     const balance = Number(data?.preferences?.wallet_balance || 0);
     return { success: true, balance };
@@ -726,14 +715,14 @@ export const walletApi = {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth?.user?.id;
     if (!uid) return { success: false, error: 'Not authenticated' };
-    
+
     // Read current preferences
     const { data: current, error: readErr } = await supabase
       .from('users')
       .select('preferences')
       .eq('id', uid)
       .single();
-    
+
     // If user profile doesn't exist, create a basic one first
     if (readErr && readErr.code === 'PGRST116') {
       console.log('User profile not found for topUp, creating basic profile...');
@@ -748,17 +737,17 @@ export const walletApi = {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-      
+
       const { error: insertErr } = await supabase
         .from('users')
         .insert(basicProfile);
-        
+
       if (insertErr) return { success: false, error: insertErr.message };
       return { success: true, balance: Number(amount) };
     }
-    
+
     if (readErr) return { success: false, error: readErr.message };
-    
+
     const prefs = current?.preferences || {};
     const nextBalance = Number(prefs.wallet_balance || 0) + Number(amount);
     const nextPrefs = { ...prefs, wallet_balance: nextBalance };
@@ -853,315 +842,248 @@ export const walletApi = {
       .select('preferences')
       .eq('id', uid)
       .single();
-    
-    // If user profile doesn't exist, we have a problem - they shouldn't be able to invest without a profile
-    if (readErr && readErr.code === 'PGRST116') {
-      return { success: false, error: 'User profile not found. Please refresh and try again.' };
-    }
-    
-    if (readErr) return { success: false, error: readErr.message };
-    const prefs = current?.preferences || {};
-    const nextBalance = Math.max(0, Number(prefs.wallet_balance || 0) - Number(amount));
-    const nextPrefs = { ...prefs, wallet_balance: nextBalance };
-    const { error: updErr } = await supabase
-      .from('users')
-      .update({ preferences: nextPrefs, updated_at: new Date().toISOString() })
-      .eq('id', uid);
-    if (updErr) return { success: false, error: updErr.message };
 
-    return { success: true, balance: nextBalance, investment: inv };
+    if (!readErr && current) {
+      const prefs = current.preferences || {};
+      const nextBalance = Number(prefs.wallet_balance || 0) - Number(amount);
+      const nextPrefs = { ...prefs, wallet_balance: nextBalance };
+      await supabase
+        .from('users')
+        .update({ preferences: nextPrefs, updated_at: new Date().toISOString() })
+        .eq('id', uid);
+    }
+
+    return { success: true, investment: inv };
   }
 };
 
 // =============================================================================
-// NOTIFICATION API - Based on your notifications table
+// MILESTONE API
 // =============================================================================
-export const notificationApi = {
-  // Get user notifications
-  async getUserNotifications(userId) {
+export const milestoneApi = {
+  async createMilestone(milestoneData) {
     try {
       const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(50);
-        
-      if (error) {
-        throw new Error(`Failed to get notifications: ${error.message}`);
-      }
-      
-      return data || [];
+        .from('milestones')
+        .insert(milestoneData)
+        .select()
+        .single();
+      if (error) throw error;
+      return { success: true, data };
     } catch (error) {
-      console.error('💥 Get notifications error:', error);
-      return [];
-    }
-  },
-
-  // Mark notification as read
-  async markAsRead(notificationId) {
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notificationId);
-        
-      if (error) {
-        throw new Error(`Failed to mark notification as read: ${error.message}`);
-      }
-    } catch (error) {
-      console.error('💥 Mark notification as read error:', error);
-      throw error;
+      console.error('Create milestone error:', error);
+      return { success: false, error: error.message };
     }
   }
 };
 
 // =============================================================================
-// LEGACY COMPATIBILITY FUNCTIONS
+// UTILITY FUNCTIONS & COMPOSITE ACTIONS
 // =============================================================================
-// These functions provide backward compatibility for existing components
-
-export const getUserRoleStatus = async (userId) => {
-  try {
-    const { data } = await userApi.getProfile(userId);
-    
-    // Check if user has a valid role set (investor and creator are both valid)
-    const validRoles = ['investor', 'creator', 'admin'];
-    // Normalize role, defaulting to investor if missing
-    const normalizedRole = validRoles.includes(data?.role) ? data.role : 'investor';
-    // Treat default investor as a valid role so investors aren't gated on role selection
-    const hasRole = !!(data?.role && validRoles.includes(data.role)) || normalizedRole === 'investor';
-    
-    // For creators, check if they have KYC verification or company data
-  let companyData = null;
-  let hasKycVerification = false;
-  let kycStatusValue = null; // 'pending' | 'approved' | null
-    
-    if (data?.role === 'creator') {
-      try {
-        // Check for KYC verification first
-        const kyc = await kycApi.getKycStatus(userId);
-        kycStatusValue = kyc?.verification_status || null;
-        hasKycVerification = !!(kyc && (kyc.verification_status === 'pending' || kyc.verification_status === 'approved'));
-
-        // Also check for company data (legacy gate; no longer required once verified)
-        const companies = await companyApi.getUserCompanies(userId);
-        companyData = companies?.length > 0 ? companies[0] : null;
-      } catch (error) {
-        console.warn('Could not fetch KYC/company data:', error);
-      }
-    }
-    
-    return {
-      hasRole,
-      // Use normalized role with investor as safe default
-      role: normalizedRole,
-      isVerified: data?.is_verified === 'yes',
-      verificationLevel: data?.verification_level || 'basic',
-      companyData,
-      hasKycVerification,
-      // New fields used by Dashboard
-      kycStatus: kycStatusValue,
-      isKYCVerified: (data?.is_verified === 'yes' || kycStatusValue === 'approved')
-    };
-  } catch (error) {
-    console.error('Error getting user role status:', error);
-    return { 
-      // On errors, allow investor flow by default
-      hasRole: true,
-      role: 'investor', 
-      isVerified: false, 
-      verificationLevel: 'basic',
-      companyData: null,
-      hasKycVerification: false
-    };
-  }
-};
-
-export const getPublicProjects = async () => {
-  try {
-    const data = await projectApi.getUserProjects(); // Get all projects (public)
-    return { success: true, data };
-  } catch (error) {
-    console.error('Error getting public projects:', error);
-    return { success: false, data: [], error: error.message };
-  }
-};
-
-export const getUserProjects = async (userId) => {
-  try {
-    const data = await projectApi.getUserProjects(userId);
-    return { success: true, data };
-  } catch (error) {
-    console.error('Error getting user projects:', error);
-    return { success: false, data: [], error: error.message };
-  }
-};
-
-export const getUserInvestments = async (userId) => {
-  try {
-    console.log('🔧 getUserInvestments wrapper: Starting for userId:', userId);
-    const result = await investmentApi.getUserInvestments(userId);
-    console.log('🔧 getUserInvestments wrapper: investmentApi returned:', result);
-    
-    const response = { success: true, data: result.data || [] };
-    console.log('🔧 getUserInvestments wrapper: Final response:', response);
-    return response;
-  } catch (error) {
-    console.error('🔧 getUserInvestments wrapper: Error caught:', error);
-    return { success: false, data: [], error: error.message };
-  }
-};
-
-export const getUserCampaigns = async (userId) => {
-  try {
-    const res = await campaignApi.getUserCampaigns(userId);
-    return res?.success ? res : { success: true, data: res?.data || [] };
-  } catch (error) {
-    console.error('Error getting user campaigns:', error);
-    return { success: false, data: [], error: error.message };
-  }
-};
-
-export const createProjectWithMilestones = async (projectData, milestones = []) => {
-  try {
-    // Create campaign first (pending review)
-    let creatorId = projectData.creator_id; // optional, we will infer from auth if not provided elsewhere
-    if (!creatorId) {
-      const { data: authData } = await supabase.auth.getUser();
-      creatorId = authData?.user?.id || null;
-    }
-    const result = await campaignApi.createCampaign({
-      title: projectData.title,
-      slug: projectData.slug,
-      description: projectData.description,
-      summary: projectData.summary,
-      category: projectData.category,
-      goalAmount: projectData.goalAmount,
-      deadline: projectData.deadline,
-      imageUrl: projectData.imageUrl,
-  }, creatorId || null);
-    if (!result.success) return result;
-
-    const campaign = result.data;
-
-    // Insert milestones mapped to campaigns.milestones
-    if (Array.isArray(milestones) && milestones.length > 0) {
-      const rows = milestones.map((m, idx) => ({
-        campaign_id: campaign.id,
-        title: m.name || `Milestone ${idx + 1}`,
-        description: m.description || '',
-        target_amount: projectData.goalAmount && m.payoutPercentage
-          ? (Number(projectData.goalAmount) * Number(m.payoutPercentage) / 100)
-          : null,
-        order_index: idx + 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }));
-      const { error: mErr } = await supabase.from('milestones').insert(rows);
-      if (mErr) {
-        console.warn('Milestones insert warning:', mErr.message);
-      }
-    }
-
-    return { success: true, data: campaign };
-  } catch (error) {
-    console.error('Error creating campaign with milestones:', error);
-    return { success: false, error: error.message };
-  }
-};
 
 export const generateSlug = (title) => {
-  const baseSlug = title
+  return title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-  
-  // Add timestamp to ensure uniqueness
-  const timestamp = Date.now().toString(36);
-  return `${baseSlug}-${timestamp}`;
+    .replace(/(^-|-$)+/g, '');
 };
 
 export const validateMilestones = (milestones) => {
   if (!Array.isArray(milestones) || milestones.length === 0) {
     return { isValid: false, error: 'At least one milestone is required' };
   }
+  const totalPercentage = milestones.reduce((sum, m) => sum + (parseFloat(m.payoutPercentage) || 0), 0);
 
-  let totalPct = 0;
-  for (let i = 0; i < milestones.length; i++) {
-    const m = milestones[i];
-    if (!m.name?.trim()) {
-      return { isValid: false, error: `Milestone ${i + 1}: Name is required` };
-    }
-    if (!m.description?.trim()) {
-      return { isValid: false, error: `Milestone ${i + 1}: Description is required` };
-    }
-    const pct = Number(m.payoutPercentage);
-    if (!Number.isFinite(pct) || pct <= 0) {
-      return { isValid: false, error: `Milestone ${i + 1}: Payout percentage must be > 0` };
-    }
-    totalPct += pct;
+  // Allow small floating point error
+  if (Math.abs(totalPercentage - 100) > 0.1) {
+    return { isValid: false, error: `Total percentage must be 100% (current: ${totalPercentage.toFixed(1)}%)` };
   }
-
-  if (Math.abs(totalPct - 100) > 0.01) {
-    return { isValid: false, error: 'Total payout percentages across milestones must equal 100%' };
-  }
-
   return { isValid: true };
 };
 
+export const createProjectWithMilestones = async (projectData, milestones) => {
+  try {
+    // 1. Create Campaign
+    const campaignRes = await campaignApi.createCampaign(projectData);
+    if (!campaignRes.success || !campaignRes.data) {
+      throw new Error(campaignRes.error || 'Failed to create campaign');
+    }
+    const campaignId = campaignRes.data.id;
+
+    // 2. Create Milestones
+    const milestonePromises = milestones.map((m, index) => {
+      return milestoneApi.createMilestone({
+        campaign_id: campaignId,
+        title: m.name,
+        description: m.description,
+        target_amount: (projectData.goalAmount * (m.payoutPercentage / 100)),
+        order_index: index,
+        is_completed: false
+      });
+    });
+
+    await Promise.all(milestonePromises);
+
+    return { success: true, data: campaignRes.data };
+  } catch (error) {
+    console.error('createProjectWithMilestones error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 // =============================================================================
-// EXPORTS
+// HELPER FOR ROLE STATUS
 // =============================================================================
+
+// Map enum → UI strings
+const mapVerificationStatus = (raw) => {
+  if (!raw) return 'not_started';
+  switch (raw) {
+    case 'approved':
+    case 'verified':
+      return 'approved';
+    case 'pending':
+    case 'in_review':
+      return 'pending';
+    case 'rejected':
+    case 'failed':
+      return 'rejected';
+    default:
+      return raw; // fallback
+  }
+};
+
+export const getUserRoleStatus = async (userId) => {
+  if (!userId) {
+    return {
+      hasRole: false,
+      role: null,
+      isKYCVerified: false,
+      companyData: null,
+      success: true,
+      kycStatus: 'not_started'
+    };
+  }
+
+  // 1) Profile / role
+  let role = 'investor';
+  let hasRole = false;
+
+  try {
+    const { data: profile, error: profileError } = await supabase
+      .from('users') // or 'profiles' depending on your schema
+      .select('id, role, is_verified')
+      .eq('id', userId)
+      .maybeSingle(); // IMPORTANT: maybeSingle, not single
+
+    if (profileError) {
+      console.warn('[getUserRoleStatus] profile error:', profileError);
+    }
+
+    if (profile) {
+      role = profile.role || 'investor';
+      hasRole = !!profile.role;
+    }
+  } catch (e) {
+    console.warn('[getUserRoleStatus] profile exception:', e);
+  }
+
+  // 2) KYC / verification
+  let kycStatus = 'not_started';
+  let isKYCVerified = false;
+  let companyData = null;
+
+  try {
+    const { data, error, status } = await supabase
+      .from('user_verifications')
+      .select(
+        `
+        id,
+        user_id,
+        verification_status,
+        verification_type,
+        legal_name,
+        legal_address,
+        phone,
+        legal_email,
+        business_email,
+        id_document_url,
+        selfie_image_url,
+        reviewed_by,
+        reviewed_at,
+        rejection_reason,
+        admin_notes,
+        submitted_at,
+        created_at,
+        updated_at
+      `
+      )
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(); // <— KEY FIX
+
+    if (status === 406) {
+      // No row yet – this is FINE, just means user never submitted KYC
+      console.info('[getUserRoleStatus] no verification row yet for user, treating as not_started');
+    } else if (error) {
+      console.warn('[getUserRoleStatus] verification error:', error);
+    } else if (data) {
+      const mapped = mapVerificationStatus(data.verification_status);
+      kycStatus = mapped;
+      companyData = data;
+      isKYCVerified = mapped === 'approved';
+    }
+  } catch (e) {
+    console.warn('[getUserRoleStatus] verification exception:', e);
+  }
+
+  return {
+    hasRole,
+    role,
+    isKYCVerified,
+    companyData,
+    success: true,
+    kycStatus
+  };
+};
+
 // =============================================================================
-// ADMIN API - approvals
+// ADMIN API
 // =============================================================================
 export const adminApi = {
   async approveCampaign(campaignId) {
     try {
       const { data, error } = await supabase
         .from('campaigns')
-        .update({ status: 'active', verified: true, updated_at: new Date().toISOString() })
+        .update({ status: 'active', updated_at: new Date().toISOString() })
         .eq('id', campaignId)
-        .select('*')
+        .select()
         .single();
+
       if (error) throw error;
       return { success: true, data };
     } catch (error) {
-      console.error('💥 Approve campaign error:', error);
+      console.error('Approve campaign error:', error);
       return { success: false, error: error.message };
     }
   },
-  async rejectCampaign(campaignId, reason = null) {
+
+  async rejectCampaign(campaignId, reason) {
     try {
-      const update = { status: 'cancelled', verified: false, updated_at: new Date().toISOString() };
-      if (reason) update.external_links = { review_reason: reason };
+      // Ideally we would store the rejection reason somewhere, but for now just updating status
       const { data, error } = await supabase
         .from('campaigns')
-        .update(update)
+        .update({ status: 'rejected', updated_at: new Date().toISOString() })
         .eq('id', campaignId)
-        .select('*')
+        .select()
         .single();
+
       if (error) throw error;
       return { success: true, data };
     } catch (error) {
-      console.error('💥 Reject campaign error:', error);
+      console.error('Reject campaign error:', error);
       return { success: false, error: error.message };
     }
   }
-};
-
-// =============================================================================
-// EXPORTS
-// =============================================================================
-export default {
-  userApi,
-  kycApi,
-  companyApi,
-  projectApi,
-  campaignApi,
-  adminApi,
-  investmentApi,
-  walletApi,
-  notificationApi
 };
