@@ -195,14 +195,14 @@ const ProfileEdit = () => {
         payload: { profileData, user, roleStatus }
       });
     },
-    [user, roleStatus]
+    [] // EMPTY dependencies to keep function stable
   );
 
   useEffect(() => {
     if (profile) {
       applyProfileToState(profile);
     }
-  }, [profile, applyProfileToState]);
+  }, [profile]); // Remove applyProfileToState from dependencies
 
   useEffect(() => {
     if (location?.state?.message) {

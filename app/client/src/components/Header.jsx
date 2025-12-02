@@ -8,22 +8,25 @@ const Header = () => {
   const { user, profile, logout, validateSession } = useAuth();
   const location = useLocation();
 
-  // Session health monitor - do not auto-logout; Supabase client already refreshes tokens
+  // Fix 6: Optimize session check with idle detection
   useEffect(() => {
     if (!user) return;
+    
     const sessionCheck = setInterval(async () => {
+      // Skip check if page is hidden
+      if (document.hidden) return;
+      
       try {
-        if (document.hidden) return;
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          // Attempt a gentle refresh; avoid logging user out automatically
+          console.warn('[Header] No session, refreshing...');
           await supabase.auth.refreshSession();
         }
       } catch (err) {
-        // Log and continue; do not clear auth
-        console.warn('Header: session check warning:', err?.message || err);
+        console.warn('[Header] Session check failed:', err?.message);
       }
-    }, 10 * 60 * 1000);
+    }, 15 * 60 * 1000); // Increase to 15 minutes
+    
     return () => clearInterval(sessionCheck);
   }, [user]);
 

@@ -364,6 +364,33 @@ export const AuthProvider = ({ children }) => {
     };
   }, []); // Empty dependencies - only run once
 
+  // Fix 1: Add session recovery for idle state
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (!document.hidden && user) {
+        console.log('[Auth] Tab became visible, refreshing session...');
+        
+        try {
+          // Verify session is still valid
+          const { data: { session }, error } = await supabase.auth.getSession();
+          
+          if (error || !session) {
+            console.warn('[Auth] Session invalid after idle, refreshing...');
+            await supabase.auth.refreshSession();
+          }
+        } catch (e) {
+          console.error('[Auth] Session refresh failed:', e);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
+
   const login = useCallback(async (email, password) => {
     setError(null);
     const { data, error } = await supabase.auth.signInWithPassword({

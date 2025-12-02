@@ -159,6 +159,21 @@ const Dashboard = () => {
       document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
+  // Fix 5: Add connection health check
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('[Dashboard] Visible again, refreshing data...');
+        setRefreshKey(k => k + 1); // Trigger data reload
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user?.id]);
+
   const userInvestments = useMemo(() => {
     if (!isInvestor) return [];
     return investments || [];

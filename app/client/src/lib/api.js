@@ -7,18 +7,56 @@
 
 import { supabase } from './supabase.js';
 
-// Add timeout to prevent hanging requests
-export const withTimeout = (promise, timeoutMs = 10000) => {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
-    )
-  ]);
+// Add timeout to prevent hanging requests with retry logic
+export const withTimeout = async (promise, timeoutMs = 10000, retries = 2) => {
+  let lastError;
+  
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
+      );
+      
+      return await Promise.race([promise, timeoutPromise]);
+    } catch (error) {
+      lastError = error;
+      
+      // Don't retry if it's not a timeout/connection error
+      if (!error.message?.includes('timeout') && 
+          !error.message?.includes('connection') &&
+          !error.message?.includes('closed')) {
+        throw error;
+      }
+      
+      if (i < retries) {
+        console.log(`[API] Retry ${i + 1}/${retries} after error:`, error.message);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+      }
+    }
+  }
+  
+  throw lastError;
 };
 
 // Simulate network delay for better UX
 const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Fix 3: Request deduplication cache
+const requestCache = new Map();
+
+const dedupeRequest = async (key, requestFn, ttl = 3000) => {
+  if (requestCache.has(key)) {
+    console.log(`[API] Reusing request: ${key}`);
+    return requestCache.get(key);
+  }
+
+  const promise = requestFn().finally(() => {
+    setTimeout(() => requestCache.delete(key), ttl);
+  });
+
+  requestCache.set(key, promise);
+  return promise;
+};
 
 // =============================================================================
 // USER API - Based on your exact users table
@@ -26,8 +64,9 @@ const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
 export const userApi = {
   // Get user profile by ID
   async getProfile(userId) {
-    try {
-      console.log('🔍 API: Fetching user profile for:', userId);
+    return dedupeRequest(`profile-${userId}`, async () => {
+      try {
+        console.log('🔍 API: Fetching user profile for:', userId);
 
       const { data, error } = await withTimeout(
         supabase
@@ -56,6 +95,7 @@ export const userApi = {
       console.error('💥 Get profile error:', error);
       throw error;
     }
+    });
   },
 
   // Update user profile
