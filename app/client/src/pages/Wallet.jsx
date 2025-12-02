@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../store/AuthContext';
-import { walletApi } from '../lib/api.js';
+import { walletApi, withTimeout } from '../lib/api.js';
 
 const Wallet = () => {
   const { sessionVersion } = useAuth();
@@ -12,16 +12,35 @@ const Wallet = () => {
 
   useEffect(() => {
     let cancelled = false;
+    
     const load = async () => {
       setLoading(true);
-      const res = await walletApi.getBalance();
-      if (!cancelled) {
-        if (res.success) setBalance(res.balance);
-        else setError(res.error || 'Failed to load balance');
-        setLoading(false);
+      try {
+        const res = await withTimeout(
+          walletApi.getBalance(),
+          10000
+        );
+        
+        if (!cancelled) {
+          if (res.success) {
+            setBalance(res.balance);
+          } else {
+            setError(res.error || 'Failed to load balance');
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError('Failed to load wallet. Please refresh.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
+    
     load();
+    
     return () => { cancelled = true; };
   }, [sessionVersion]);
 

@@ -156,10 +156,14 @@ export const AuthProvider = ({ children }) => {
         } catch (e) {
           console.error('[Auth] loadUserProfile exception:', e);
           return null;
-        } finally {
-          profileLoadRef.current = null;
         }
       })();
+
+      // Clear ref AFTER promise settles
+      profileLoadRef.current
+        .finally(() => {
+          profileLoadRef.current = null;
+        });
 
       return profileLoadRef.current;
     },
@@ -190,10 +194,14 @@ export const AuthProvider = ({ children }) => {
         console.error('[Auth] loadUserRoleStatus error:', e);
         setRoleStatus(defaultRoleStatus);
         return defaultRoleStatus;
-      } finally {
-        roleLoadRef.current = null;
       }
     })();
+
+    // Clear ref AFTER promise settles
+    roleLoadRef.current
+      .finally(() => {
+        roleLoadRef.current = null;
+      });
 
     return roleLoadRef.current;
   }, []);
@@ -222,10 +230,10 @@ export const AuthProvider = ({ children }) => {
             }
           }
 
-          // CRITICAL: Get session with timeout
+          // Better approach - 15 second timeout
           const sessionPromise = supabase.auth.getSession();
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Session load timeout')), 5000)
+            setTimeout(() => reject(new Error('Session load timeout')), 15000)
           );
 
           const { data: { session }, error } = await Promise.race([

@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import CampaignCard from '../components/CampaignCard';
 import EmptyState from '../components/EmptyState';
-import { campaignApi, investmentApi } from '../lib/api.js';
+import { campaignApi, investmentApi, withTimeout } from '../lib/api.js';
 
 const Dashboard = () => {
   const {
@@ -90,60 +90,61 @@ const Dashboard = () => {
   // Data loader for projects / investments
   useEffect(() => {
     let mounted = true;
+    let loadPromise = null;
 
     const loadData = async () => {
-      if (!mounted) return;
-
-      try {
-        if (debug) {
-          console.log('[Dashboard] loadData start', {
-            role,
-            isFullyOnboarded,
-            userId: user?.id
-          });
-        }
-
-        if (!user?.id || authLoading) {
-          setDataLoading(false);
-          return;
-        }
-
-        if (role === 'creator') {
-          const result = await campaignApi.getUserCampaigns(user.id);
-          if (result?.success && mounted) {
-            setProjects(result.data || []);
-          }
-        } else if (role === 'investor') {
-          const result = await investmentApi.getUserInvestments(user.id);
-          if (result && mounted) {
-            setInvestments(result.data || []);
-          }
-        }
-      } catch (error) {
-        console.error('[Dashboard] Error loading data:', error);
-      } finally {
-        if (mounted) setDataLoading(false);
+      // Prevent concurrent loads
+      if (loadPromise) {
+        console.log('[Dashboard] Load already in progress, skipping');
+        return loadPromise;
       }
-    };
 
-    // Failsafe timeout
-    const timeout = setTimeout(() => {
-      if (mounted) {
-        if (debug)
-          console.log(
-            '[Dashboard] loadData timeout reached, forcing dataLoading=false'
-          );
+      // Don't load if still authenticating
+      if (authLoading || !user?.id) {
         setDataLoading(false);
+        return;
       }
-    }, 3000);
+
+      loadPromise = (async () => {
+        try {
+          setDataLoading(true);
+          
+          if (role === 'creator') {
+            const result = await withTimeout(
+              campaignApi.getUserCampaigns(user.id),
+              15000
+            );
+            if (mounted && result?.success) {
+              setProjects(result.data || []);
+            }
+          } else if (role === 'investor') {
+            const result = await withTimeout(
+              investmentApi.getUserInvestments(user.id),
+              15000
+            );
+            if (mounted && result) {
+              setInvestments(result.data || []);
+            }
+          }
+        } catch (error) {
+          console.error('[Dashboard] Load error:', error);
+        } finally {
+          if (mounted) {
+            setDataLoading(false);
+          }
+          loadPromise = null;
+        }
+      })();
+
+      return loadPromise;
+    };
 
     loadData();
 
     return () => {
       mounted = false;
-      clearTimeout(timeout);
     };
-  }, [authLoading, user?.id, role, sessionVersion, refreshKey]); // Removed isFullyOnboarded and debug to prevent loops
+  }, [user?.id, role]); // REDUCED dependencies - only essentials
 
   // Refresh data after tab was hidden for a while
   useEffect(() => {

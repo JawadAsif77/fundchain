@@ -7,6 +7,16 @@
 
 import { supabase } from './supabase.js';
 
+// Add timeout to prevent hanging requests
+export const withTimeout = (promise, timeoutMs = 10000) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
+    )
+  ]);
+};
+
 // Simulate network delay for better UX
 const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -19,18 +29,21 @@ export const userApi = {
     try {
       console.log('🔍 API: Fetching user profile for:', userId);
 
-      const { data, error } = await supabase
-        .from('users')
-        .select(`
-          id, email, username, full_name, avatar_url, role,
-          linkedin_url, twitter_url, instagram_url, is_verified,
-          created_at, updated_at, bio, location, phone, date_of_birth,
-          social_links, preferences, verification_level, trust_score,
-          referral_code, last_active_at, followers_count, following_count,
-          is_accredited_investor, total_invested, total_campaigns_backed
-        `)
-        .eq('id', userId)
-        .single();
+      const { data, error } = await withTimeout(
+        supabase
+          .from('users')
+          .select(`
+            id, email, username, full_name, avatar_url, role,
+            linkedin_url, twitter_url, instagram_url, is_verified,
+            created_at, updated_at, bio, location, phone, date_of_birth,
+            social_links, preferences, verification_level, trust_score,
+            referral_code, last_active_at, followers_count, following_count,
+            is_accredited_investor, total_invested, total_campaigns_backed
+          `)
+          .eq('id', userId)
+          .single(),
+        15000
+      );
 
       if (error) {
         console.error('❌ Failed to fetch user profile:', error);
@@ -476,7 +489,7 @@ export const campaignApi = {
 
       query = query.order('created_at', { ascending: false });
 
-      const { data, error } = await query;
+      const { data, error } = await withTimeout(query, 15000);
 
       if (error) {
         console.error('❌ Failed to fetch campaigns:', error);
@@ -502,14 +515,17 @@ export const campaignApi = {
 
       console.log('🔍 API: getUserCampaigns called for userId:', uid);
 
-      const { data, error } = await supabase
-        .from('campaigns')
-        .select(`
-          *,
-          categories(name, icon)
-        `)
-        .eq('creator_id', uid)
-        .order('created_at', { ascending: false });
+      const { data, error } = await withTimeout(
+        supabase
+          .from('campaigns')
+          .select(`
+            *,
+            categories(name, icon)
+          `)
+          .eq('creator_id', uid)
+          .order('created_at', { ascending: false }),
+        15000
+      );
 
       console.log('📊 API: getUserCampaigns query result. Error:', error, 'Data count:', data?.length);
 
@@ -606,10 +622,13 @@ export const investmentApi = {
       console.log('💰 API: Fetching investments for user:', userId);
 
       // First check if there are ANY investments for this user
-      const { data: basicData, error: basicError } = await supabase
-        .from('investments')
-        .select('id, investor_id, campaign_id, amount, status, investment_date')
-        .eq('investor_id', userId);
+      const { data: basicData, error: basicError } = await withTimeout(
+        supabase
+          .from('investments')
+          .select('id, investor_id, campaign_id, amount, status, investment_date')
+          .eq('investor_id', userId),
+        15000
+      );
 
       console.log('💰 API: Basic investment check result:', basicData);
       console.log('💰 API: Basic investment check error:', basicError);
@@ -625,30 +644,33 @@ export const investmentApi = {
       }
 
       // If we have investments, try to get them with campaign data
-      const { data, error } = await supabase
-        .from('investments')
-        .select(`
-          id,
-          investor_id,
-          campaign_id,
-          amount,
-          status,
-          investment_date,
-          created_at,
-          campaigns!inner(
+      const { data, error } = await withTimeout(
+        supabase
+          .from('investments')
+          .select(`
             id,
-            title,
-            slug,
-            short_description,
-            image_url,
+            investor_id,
+            campaign_id,
+            amount,
             status,
-            funding_goal,
-            current_funding,
-            end_date
-          )
-        `)
-        .eq('investor_id', userId)
-        .order('investment_date', { ascending: false });
+            investment_date,
+            created_at,
+            campaigns!inner(
+              id,
+              title,
+              slug,
+              short_description,
+              image_url,
+              status,
+              funding_goal,
+              current_funding,
+              end_date
+            )
+          `)
+          .eq('investor_id', userId)
+          .order('investment_date', { ascending: false }),
+        15000
+      );
 
       if (error) {
         console.warn('💰 API: Join query failed, using basic data:', error.message);
@@ -693,11 +715,14 @@ export const walletApi = {
     const uid = auth?.user?.id;
     if (!uid) return { success: false, balance: 0, error: 'Not authenticated' };
 
-    const { data, error } = await supabase
-      .from('users')
-      .select('preferences')
-      .eq('id', uid)
-      .single();
+    const { data, error } = await withTimeout(
+      supabase
+        .from('users')
+        .select('preferences')
+        .eq('id', uid)
+        .single(),
+      10000
+    );
 
     // If user profile doesn't exist yet, return 0 balance instead of error
     if (error && error.code === 'PGRST116') {

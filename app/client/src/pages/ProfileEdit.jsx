@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useReducer } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
+import { withTimeout } from '../lib/api';
 
 const EMPTY_SOCIAL_LINKS = {
   website: '',
@@ -315,7 +316,11 @@ const ProfileEdit = () => {
     }
 
     try {
-      const updatedProfile = await updateProfile(updates);
+      // Add timeout to prevent infinite "Saving..."
+      const updatedProfile = await withTimeout(
+        updateProfile(updates),
+        15000
+      );
 
       if (!updatedProfile) {
         throw new Error('No data returned from profile update');
@@ -333,7 +338,9 @@ const ProfileEdit = () => {
       let errorMessage = 'Failed to update profile. ';
 
       if (submitError?.message) {
-        if (submitError.message.includes('bio')) {
+        if (submitError.message === 'Request timeout') {
+          errorMessage += 'The request took too long. Please check your connection and try again.';
+        } else if (submitError.message.includes('bio')) {
           errorMessage +=
             'The bio field is not available yet. Please run the database migration first.';
         } else if (submitError.message.includes('social_links')) {
