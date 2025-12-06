@@ -491,6 +491,10 @@ export const AuthProvider = ({ children }) => {
 
         const walletResult = await response.json();
         console.log('[Auth] Wallet creation result:', walletResult);
+        
+        // Wait for wallet creation to complete, then load it
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await refreshWallet(data.user.id);
       } catch (walletError) {
         // Don't fail signup if wallet creation fails, just log it
         console.error('[Auth] Failed to create wallet:', walletError);
@@ -498,7 +502,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     return data;
-  }, []);
+  }, [refreshWallet]);
 
   // FIXED: Logout with aggressive cleanup
   const logout = useCallback(async () => {

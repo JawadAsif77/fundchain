@@ -1287,6 +1287,38 @@ CREATE INDEX idx_token_transactions_campaign ON public.token_transactions(campai
 CREATE INDEX idx_token_transactions_type ON public.token_transactions(type);
 CREATE INDEX idx_token_transactions_created ON public.token_transactions(created_at DESC);
 
+-- Campaign Investments Table
+CREATE TABLE public.campaign_investments (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  campaign_id uuid NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  investor_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  amount_fc numeric NOT NULL CHECK (amount_fc > 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  
+  UNIQUE(campaign_id, investor_id, created_at)
+);
+
+COMMENT ON TABLE public.campaign_investments IS 'Individual investment transactions';
+CREATE INDEX idx_campaign_investments_campaign ON public.campaign_investments(campaign_id);
+CREATE INDEX idx_campaign_investments_investor ON public.campaign_investments(investor_id);
+CREATE INDEX idx_campaign_investments_created ON public.campaign_investments(created_at DESC);
+
+-- Campaign Investors Table (aggregated)
+CREATE TABLE public.campaign_investors (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  campaign_id uuid NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  investor_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  total_invested_fc numeric NOT NULL DEFAULT 0 CHECK (total_invested_fc >= 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  
+  CONSTRAINT campaign_investors_unique UNIQUE (campaign_id, investor_id)
+);
+
+COMMENT ON TABLE public.campaign_investors IS 'Aggregated investment totals per investor per campaign';
+CREATE INDEX idx_campaign_investors_campaign ON public.campaign_investors(campaign_id);
+CREATE INDEX idx_campaign_investors_investor ON public.campaign_investors(investor_id);
+
 -- ============================================================
 -- RLS POLICIES FOR WALLET SYSTEM
 -- ============================================================
@@ -1408,6 +1440,38 @@ CREATE POLICY token_transactions_insert_system
 ON public.token_transactions
 FOR INSERT
 WITH CHECK (true); -- System inserts only, implement app-level checks
+
+-- Enable RLS on campaign investment tables
+ALTER TABLE public.campaign_investments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.campaign_investors ENABLE ROW LEVEL SECURITY;
+
+-- campaign_investments policies
+CREATE POLICY campaign_investments_select_all
+ON public.campaign_investments
+FOR SELECT
+USING (true);
+
+CREATE POLICY campaign_investments_insert_system
+ON public.campaign_investments
+FOR INSERT
+WITH CHECK (true); -- System inserts only through edge functions
+
+-- campaign_investors policies
+CREATE POLICY campaign_investors_select_all
+ON public.campaign_investors
+FOR SELECT
+USING (true);
+
+CREATE POLICY campaign_investors_insert_system
+ON public.campaign_investors
+FOR INSERT
+WITH CHECK (true); -- System inserts only through edge functions
+
+CREATE POLICY campaign_investors_update_system
+ON public.campaign_investors
+FOR UPDATE
+USING (true)
+WITH CHECK (true); -- System updates only through edge functions
 
 -- ============================================================
 -- TRIGGERS FOR WALLET SYSTEM

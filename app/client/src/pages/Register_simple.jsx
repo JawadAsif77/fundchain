@@ -90,13 +90,26 @@ const handleSubmit = async (e) => {
       })
     );
 
-    // STEP 2 — REMOVE RPC / REMOVE DIRECT INSERT
-    // ---------------------------------------------------
-    // Your AuthContext will automatically:
-    // - detect no profile
-    // - create profile through api.js
-    // So we do NOTHING here.
-    // ---------------------------------------------------
+    // STEP 2 — Create wallet for new user
+    if (authData.user?.id) {
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const response = await fetch(`${supabaseUrl}/functions/v1/create-user-wallet`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({ userId: authData.user.id })
+        });
+
+        const walletResult = await response.json();
+        console.log('[Register] Wallet creation result:', walletResult);
+      } catch (walletError) {
+        console.error('[Register] Failed to create wallet:', walletError);
+        // Don't fail registration, just log the error
+      }
+    }
 
     setStatusMessage("Account created successfully!");
 

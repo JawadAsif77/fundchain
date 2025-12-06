@@ -13,8 +13,16 @@ Deno.serve(async (req) => {
 
   try {
     // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return new Response(
+        JSON.stringify({ error: 'Server configuration error' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     const body = await req.json()
@@ -46,16 +54,14 @@ Deno.serve(async (req) => {
       }), { status: 200, headers: corsHeaders })
     }
 
-    // PROPER INSERT FORMAT
+    // PROPER INSERT FORMAT (without array wrapper)
     const { data: newWallet, error: insertError } = await supabase
       .from('wallets')
-      .insert([
-        {
-          user_id: userId,
-          balance_fc: 0,
-          locked_fc: 0
-        }
-      ])
+      .insert({
+        user_id: userId,
+        balance_fc: 0,
+        locked_fc: 0
+      })
       .select()
       .single()
 
@@ -75,9 +81,12 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("Error in create-user-wallet:", err)
 
-    return new Response(JSON.stringify({
-      error: "Internal server error",
-      message: String(err)
-    }), { status: 500, headers: corsHeaders })
+    return new Response(
+      JSON.stringify({
+        error: "Internal server error",
+        message: err instanceof Error ? err.message : String(err)
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
   }
 })
