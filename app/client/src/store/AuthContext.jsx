@@ -174,7 +174,30 @@ export const AuthProvider = ({ children }) => {
 
             const created = result.data || result;
             setProfile(created);
+
+            /* ⭐ Create wallet AFTER profile creation */
+            try {
+              const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+              const response = await fetch(`${supabaseUrl}/functions/v1/create-user-wallet`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify({ userId })
+              });
+
+              const walletResult = await response.json();
+              console.log('[Auth] Wallet created after profile:', walletResult);
+
+              await refreshWallet(userId);
+            } catch (err) {
+              console.error('[Auth] Wallet create error:', err);
+            }
+
             return created;
+
           }
 
           return null;
@@ -340,34 +363,6 @@ export const AuthProvider = ({ children }) => {
 
       if (debug) console.log('[Auth] Auth state changed:', event);
 
-      // AUTO-CREATE WALLET WHEN USER FIRST AUTHENTICATES
-      if (event === 'SIGNED_IN' && session?.user?.id) {
-        console.log('[Auth] SIGNED_IN → ensuring wallet exists');
-
-        try {
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-
-          const response = await fetch(`${supabaseUrl}/functions/v1/create-user-wallet`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-            },
-            body: JSON.stringify({ userId: session.user.id })
-          });
-
-          const walletResult = await response.json();
-          console.log('[Auth] Wallet creation result:', walletResult);
-
-          // Refresh wallet state
-          await refreshWallet(session.user.id);
-
-        } catch (walletError) {
-          console.error('[Auth] Wallet create error:', walletError);
-        }
-      }
-
-
       // Handle signout/deletion
       if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || !session) {
         setUser(null);
@@ -474,31 +469,6 @@ export const AuthProvider = ({ children }) => {
     if (error) {
       setError(error.message);
       throw error;
-    }
-
-    // Create wallet for new user
-    if (data.user?.id) {
-      try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const response = await fetch(`${supabaseUrl}/functions/v1/create-user-wallet`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({ userId: data.user.id })
-        });
-
-        const walletResult = await response.json();
-        console.log('[Auth] Wallet creation result:', walletResult);
-        
-        // Wait for wallet creation to complete, then load it
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await refreshWallet(data.user.id);
-      } catch (walletError) {
-        // Don't fail signup if wallet creation fails, just log it
-        console.error('[Auth] Failed to create wallet:', walletError);
-      }
     }
 
     return data;

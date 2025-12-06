@@ -78,37 +78,24 @@ const handleSubmit = async (e) => {
 
     if (!userId) throw new Error("No user returned from signup");
 
-    // Store pending profile for AuthContext first load
-    localStorage.setItem(
-      "pendingUserProfile",
-      JSON.stringify({
-        id: userId,
-        email: formData.email,
-        username: formData.username,
-        full_name: formData.fullName,
-        role: selectedRole,
-      })
-    );
+    // STEP 3 — Now create wallet (users row exists, so foreign key will work)
+    try {
+      console.log('[Register] Creating wallet...');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-user-wallet`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({ userId })
+      });
 
-    // STEP 2 — Create wallet for new user
-    if (authData.user?.id) {
-      try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const response = await fetch(`${supabaseUrl}/functions/v1/create-user-wallet`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({ userId: authData.user.id })
-        });
-
-        const walletResult = await response.json();
-        console.log('[Register] Wallet creation result:', walletResult);
-      } catch (walletError) {
-        console.error('[Register] Failed to create wallet:', walletError);
-        // Don't fail registration, just log the error
-      }
+      const walletResult = await response.json();
+      console.log('[Register] Wallet creation result:', walletResult);
+    } catch (walletError) {
+      console.error('[Register] Failed to create wallet:', walletError);
+      // Don't fail registration, just log the error
     }
 
     setStatusMessage("Account created successfully!");
