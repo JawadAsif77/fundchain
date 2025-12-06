@@ -1197,5 +1197,270 @@ FOR INSERT
 WITH CHECK (true);
 
 -- ============================================================
+-- WALLET SYSTEM TABLES (Internal Token System)
+-- ============================================================
+
+---------------------------------------------------------------
+-- WALLETS (One per user for FC token balance)
+---------------------------------------------------------------
+
+CREATE TABLE public.wallets (
+  user_id uuid PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+  balance_fc numeric NOT NULL DEFAULT 0,
+  locked_fc numeric NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.wallets IS 'User wallets for internal FundChain (FC) tokens';
+COMMENT ON COLUMN public.wallets.balance_fc IS 'Available FC token balance';
+COMMENT ON COLUMN public.wallets.locked_fc IS 'Reserved/locked FC tokens for future use';
+
+---------------------------------------------------------------
+-- PLATFORM WALLET (Single-row treasury for app FC tokens)
+---------------------------------------------------------------
+
+CREATE TABLE public.platform_wallet (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  balance_fc numeric NOT NULL DEFAULT 0,
+  locked_fc numeric NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.platform_wallet IS 'Platform treasury wallet for FundChain tokens';
+
+---------------------------------------------------------------
+-- CAMPAIGN WALLETS (Escrow wallet per campaign)
+---------------------------------------------------------------
+
+CREATE TABLE public.campaign_wallets (
+  campaign_id uuid PRIMARY KEY REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  escrow_balance_fc numeric NOT NULL DEFAULT 0,
+  released_fc numeric NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.campaign_wallets IS 'Escrow wallets for campaign funds in FC tokens';
+COMMENT ON COLUMN public.campaign_wallets.escrow_balance_fc IS 'FC tokens held in escrow';
+COMMENT ON COLUMN public.campaign_wallets.released_fc IS 'FC tokens released to creator';
+
+---------------------------------------------------------------
+-- MILESTONE VOTES (Investor voting on milestone delivery)
+---------------------------------------------------------------
+
+CREATE TABLE public.milestone_votes (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  milestone_id uuid NOT NULL REFERENCES public.milestones(id) ON DELETE CASCADE,
+  investor_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  vote boolean NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  
+  CONSTRAINT milestone_votes_unique_vote UNIQUE (milestone_id, investor_id)
+);
+
+COMMENT ON TABLE public.milestone_votes IS 'Investor votes on milestone completion';
+COMMENT ON COLUMN public.milestone_votes.vote IS 'true = milestone approved, false = milestone rejected';
+
+CREATE INDEX idx_milestone_votes_milestone ON public.milestone_votes(milestone_id);
+CREATE INDEX idx_milestone_votes_investor ON public.milestone_votes(investor_id);
+
+---------------------------------------------------------------
+-- TOKEN TRANSACTIONS (Log of all token operations)
+---------------------------------------------------------------
+
+CREATE TABLE public.token_transactions (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  campaign_id uuid NULL REFERENCES public.campaigns(id) ON DELETE SET NULL,
+  milestone_id uuid NULL REFERENCES public.milestones(id) ON DELETE SET NULL,
+  amount_fc numeric NOT NULL,
+  type text NOT NULL,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.token_transactions IS 'Audit log of all FC token transactions';
+COMMENT ON COLUMN public.token_transactions.type IS 'Transaction type: BUY_FC, INVEST, RELEASE, REFUND, WITHDRAW, etc.';
+COMMENT ON COLUMN public.token_transactions.metadata IS 'Additional transaction details in JSON format';
+
+CREATE INDEX idx_token_transactions_user ON public.token_transactions(user_id);
+CREATE INDEX idx_token_transactions_campaign ON public.token_transactions(campaign_id);
+CREATE INDEX idx_token_transactions_type ON public.token_transactions(type);
+CREATE INDEX idx_token_transactions_created ON public.token_transactions(created_at DESC);
+
+-- ============================================================
+-- RLS POLICIES FOR WALLET SYSTEM
+-- ============================================================
+
+-- Enable RLS on all wallet tables
+ALTER TABLE public.wallets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.platform_wallet ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.campaign_wallets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.milestone_votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.token_transactions ENABLE ROW LEVEL SECURITY;
+
+---------------------------------------------------------------
+-- WALLETS POLICIES
+---------------------------------------------------------------
+
+CREATE POLICY wallets_select_own
+ON public.wallets
+FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY wallets_insert_own
+ON public.wallets
+FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY wallets_update_system
+ON public.wallets
+FOR UPDATE
+USING (true); -- System updates only, implement app-level checks
+
+---------------------------------------------------------------
+-- PLATFORM WALLET POLICIES (Admin/System only)
+---------------------------------------------------------------
+
+CREATE POLICY platform_wallet_select_admin
+ON public.platform_wallet
+FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM public.users
+    WHERE id = auth.uid() AND role = 'admin'
+  )
+);
+
+---------------------------------------------------------------
+-- CAMPAIGN WALLETS POLICIES
+---------------------------------------------------------------
+
+CREATE POLICY campaign_wallets_select_creator
+ON public.campaign_wallets
+FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM public.campaigns c
+    WHERE c.id = campaign_id
+      AND c.creator_id = auth.uid()
+  )
+);
+
+CREATE POLICY campaign_wallets_select_investor
+ON public.campaign_wallets
+FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM public.investments i
+    WHERE i.campaign_id = campaign_id
+      AND i.investor_id = auth.uid()
+  )
+);
+
+---------------------------------------------------------------
+-- MILESTONE VOTES POLICIES
+---------------------------------------------------------------
+
+CREATE POLICY milestone_votes_select_related
+ON public.milestone_votes
+FOR SELECT
+USING (
+  auth.uid() = investor_id
+  OR EXISTS (
+    SELECT 1 FROM public.milestones m
+    JOIN public.campaigns c ON c.id = m.campaign_id
+    WHERE m.id = milestone_id
+      AND c.creator_id = auth.uid()
+  )
+);
+
+CREATE POLICY milestone_votes_insert_investor
+ON public.milestone_votes
+FOR INSERT
+WITH CHECK (
+  auth.uid() = investor_id
+  AND EXISTS (
+    SELECT 1 FROM public.investments i
+    JOIN public.milestones m ON m.campaign_id = i.campaign_id
+    WHERE m.id = milestone_id
+      AND i.investor_id = auth.uid()
+      AND i.status = 'confirmed'
+  )
+);
+
+---------------------------------------------------------------
+-- TOKEN TRANSACTIONS POLICIES
+---------------------------------------------------------------
+
+CREATE POLICY token_transactions_select_own
+ON public.token_transactions
+FOR SELECT
+USING (
+  auth.uid() = user_id
+  OR EXISTS (
+    SELECT 1 FROM public.campaigns c
+    WHERE c.id = campaign_id
+      AND c.creator_id = auth.uid()
+  )
+);
+
+CREATE POLICY token_transactions_insert_system
+ON public.token_transactions
+FOR INSERT
+WITH CHECK (true); -- System inserts only, implement app-level checks
+
+-- ============================================================
+-- TRIGGERS FOR WALLET SYSTEM
+-- ============================================================
+
+-- Update updated_at timestamp on wallets
+CREATE OR REPLACE FUNCTION update_wallet_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER wallets_updated_at
+BEFORE UPDATE ON public.wallets
+FOR EACH ROW
+EXECUTE FUNCTION update_wallet_timestamp();
+
+CREATE TRIGGER platform_wallet_updated_at
+BEFORE UPDATE ON public.platform_wallet
+FOR EACH ROW
+EXECUTE FUNCTION update_wallet_timestamp();
+
+CREATE TRIGGER campaign_wallets_updated_at
+BEFORE UPDATE ON public.campaign_wallets
+FOR EACH ROW
+EXECUTE FUNCTION update_wallet_timestamp();
+
+-- ============================================================
+-- SEED DATA FOR WALLET SYSTEM
+-- ============================================================
+
+-- Ensure platform_wallet has exactly one row (safe for multiple runs)
+INSERT INTO public.platform_wallet (balance_fc, locked_fc)
+SELECT 0, 0
+WHERE NOT EXISTS (SELECT 1 FROM public.platform_wallet);
+
+-- Backfill wallets for all existing users (safe for multiple runs)
+INSERT INTO public.wallets (user_id)
+SELECT u.id
+FROM public.users u
+LEFT JOIN public.wallets w ON w.user_id = u.id
+WHERE w.user_id IS NULL;
+
+-- ============================================================
+-- INDEXES FOR WALLET SYSTEM PERFORMANCE
+-- ============================================================
+
+-- Index on wallets.user_id for fast lookup (already covered by PK, but explicit for clarity)
+CREATE INDEX IF NOT EXISTS idx_wallets_user_id 
+ON public.wallets(user_id);
+
+-- ============================================================
 -- END OF CURRENT FUNDCHAIN SCHEMA
 -- ============================================================

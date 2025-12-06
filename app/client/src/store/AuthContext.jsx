@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { auth, db, supabase } from '../lib/supabase.js';
 import { getUserRoleStatus, userApi } from '../lib/api.js';
+import { getWallet } from '../services/walletService.js';
 
 const AuthContext = createContext(null);
 
@@ -97,6 +98,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [roleStatus, setRoleStatus] = useState(null);
+  const [wallet, setWallet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sessionVersion, setSessionVersion] = useState(0);
@@ -108,6 +110,29 @@ export const AuthProvider = ({ children }) => {
   const profileLoadRef = useRef(null);
   const roleLoadRef = useRef(null);
   const logoutRef = useRef(false);
+
+  // Load wallet data
+  const refreshWallet = useCallback(async (userId) => {
+    if (!userId) return;
+    
+    try {
+      console.log('[Auth] Loading wallet for user:', userId);
+      const walletData = await getWallet(userId);
+      
+      if (walletData.status === 'success') {
+        setWallet({
+          balanceFc: walletData.balanceFc,
+          lockedFc: walletData.lockedFc
+        });
+        console.log('[Auth] Wallet loaded:', walletData);
+      } else if (walletData.status === 'not_found') {
+        console.log('[Auth] Wallet not found for user');
+        setWallet(null);
+      }
+    } catch (err) {
+      console.error('[Auth] Failed to load wallet:', err);
+    }
+  }, []);
 
   // FIXED: Load user profile without state dependencies
   const loadUserProfile = useCallback(
@@ -277,6 +302,8 @@ export const AuthProvider = ({ children }) => {
             const profileData = await loadUserProfile(session.user.id, session.user);
             if (mounted && profileData) {
               await loadUserRoleStatus(session.user.id);
+              // Load wallet after session is restored
+              await refreshWallet(session.user.id);
             }
           } else {
             if (debug) console.log('[Auth] No active session');
@@ -312,6 +339,34 @@ export const AuthProvider = ({ children }) => {
       if (!mounted || logoutRef.current) return;
 
       if (debug) console.log('[Auth] Auth state changed:', event);
+
+      // AUTO-CREATE WALLET WHEN USER FIRST AUTHENTICATES
+      if (event === 'SIGNED_IN' && session?.user?.id) {
+        console.log('[Auth] SIGNED_IN → ensuring wallet exists');
+
+        try {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+          const response = await fetch(`${supabaseUrl}/functions/v1/create-user-wallet`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({ userId: session.user.id })
+          });
+
+          const walletResult = await response.json();
+          console.log('[Auth] Wallet creation result:', walletResult);
+
+          // Refresh wallet state
+          await refreshWallet(session.user.id);
+
+        } catch (walletError) {
+          console.error('[Auth] Wallet create error:', walletError);
+        }
+      }
+
 
       // Handle signout/deletion
       if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || !session) {
@@ -401,8 +456,14 @@ export const AuthProvider = ({ children }) => {
       setError(error.message);
       throw error;
     }
+    
+    // Load wallet after successful login
+    if (data.user?.id) {
+      await refreshWallet(data.user.id);
+    }
+    
     return data;
-  }, []);
+  }, [refreshWallet]);
 
   const register = useCallback(async (email, password, userData = {}) => {
     setError(null);
@@ -414,6 +475,28 @@ export const AuthProvider = ({ children }) => {
       setError(error.message);
       throw error;
     }
+
+    // Create wallet for new user
+    if (data.user?.id) {
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const response = await fetch(`${supabaseUrl}/functions/v1/create-user-wallet`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({ userId: data.user.id })
+        });
+
+        const walletResult = await response.json();
+        console.log('[Auth] Wallet creation result:', walletResult);
+      } catch (walletError) {
+        // Don't fail signup if wallet creation fails, just log it
+        console.error('[Auth] Failed to create wallet:', walletError);
+      }
+    }
+
     return data;
   }, []);
 
@@ -453,6 +536,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setProfile(null);
     setRoleStatus(null);
+    setWallet(null);
     setSessionVersion((v) => v + 1);
     setLoading(false);
     
@@ -532,8 +616,10 @@ export const AuthProvider = ({ children }) => {
   const value = useMemo(
     () => ({
       user: currentUser,
+      userId: currentUser?.id || null,
       profile,
       roleStatus,
+      wallet,
       sessionVersion,
       loading,
       error,
@@ -543,6 +629,7 @@ export const AuthProvider = ({ children }) => {
       updateProfile,
       resetPassword,
       clearError,
+      refreshWallet: () => refreshWallet(currentUser?.id),
       isAuthenticated: !!user,
       isEmailConfirmed: !!user?.email_confirmed_at,
       needsProfileCompletion,
@@ -554,6 +641,7 @@ export const AuthProvider = ({ children }) => {
       currentUser,
       profile,
       roleStatus,
+      wallet,
       sessionVersion,
       loading,
       error,
@@ -563,6 +651,7 @@ export const AuthProvider = ({ children }) => {
       updateProfile,
       resetPassword,
       clearError,
+      refreshWallet,
       user,
       needsProfileCompletion,
       needsRoleSelection,
