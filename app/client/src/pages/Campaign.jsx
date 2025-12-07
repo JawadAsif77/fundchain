@@ -2,11 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import MilestoneList from '../components/MilestoneList';
 import InvestPanel from '../components/InvestPanel';
+import InvestmentBox from '../components/InvestmentBox';
 import Loader from '../components/Loader';
 import { campaignApi } from '../lib/api.js';
+import { useAuth } from '../store/AuthContext';
 
 const Campaign = () => {
   const { slug } = useParams();
+  const { userId } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [campaign, setCampaign] = useState(null);
@@ -290,6 +293,20 @@ const Campaign = () => {
                     }) : prev);
                   }}
                 />
+                
+                {/* Investment Box for authenticated users */}
+                {userId && (
+                  <div className="mt-6">
+                    <InvestmentBox
+                      campaignId={campaign.id}
+                      campaignStatus={campaign.status}
+                      onInvestSuccess={() => {
+                        // Refresh campaign data after successful investment
+                        window.location.reload();
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>

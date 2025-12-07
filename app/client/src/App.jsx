@@ -21,6 +21,7 @@ import AdminPanel from './pages/AdminPanel';
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Wallet from './pages/Wallet';
+import Portfolio from './pages/Portfolio';
 import HowItWorks from './pages/HowItWorks';
 import Governance from './pages/Governance';
 import Analytics from './pages/Analytics';
@@ -124,6 +125,14 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <Wallet />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route 
+                        path="/portfolio" 
+                        element={
+                          <ProtectedRoute>
+                            <Portfolio />
                           </ProtectedRoute>
                         }
                       />
