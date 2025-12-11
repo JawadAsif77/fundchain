@@ -1,9 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../store/AuthContext';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { getWallet, buyTokens, getTransactions, exchangeUsdToFc } from '../services/walletService';
+import AddFundsPhantomModal from '../components/wallet/AddFundsPhantomModal';
+import SwapSolToFc from '../components/SwapSolToFc';
 
 const Wallet = () => {
   const { userId, wallet, refreshWallet } = useAuth();
+  const { publicKey, connected } = useWallet();
+  const address = publicKey?.toBase58();
+  const balance = null;
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [buyAmount, setBuyAmount] = useState('');
@@ -11,6 +17,7 @@ const Wallet = () => {
   const [buying, setBuying] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showPhantomModal, setShowPhantomModal] = useState(false);
 
   useEffect(() => {
     if (userId) {
@@ -96,7 +103,9 @@ const Wallet = () => {
   const getTransactionTypeLabel = (type) => {
     const labels = {
       'BUY_FC': 'Purchase',
+      'buy_fc': 'Bought FC',
       'INVEST': 'Investment',
+      'invest_fc': 'Investment',
       'RELEASE': 'Release',
       'REFUND': 'Refund',
       'WITHDRAW': 'Withdrawal'
@@ -260,13 +269,56 @@ const Wallet = () => {
         </form>
       </div>
 
+      {/* Phantom Wallet Connection Status */}
+      <div style={{
+        backgroundColor: '#fff',
+        padding: '20px',
+        borderRadius: '12px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        marginBottom: '20px',
+        border: address ? '2px solid #29C7AC' : '2px solid #dc2626'
+      }}>
+        {address ? (
+          <p style={{ margin: 0, color: '#333' }}>
+            Connected wallet: <strong>{address}</strong>  
+            {balance != null && <> — Balance: {balance.toFixed(3)} SOL (devnet)</>}
+          </p>
+        ) : (
+          <p style={{ margin: 0, color: '#dc2626' }}>Connect your Phantom wallet first.</p>
+        )}
+      </div>
+
+      {/* Solana Swap Widget */}
+      <SwapSolToFc />
+
       <div style={{
         backgroundColor: '#fff',
         padding: '30px',
         borderRadius: '12px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
       }}>
-        <h2 style={{ marginBottom: '20px', color: '#333' }}>📜 Transaction History</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ color: '#333', margin: 0 }}>Transaction History</h2>
+          <button
+            onClick={() => setShowPhantomModal(true)}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: '#6366f1',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '15px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(99, 102, 241, 0.3)',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = '#5558e3'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = '#6366f1'}
+          >
+            💰 Add Funds with Phantom
+          </button>
+        </div>
 
         {transactions.length === 0 ? (
           <p style={{ color: '#999', textAlign: 'center', padding: '40px' }}>
@@ -305,7 +357,23 @@ const Wallet = () => {
                       {formatDate(tx.created_at)}
                     </td>
                     <td style={{ padding: '12px', color: '#999', fontSize: '12px' }}>
-                      {tx.metadata?.campaign_id ? `Campaign: ${tx.metadata.campaign_id.slice(0, 8)}...` : '-'}
+                      {tx.metadata?.campaign_id && `Campaign: ${tx.metadata.campaign_id.slice(0, 8)}...`}
+                      {tx.metadata?.amountSol && (
+                        <div style={{ marginTop: '4px' }}>
+                          {tx.metadata.amountSol} SOL
+                        </div>
+                      )}
+                      {tx.metadata?.txSignature && (
+                        <a
+                          href={`https://explorer.solana.com/tx/${tx.metadata.txSignature}?cluster=devnet`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ color: '#6366f1', textDecoration: 'none', fontSize: '11px', marginTop: '4px', display: 'block' }}
+                        >
+                          View on Solana Explorer
+                        </a>
+                      )}
+                      {!tx.metadata?.campaign_id && !tx.metadata?.amountSol && !tx.metadata?.txSignature && '-'}
                     </td>
                   </tr>
                 ))}
@@ -314,6 +382,16 @@ const Wallet = () => {
           </div>
         )}
       </div>
+
+      {/* Add Funds with Phantom Modal */}
+      <AddFundsPhantomModal 
+        isOpen={showPhantomModal} 
+        onClose={() => setShowPhantomModal(false)}
+        onSuccess={async () => {
+          await refreshWallet();
+          await loadWalletData();
+        }}
+      />
     </div>
   );
 };

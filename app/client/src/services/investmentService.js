@@ -10,12 +10,24 @@ const headers = {
  * Invest FC tokens in a campaign
  */
 export async function investInCampaign(userId, campaignId, amountFc) {
-  const response = await fetch(`${functionsBase}invest-in-campaign`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ userId, campaignId, amountFc })
-  });
-  return await response.json();
+  try {
+    const response = await fetch(`${functionsBase}invest-in-campaign`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ userId, campaignId, amountFc })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || data.details || 'Investment failed');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('investInCampaign error:', error);
+    throw error;
+  }
 }
 
 /**

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { supabase } from '../lib/supabase';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -204,6 +205,9 @@ const Header = () => {
             alignItems: 'center',
             gap: 'var(--space-3)'
           }}>
+            <div style={{ display: 'none' }} data-desktop-only="true">
+              <WalletMultiButton />
+            </div>
             {user ? (
               <>
                 <Link

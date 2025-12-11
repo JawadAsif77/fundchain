@@ -30,12 +30,12 @@ const InvestmentBox = ({ campaignId, campaignStatus, onSuccess }) => {
     try {
       const result = await investInCampaign(userId, campaignId, investAmount);
       
-      if (result.status === 'success') {
+      if (result.success) {
         setSuccess(`Successfully invested ${investAmount} FC!`);
         setAmount('');
         
         // Refresh wallet
-        await refreshWallet();
+        await refreshWallet(userId);
         
         // Notify parent component
         if (onSuccess) {
@@ -46,7 +46,7 @@ const InvestmentBox = ({ campaignId, campaignStatus, onSuccess }) => {
       }
     } catch (err) {
       console.error('Investment failed:', err);
-      setError('Failed to process investment. Please try again.');
+      setError(err.message || 'Failed to process investment. Please try again.');
     } finally {
       setInvesting(false);
     }

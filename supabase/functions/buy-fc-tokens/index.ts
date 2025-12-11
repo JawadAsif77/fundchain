@@ -1,159 +1,166 @@
+// supabase/functions/buy-fc-tokens/index.ts
 // @deno-types="https://esm.sh/v135/@supabase/supabase-js@2.38.4/dist/module/index.d.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
-// Fixed conversion rate: 1 USD = 1 FC
-const USD_TO_FC_RATE = 1
+const FC_PER_SOL = 100; // 🔹 1 SOL = 100 FC (adjust if you want)
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Initialize Supabase client with service role key
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    // Parse request body
-    const body = await req.json()
-    const userId = body.userId
-    const amountUsd = body.amountUsd
-
-    // Validate input
-    if (!userId || typeof userId !== 'string') {
+    if (req.method !== "POST") {
       return new Response(
-        JSON.stringify({ 
-          error: 'Invalid request: userId is required and must be a string' 
-        }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
+        JSON.stringify({ error: "Method not allowed" }),
+        { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    if (!amountUsd || typeof amountUsd !== 'number' || amountUsd <= 0) {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("Missing Supabase env vars");
       return new Response(
-        JSON.stringify({ 
-          error: 'Invalid request: amountUsd is required and must be a positive number' 
-        }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
+        JSON.stringify({ error: "Server misconfigured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Convert USD to FC tokens
-    const amountFc = amountUsd * USD_TO_FC_RATE
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Execute transaction: Update user wallet, platform wallet, and create transaction record
-    // We'll use multiple queries in sequence to simulate a transaction
-    
-    // Step 1: Get current user wallet balance
-    const { data: userWallet, error: walletError } = await supabase
-      .from('wallets')
-      .select('balance_fc')
-      .eq('user_id', userId)
-      .single()
+    const body = await req.json();
+    const { userId, amountSol, txSignature } = body ?? {};
 
-    if (walletError) {
-      throw new Error(`Failed to fetch user wallet: ${walletError.message}`)
+    if (!userId || typeof userId !== "string") {
+      return new Response(
+        JSON.stringify({ error: "userId is required and must be a string" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Step 2: Update user wallet balance
-    const newBalance = (userWallet.balance_fc || 0) + amountFc
-    
-    const { error: updateWalletError } = await supabase
-      .from('wallets')
-      .update({ 
-        balance_fc: newBalance,
-        updated_at: new Date().toISOString()
-      })
-      .eq('user_id', userId)
-
-    if (updateWalletError) {
-      throw new Error(`Failed to update user wallet: ${updateWalletError.message}`)
+    const parsedAmountSol = Number(amountSol);
+    if (!parsedAmountSol || parsedAmountSol <= 0) {
+      return new Response(
+        JSON.stringify({ error: "amountSol must be a positive number" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Step 3: Update platform wallet
-    // First get the platform wallet (should only be one row)
-    const { data: platformWallets, error: platformFetchError } = await supabase
-      .from('platform_wallet')
-      .select('id, balance_fc')
-      .limit(1)
-
-    if (platformFetchError || !platformWallets || platformWallets.length === 0) {
-      throw new Error('Platform wallet not found')
+    if (!txSignature || typeof txSignature !== "string") {
+      return new Response(
+        JSON.stringify({ error: "txSignature is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const platformWallet = platformWallets[0]
-    const newPlatformBalance = (platformWallet.balance_fc || 0) + amountFc
+    // Calculate FC to credit
+    const fcAmount = parsedAmountSol * FC_PER_SOL;
 
-    const { error: updatePlatformError } = await supabase
-      .from('platform_wallet')
-      .update({ 
-        balance_fc: newPlatformBalance,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', platformWallet.id)
+    // 1) Get or create wallet
+    const { data: existingWallet, error: walletSelectError } = await supabase
+      .from("wallets")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
 
-    if (updatePlatformError) {
-      throw new Error(`Failed to update platform wallet: ${updatePlatformError.message}`)
+    if (walletSelectError) {
+      console.error("walletSelectError", walletSelectError);
+      return new Response(
+        JSON.stringify({ error: "Failed to fetch wallet", details: walletSelectError.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Step 4: Create transaction record
-    const { error: transactionError } = await supabase
-      .from('token_transactions')
+    let wallet;
+    if (!existingWallet) {
+      // create wallet with initial balance
+      const { data: newWallet, error: insertWalletError } = await supabase
+        .from("wallets")
+        .insert({
+          user_id: userId,
+          balance_fc: fcAmount,
+          locked_fc: 0,
+        })
+        .select("*")
+        .single();
+
+      if (insertWalletError) {
+        console.error("insertWalletError", insertWalletError);
+        return new Response(
+          JSON.stringify({ error: "Failed to create wallet", details: insertWalletError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      wallet = newWallet;
+    } else {
+      // update existing wallet balance
+      const newBalance = Number(existingWallet.balance_fc ?? 0) + fcAmount;
+
+      const { data: updatedWallet, error: updateWalletError } = await supabase
+        .from("wallets")
+        .update({ balance_fc: newBalance })
+        .eq("user_id", userId)
+        .select("*")
+        .single();
+
+      if (updateWalletError) {
+        console.error("updateWalletError", updateWalletError);
+        return new Response(
+          JSON.stringify({ error: "Failed to update wallet", details: updateWalletError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      wallet = updatedWallet;
+    }
+
+    // 2) Insert token transaction record
+    const { error: txInsertError } = await supabase
+      .from("token_transactions")
       .insert({
         user_id: userId,
-        amount_fc: amountFc,
-        type: 'BUY_FC',
+        type: "buy_fc",
+        amount_fc: fcAmount,
         metadata: {
-          amount_usd: amountUsd,
-          conversion_rate: USD_TO_FC_RATE,
-          timestamp: new Date().toISOString()
-        }
-      })
+          amountSol: parsedAmountSol,
+          txSignature,
+          fcRate: FC_PER_SOL,
+          network: "devnet",
+        },
+      });
 
-    if (transactionError) {
-      throw new Error(`Failed to create transaction record: ${transactionError.message}`)
+    if (txInsertError) {
+      console.error("txInsertError", txInsertError);
+      // We don't revert wallet update here, just log
     }
 
-    // Return success response
     return new Response(
-      JSON.stringify({ 
-        status: 'success',
-        amountFc,
-        newBalance,
-        message: `Successfully purchased ${amountFc} FC tokens`
+      JSON.stringify({
+        status: "success",
+        userId,
+        amountSol: parsedAmountSol,
+        fcAmount,
+        wallet: {
+          balance_fc: wallet.balance_fc,
+          locked_fc: wallet.locked_fc,
+        },
       }),
-      { 
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    )
-
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (err) {
-    console.error('Error in buy-fc-tokens:', err)
-    
+    console.error("Error in buy-fc-tokens:", err);
     return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error',
-        message: String(err)
-      }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    )
+      JSON.stringify({ error: "Internal server error", message: String(err) }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
-})
+});
