@@ -4,6 +4,58 @@ import { useAuth } from '../store/AuthContext';
 import CampaignCard from '../components/CampaignCard';
 import EmptyState from '../components/EmptyState';
 import { campaignApi, investmentApi, withTimeout } from '../lib/api.js';
+import { useWallet } from '@solana/wallet-adapter-react';
+
+// Connected Wallet Display Component
+const ConnectedWalletDisplay = () => {
+  const { publicKey } = useWallet();
+  const walletAddress = publicKey?.toBase58();
+
+  return (
+    <div
+      style={{
+        padding: '16px 20px',
+        backgroundColor: 'var(--color-bg-elev)',
+        borderRadius: '12px',
+        marginBottom: '24px',
+        border: '1px solid var(--color-border)'
+      }}
+    >
+      <h3
+        style={{
+          fontSize: '16px',
+          fontWeight: 600,
+          color: 'var(--color-text)',
+          marginBottom: '8px'
+        }}
+      >
+        🔗 Connected Wallet
+      </h3>
+      {walletAddress ? (
+        <p
+          style={{
+            fontSize: '14px',
+            color: 'var(--color-success)',
+            fontFamily: 'monospace',
+            marginTop: '8px'
+          }}
+        >
+          {walletAddress.slice(0, 4)}...{walletAddress.slice(-4)}
+        </p>
+      ) : (
+        <p
+          style={{
+            fontSize: '14px',
+            color: 'var(--color-danger)',
+            marginTop: '8px'
+          }}
+        >
+          No wallet connected
+        </p>
+      )}
+    </div>
+  );
+};
 
 const Dashboard = () => {
   const {
@@ -90,61 +142,71 @@ const Dashboard = () => {
   // Data loader for projects / investments
   useEffect(() => {
     let mounted = true;
-    let loadPromise = null;
+    let timeoutId = null;
 
     const loadData = async () => {
-      // Prevent concurrent loads
-      if (loadPromise) {
-        console.log('[Dashboard] Load already in progress, skipping');
-        return loadPromise;
-      }
-
-      // Don't load if still authenticating
-      if (authLoading || !user?.id) {
-        setDataLoading(false);
+      // Don't load if still authenticating or already loading
+      if (authLoading || !user?.id || dataLoading) {
         return;
       }
 
-      loadPromise = (async () => {
-        try {
-          setDataLoading(true);
-          
-          if (role === 'creator') {
-            const result = await withTimeout(
-              campaignApi.getUserCampaigns(user.id),
-              15000
-            );
-            if (mounted && result?.success) {
-              setProjects(result.data || []);
-            }
-          } else if (role === 'investor') {
-            const result = await withTimeout(
-              investmentApi.getUserInvestments(user.id),
-              15000
-            );
-            if (mounted && result) {
-              setInvestments(result.data || []);
-            }
-          }
-        } catch (error) {
-          console.error('[Dashboard] Load error:', error);
-        } finally {
-          if (mounted) {
-            setDataLoading(false);
-          }
-          loadPromise = null;
+      // Set timeout to prevent infinite loading
+      timeoutId = setTimeout(() => {
+        if (mounted && dataLoading) {
+          console.warn('[Dashboard] Load timeout, forcing completion');
+          setDataLoading(false);
         }
-      })();
+      }, 15000);
 
-      return loadPromise;
+      try {
+        setDataLoading(true);
+        
+        if (role === 'creator') {
+          const result = await withTimeout(
+            campaignApi.getUserCampaigns(user.id),
+            15000
+          );
+          if (mounted && result?.success) {
+            setProjects(result.data || []);
+          }
+        } else if (role === 'investor') {
+          const result = await withTimeout(
+            investmentApi.getUserInvestments(user.id),
+            15000
+          );
+          if (mounted && result) {
+            setInvestments(result.data || []);
+          }
+        }
+      } catch (error) {
+        console.error('[Dashboard] Load error:', error);
+        
+        // If it's an auth error, redirect to login
+        if (error.message?.includes('Authentication expired')) {
+          navigate('/login', { replace: true });
+        }
+      } finally {
+        if (mounted) {
+          setDataLoading(false);
+        }
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      }
     };
 
-    loadData();
+    // Only load once when conditions are met
+    if (!authLoading && user?.id && !dataLoading) {
+      loadData();
+    }
 
     return () => {
       mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     };
-  }, [user?.id, role]); // REDUCED dependencies - only essentials
+  }, [user?.id, role, authLoading]); // MINIMAL dependencies
 
   // Refresh data after tab was hidden for a while
   useEffect(() => {
@@ -923,6 +985,9 @@ const Dashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Connected Wallet Section */}
+      <ConnectedWalletDisplay />
 
       {/* Body */}
       {isInvestor ? renderInvestorDashboard() : renderCreatorDashboard()}

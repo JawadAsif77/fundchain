@@ -587,6 +587,31 @@ export const AuthProvider = ({ children }) => {
     return true;
   }, [user, roleStatus]);
 
+  // Add this new useEffect for automatic session refresh
+  useEffect(() => {
+    if (!user) return;
+
+    // Refresh session every 10 minutes when app is active
+    const refreshInterval = setInterval(async () => {
+      if (document.hidden) return; // Skip if tab is hidden
+      
+      try {
+        console.log('[Auth] Automatic session refresh...');
+        const { error } = await supabase.auth.refreshSession();
+        
+        if (error) {
+          console.error('[Auth] Auto-refresh failed:', error);
+        } else {
+          console.log('[Auth] Session refreshed successfully');
+        }
+      } catch (err) {
+        console.error('[Auth] Auto-refresh exception:', err);
+      }
+    }, 10 * 60 * 1000); // 10 minutes
+
+    return () => clearInterval(refreshInterval);
+  }, [user]);
+
   const value = useMemo(
     () => ({
       user: currentUser,

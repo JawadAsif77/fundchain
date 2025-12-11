@@ -4,6 +4,7 @@ import { AuthProvider } from './store/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import NetworkStatus from './components/NetworkStatus';
 
 // Pages
 import Home from './pages/Home';
@@ -44,7 +45,7 @@ function App() {
   
   return (
     <ErrorBoundary>
-      <AuthProvider>
+        <NetworkStatus />
         <Router>
           <Routes>
             {/* Admin route - completely separate layout */}
@@ -147,7 +148,6 @@ function App() {
             />
           </Routes>
         </Router>
-      </AuthProvider>
     </ErrorBoundary>
   );
 }

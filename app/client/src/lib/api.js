@@ -7,8 +7,48 @@
 
 import { supabase } from './supabase.js';
 
-// Add timeout to prevent hanging requests with retry logic
+// Add at the top of the file, after imports
+const ensureValidSession = async () => {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error || !session) {
+      console.warn('[API] No valid session, attempting refresh...');
+      const { data: { session: refreshedSession }, error: refreshError } = 
+        await supabase.auth.refreshSession();
+      
+      if (refreshError) {
+        console.error('[API] Session refresh failed:', refreshError);
+        throw new Error('Authentication expired. Please log in again.');
+      }
+      
+      return refreshedSession;
+    }
+    
+    // Check if token is about to expire (within 5 minutes)
+    const expiresAt = session.expires_at * 1000;
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000;
+    
+    if (expiresAt - now < fiveMinutes) {
+      console.log('[API] Token expiring soon, refreshing...');
+      const { data: { session: refreshedSession } } = 
+        await supabase.auth.refreshSession();
+      return refreshedSession || session;
+    }
+    
+    return session;
+  } catch (error) {
+    console.error('[API] Session check failed:', error);
+    throw error;
+  }
+};
+
+// Update withTimeout to include session check
 export const withTimeout = async (promise, timeoutMs = 10000, retries = 2) => {
+  // FIRST: Ensure session is valid
+  await ensureValidSession();
+  
   let lastError;
   
   for (let i = 0; i <= retries; i++) {
@@ -21,16 +61,26 @@ export const withTimeout = async (promise, timeoutMs = 10000, retries = 2) => {
     } catch (error) {
       lastError = error;
       
-      // Don't retry if it's not a timeout/connection error
+      // If it's an auth error, refresh session and retry
+      if (error.message?.includes('JWT') || error.message?.includes('auth')) {
+        console.log('[API] Auth error detected, refreshing session...');
+        try {
+          await ensureValidSession();
+        } catch (authError) {
+          throw authError;
+        }
+      }
+      
       if (!error.message?.includes('timeout') && 
           !error.message?.includes('connection') &&
-          !error.message?.includes('closed')) {
+          !error.message?.includes('closed') &&
+          !error.message?.includes('JWT')) {
         throw error;
       }
       
       if (i < retries) {
         console.log(`[API] Retry ${i + 1}/${retries} after error:`, error.message);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
       }
     }
   }
@@ -193,6 +243,31 @@ export const userApi = {
       return { data, error: null };
     } catch (error) {
       console.error('💥 Create user error:', error);
+      throw error;
+    }
+  },
+
+  // Update wallet address
+  async updateWalletAddress(userId, address) {
+    try {
+      console.log('🔄 API: Updating wallet address for user:', userId);
+      
+      const { data, error } = await supabase
+        .from('users')
+        .update({ wallet_address: address })
+        .eq('id', userId)
+        .select('*')
+        .single();
+
+      if (error) {
+        console.error('❌ Wallet address update failed:', error);
+        throw new Error(`Failed to update wallet address: ${error.message}`);
+      }
+
+      console.log('✅ Wallet address updated successfully:', data);
+      return { data, error: null };
+    } catch (error) {
+      console.error('💥 Update wallet address error:', error);
       throw error;
     }
   }

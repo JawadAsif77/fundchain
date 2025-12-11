@@ -1,42 +1,36 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
-import { supabase } from './lib/supabase.js'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App.jsx';
+import { AuthProvider } from './store/AuthContext';
 
-console.log('main.jsx loading full App...');
+import {
+  ConnectionProvider,
+  WalletProvider
+} from '@solana/wallet-adapter-react';
 
-// Add global error handler
-window.addEventListener('error', (event) => {
-  console.error('Global error caught:', event.error);
-});
+import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
 
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled promise rejection:', event.reason);
-});
+import '@solana/wallet-adapter-react-ui/styles.css';
 
-// Fix 7: Add global fetch interceptor for connection errors
-const originalFetch = window.fetch;
-window.fetch = async (...args) => {
-  try {
-    return await originalFetch(...args);
-  } catch (error) {
-    if (error.message?.includes('NetworkError') || 
-        error.message?.includes('Failed to fetch')) {
-      console.warn('[Fetch] Network error, will retry:', error);
-      
-      // Try to refresh Supabase session
-      try {
-        await supabase.auth.refreshSession();
-      } catch (refreshError) {
-        console.error('[Fetch] Session refresh failed:', refreshError);
-      }
-    }
-    throw error;
-  }
-};
+// Phantom wallets list
+const wallets = [
+  new PhantomWalletAdapter()
+];
+
+// Solana devnet RPC
+const endpoint = "https://api.devnet.solana.com";
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+    <ConnectionProvider endpoint={endpoint}>
+      <WalletProvider wallets={wallets} autoConnect>
+        <WalletModalProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </WalletModalProvider>
+      </WalletProvider>
+    </ConnectionProvider>
+  </React.StrictMode>
+);
