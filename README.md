@@ -10,6 +10,7 @@
 
 ## 📋 Table of Contents
 
+- [🆕 Latest Updates](#-latest-updates)
 - [🌟 Project Overview](#-project-overview)
 - [🎯 Current Status & Achievements](#-current-status--achievements)
 - [🏗️ Technical Architecture](#️-technical-architecture)
@@ -22,6 +23,35 @@
 - [📦 Deployment](#-deployment)
 - [👥 Contributing](#-contributing)
 - [📞 Support](#-support)
+
+---
+
+## 🆕 Latest Updates
+
+### **December 2024 - Solana Blockchain Integration** 🎉
+
+We're excited to announce the integration of Solana blockchain technology into FundChain!
+
+#### **New Features:**
+- ⚡ **Phantom Wallet Integration** - Connect your Phantom wallet seamlessly
+- 💸 **SOL to FC Token Swaps** - Direct conversion from SOL to FundChain tokens
+- 🔗 **On-Chain Transactions** - All investments recorded on Solana blockchain
+- 🌐 **Devnet Support** - Currently running on Solana devnet for testing
+- 💰 **Unified Funding Modal** - Single interface for adding funds via Phantom
+- 📊 **Transaction History** - View blockchain-verified transaction records
+- 🔐 **Secure Token Transfers** - Automated SOL transfers to treasury wallet
+
+#### **Technical Highlights:**
+- Official Solana Wallet Adapter integration
+- Real-time balance updates from blockchain
+- Smart contract preparation for milestone-based fund release
+- Transparent transaction tracking with Solana Explorer links
+- Conversion rate: 1 SOL = 100 FC tokens (devnet)
+
+#### **Branch:** `Wallet/Solana`
+**Status:** ✅ Completed and ready for testing
+
+---
 
 ## 🌟 Project Overview
 
