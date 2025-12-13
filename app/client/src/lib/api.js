@@ -44,7 +44,25 @@ const ensureValidSession = async () => {
   }
 };
 
-// Update withTimeout to include session check
+// Timeout helper without auth check (for public endpoints)
+export const withTimeoutPublic = async (promise, timeoutMs = 10000, retries = 2) => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
+        )
+      ]);
+    } catch (error) {
+      if (attempt === retries) throw error;
+      console.warn(`[API] Retry ${attempt + 1}/${retries}:`, error.message);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+};
+
+// Update withTimeout to include session check (for authenticated endpoints)
 export const withTimeout = async (promise, timeoutMs = 10000, retries = 2) => {
   // FIRST: Ensure session is valid
   await ensureValidSession();
@@ -617,7 +635,8 @@ export const campaignApi = {
 
       query = query.order('created_at', { ascending: false });
 
-      const { data, error } = await withTimeout(query, 15000);
+      // Use public timeout for guest access
+      const { data, error } = await withTimeoutPublic(query, 15000);
 
       if (error) {
         console.error('❌ Failed to fetch campaigns:', error);

@@ -66,10 +66,7 @@ const AdminPanel = () => {
     try {
       const { data: campaigns, error: campaignsError } = await supabase
         .from('campaigns')
-        .select(`
-          *,
-          users!creator_id (full_name, email)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
       
       if (campaignsError) throw campaignsError;
