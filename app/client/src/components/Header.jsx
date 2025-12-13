@@ -210,15 +210,17 @@ const Header = () => {
             </div>
             {user ? (
               <>
-                <Link
-                  to="/wallet"
-                  className="btn btn--ghost btn--sm"
-                  onClick={closeMobileMenu}
-                  style={{ display: 'none' }}
-                  data-desktop-only="true"
-                >
-                  💼 Wallet
-                </Link>
+                {profile?.role !== 'admin' && (
+                  <Link
+                    to="/wallet"
+                    className="btn btn--ghost btn--sm"
+                    onClick={closeMobileMenu}
+                    style={{ display: 'none' }}
+                    data-desktop-only="true"
+                  >
+                    💼 Wallet
+                  </Link>
+                )}
                 <Link
                   to="/profile"
                   className="btn btn--ghost btn--sm"
@@ -381,21 +383,23 @@ const Header = () => {
                     Dashboard
                   </Link>
                   
-                  <Link
-                    to="/wallet"
-                    onClick={closeMobileMenu}
-                    style={{
-                      padding: 'var(--space-3) 0',
-                      borderBottom: '1px solid var(--color-border-light)',
-                      color: 'var(--color-text)',
-                      textDecoration: 'none',
-                      fontSize: 'var(--text-md)',
-                      fontWeight: 'var(--font-semibold)',
-                      transition: 'var(--transition-default)'
-                    }}
-                  >
-                    💼 Wallet
-                  </Link>
+                  {profile?.role !== 'admin' && (
+                    <Link
+                      to="/wallet"
+                      onClick={closeMobileMenu}
+                      style={{
+                        padding: 'var(--space-3) 0',
+                        borderBottom: '1px solid var(--color-border-light)',
+                        color: 'var(--color-text)',
+                        textDecoration: 'none',
+                        fontSize: 'var(--text-md)',
+                        fontWeight: 'var(--font-semibold)',
+                        transition: 'var(--transition-default)'
+                      }}
+                    >
+                      💼 Wallet
+                    </Link>
+                  )}
                   
                   <Link
                     to="/profile"

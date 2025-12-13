@@ -1,19 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import MilestoneList from '../components/MilestoneList';
-import InvestPanel from '../components/InvestPanel';
-import InvestmentBox from '../components/InvestmentBox';
 import Loader from '../components/Loader';
 import { campaignApi } from '../lib/api.js';
 import { useAuth } from '../store/AuthContext';
+import { useEscrowActions } from '../hooks/useEscrowActions';
+import { supabase } from '../lib/supabase';
 
 const Campaign = () => {
   const { slug } = useParams();
-  const { userId } = useAuth();
+  const { userId, user, wallet, refreshWallet } = useAuth();
+  const { investInCampaign, investLoading, investError } = useEscrowActions();
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [campaign, setCampaign] = useState(null);
   const [campaignMilestones, setCampaignMilestones] = useState([]);
+  const [campaignWallet, setCampaignWallet] = useState(null);
+  const [userInvestments, setUserInvestments] = useState([]);
+  const [showInvestModal, setShowInvestModal] = useState(false);
+  const [investAmount, setInvestAmount] = useState('');
+  const [investmentLoading, setInvestmentLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +62,29 @@ const Campaign = () => {
             status: row.is_completed ? 'completed' : 'pending'
           }));
           setCampaignMilestones(mm);
+        }
+
+        // Fetch campaign wallet data
+        const { data: cwData } = await supabase
+          .from('campaign_wallets')
+          .select('escrow_balance_fc, released_fc')
+          .eq('campaign_id', data.id)
+          .maybeSingle();
+        if (!cancelled && cwData) {
+          setCampaignWallet(cwData);
+        }
+
+        // Fetch user's investments in this campaign
+        if (userId) {
+          const { data: investments } = await supabase
+            .from('investments')
+            .select('id, amount, status, investment_date, confirmed_at')
+            .eq('campaign_id', data.id)
+            .eq('investor_id', userId)
+            .order('investment_date', { ascending: false });
+          if (!cancelled && investments) {
+            setUserInvestments(investments);
+          }
         }
       } catch (e) {
         if (!cancelled) {
@@ -100,6 +130,68 @@ const Campaign = () => {
     if (riskScore <= 30) return 'Low Risk';
     if (riskScore <= 60) return 'Medium Risk';
     return 'High Risk';
+  };
+
+  const handleInvestSubmit = async (e) => {
+    e.preventDefault();
+    const amount = parseFloat(investAmount);
+    
+    if (!amount || amount <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    if (amount > (wallet?.balanceFc || 0)) {
+      alert('Insufficient balance');
+      return;
+    }
+
+    setInvestmentLoading(true);
+    setSuccessMessage('');
+    
+    try {
+      const result = await investInCampaign({
+        campaignId: campaign.id,
+        amount
+      });
+
+      if (result.success) {
+        setSuccessMessage(`Successfully invested ${amount} FC!`);
+        setInvestAmount('');
+        setShowInvestModal(false);
+        
+        // Refresh wallet
+        if (refreshWallet) await refreshWallet();
+        
+        // Refresh campaign data
+        setCampaign(prev => prev ? ({
+          ...prev,
+          raisedAmount: Number(prev.raisedAmount || 0) + amount
+        }) : prev);
+        
+        // Refresh user investments
+        const { data: investments } = await supabase
+          .from('investments')
+          .select('id, amount, status, investment_date, confirmed_at')
+          .eq('campaign_id', campaign.id)
+          .eq('investor_id', userId)
+          .order('investment_date', { ascending: false });
+        if (investments) setUserInvestments(investments);
+        
+        // Refresh campaign wallet
+        const { data: cwData } = await supabase
+          .from('campaign_wallets')
+          .select('escrow_balance_fc, released_fc')
+          .eq('campaign_id', campaign.id)
+          .maybeSingle();
+        if (cwData) setCampaignWallet(cwData);
+      }
+    } catch (err) {
+      console.error('Investment error:', err);
+      alert(err.message || 'Investment failed');
+    } finally {
+      setInvestmentLoading(false);
+    }
   };
 
   const getStatusBadgeClass = (status) => {
@@ -220,6 +312,81 @@ const Campaign = () => {
               <div>
                 {activeTab === 'overview' && (
                   <div className="space-y-lg">
+
+                    {/* Funding Overview */}
+                    <div className="card">
+                      <h3 className="card-title">💰 Funding Overview</h3>
+                      <div className="progress-bar mb-md" style={{ height: '24px' }}>
+                        <div 
+                          className="progress-fill" 
+                          style={{ width: `${progress}%` }}
+                        ></div>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-md">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-primary">{formatCurrency(campaign.raisedAmount)}</div>
+                          <div className="text-sm text-gray-600">Current Funding</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold">{formatCurrency(campaign.goalAmount)}</div>
+                          <div className="text-sm text-gray-600">Target Funding</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold" style={{ color: '#29C7AC' }}>-</div>
+                          <div className="text-sm text-gray-600">Investor Count</div>
+                        </div>
+                        {campaignWallet && (
+                          <div className="text-center">
+                            <div className="text-2xl font-bold" style={{ color: '#f59e0b' }}>
+                              {campaignWallet.escrow_balance_fc?.toLocaleString() || 0} FC
+                            </div>
+                            <div className="text-sm text-gray-600">Escrow Balance</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Past Investments List */}
+                    {userId && userInvestments.length > 0 && (
+                      <div className="card">
+                        <h3 className="card-title">📊 Your Investment History</h3>
+                        <div className="space-y-sm">
+                          {userInvestments.map((investment) => (
+                            <div 
+                              key={investment.id}
+                              className="flex items-center justify-between p-md border rounded-lg"
+                              style={{ backgroundColor: investment.status === 'refunded' ? '#fef2f2' : '#f0fdf9' }}
+                            >
+                              <div>
+                                <div className="font-semibold text-lg">{investment.amount.toLocaleString()} FC</div>
+                                <div className="text-sm text-gray-600">
+                                  {new Date(investment.investment_date).toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric'
+                                  })}
+                                </div>
+                              </div>
+                              <span 
+                                className="badge"
+                                style={{
+                                  backgroundColor: investment.status === 'confirmed' ? '#29C7AC' : investment.status === 'refunded' ? '#ef4444' : '#f59e0b',
+                                  color: 'white',
+                                  padding: '6px 12px',
+                                  borderRadius: '6px',
+                                  fontSize: '12px',
+                                  fontWeight: 'bold',
+                                  textTransform: 'uppercase'
+                                }}
+                              >
+                                {investment.status}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="card">
                       <h3 className="card-title">Project Details</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
@@ -283,28 +450,37 @@ const Campaign = () => {
             {/* Sidebar */}
             <div>
               <div className="sticky" style={{ top: '6rem' }}>
-                <InvestPanel 
-                  campaign={campaign} 
-                  onInvestSuccess={({ amount }) => {
-                    // Optimistically update progress while DB triggers update canonical values
-                    setCampaign(prev => prev ? ({
-                      ...prev,
-                      raisedAmount: Number(prev.raisedAmount || 0) + Number(amount)
-                    }) : prev);
-                  }}
-                />
-                
-                {/* Investment Box for authenticated users */}
-                {userId && (
-                  <div className="mt-6">
-                    <InvestmentBox
-                      campaignId={campaign.id}
-                      campaignStatus={campaign.status}
-                      onInvestSuccess={() => {
-                        // Refresh campaign data after successful investment
-                        window.location.reload();
-                      }}
-                    />
+                {/* Investment Panel */}
+                {userId && campaign.status === 'active' && (
+                  <div className="card" style={{ backgroundColor: '#f0fdfa', border: '2px solid #29C7AC' }}>
+                    <h3 className="card-title" style={{ color: '#0f766e' }}>💼 Your Wallet</h3>
+                    <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: 'white', borderRadius: '8px' }}>
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>AVAILABLE BALANCE:</div>
+                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#29C7AC' }}>
+                          {wallet?.balanceFc?.toLocaleString() || 0} FC
+                        </div>
+                      </div>
+                      <div style={{ paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
+                        <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>LOCKED (INVESTED):</div>
+                        <div style={{ fontSize: '20px', fontWeight: '600', color: '#f59e0b' }}>
+                          {wallet?.lockedFc?.toLocaleString() || 0} FC
+                        </div>
+                      </div>
+                      <div style={{ paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
+                        <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>TOTAL WALLET:</div>
+                        <div style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937' }}>
+                          {((wallet?.balanceFc || 0) + (wallet?.lockedFc || 0)).toLocaleString()} FC
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowInvestModal(true)}
+                      className="btn btn-primary"
+                      style={{ width: '100%', padding: '14px', fontSize: '16px', fontWeight: 'bold' }}
+                    >
+                      🚀 Invest in This Campaign
+                    </button>
                   </div>
                 )}
               </div>
@@ -312,6 +488,92 @@ const Campaign = () => {
           </div>
         </div>
       </div>
+
+      {/* Invest Modal */}
+      {showInvestModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setShowInvestModal(false)}
+        >
+          <div 
+            className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-2xl font-bold">Invest in Campaign</h3>
+              <button 
+                onClick={() => setShowInvestModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            {successMessage && (
+              <div className="mb-4 p-3 bg-green-100 text-green-800 rounded-lg">
+                {successMessage}
+              </div>
+            )}
+
+            {investError && (
+              <div className="mb-4 p-3 bg-red-100 text-red-800 rounded-lg">
+                {investError}
+              </div>
+            )}
+
+            <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+              <div className="text-sm text-gray-600 mb-1">Your Available Balance</div>
+              <div className="text-2xl font-bold text-primary">
+                {wallet?.balanceFc?.toLocaleString() || 0} FC
+              </div>
+            </div>
+
+            <form onSubmit={handleInvestSubmit}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Investment Amount (FC)
+                </label>
+                <input
+                  type="number"
+                  value={investAmount}
+                  onChange={(e) => setInvestAmount(e.target.value)}
+                  placeholder="Enter amount to invest"
+                  min="1"
+                  step="1"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  disabled={investmentLoading || investLoading}
+                  required
+                />
+                {investAmount && parseFloat(investAmount) > (wallet?.balanceFc || 0) && (
+                  <p className="text-red-600 text-sm mt-1">Insufficient balance</p>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowInvestModal(false)}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={investmentLoading || investLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={investmentLoading || investLoading || !investAmount || parseFloat(investAmount) > (wallet?.balanceFc || 0)}
+                >
+                  {investmentLoading || investLoading ? 'Processing...' : 'Invest Now'}
+                </button>
+              </div>
+            </form>
+
+            <div className="mt-4 text-xs text-gray-500 text-center">
+              Your investment will be locked in escrow until campaign milestones are met
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

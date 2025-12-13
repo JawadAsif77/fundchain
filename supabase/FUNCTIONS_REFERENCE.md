@@ -398,6 +398,110 @@ supabase functions deploy
 
 ## 📝 Testing
 
+---
+
+### 10. **release-milestone-funds**
+**Path:** `functions/release-milestone-funds/index.ts`
+
+**Purpose:** Admin releases FC from campaign escrow to campaign creator when milestone is approved
+
+**HTTP Method:** `POST`
+
+**Request Body:**
+```typescript
+{
+  adminId: string;        // Admin user ID
+  campaignId: string;     // Campaign ID
+  milestoneId: string;    // Milestone to mark complete
+  amountFc: number;       // FC amount to release
+  notes?: string;         // Optional release notes
+}
+```
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  campaignWallet: {
+    escrow_balance_fc: number;
+    released_fc: number;
+  };
+  creatorWallet: {
+    balance_fc: number;
+    locked_fc: number;
+  };
+  milestone: {
+    id: string;
+    is_completed: boolean;
+    completion_date: string;
+  };
+}
+```
+
+**Logic:**
+1. Validates admin role (user.role = 'admin')
+2. Verifies campaign exists and is not 'failed' or 'cancelled'
+3. Verifies milestone belongs to campaign
+4. Checks campaign_wallets has sufficient escrow_balance_fc
+5. Gets or creates creator wallet
+6. Updates campaign_wallets (decrease escrow, increase released)
+7. Updates platform_wallet (decrease locked_fc)
+8. Updates creator wallet (increase balance_fc)
+9. Updates milestone (is_completed = true, completion_date)
+10. Records token_transactions and transactions
+11. Returns updated wallet and milestone data
+
+**Used By:** Admin panel, milestone management
+
+---
+
+### 11. **refund-campaign-investors**
+**Path:** `functions/refund-campaign-investors/index.ts`
+
+**Purpose:** Admin triggers bulk refund of all confirmed investments when campaign fails
+
+**HTTP Method:** `POST`
+
+**Request Body:**
+```typescript
+{
+  adminId: string;        // Admin user ID
+  campaignId: string;     // Campaign ID to refund
+  reason?: string;        // Optional refund reason
+}
+```
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  refundedCount: number;  // Number of investments refunded
+  totalRefund: number;    // Total FC refunded
+  message?: string;       // Status message
+}
+```
+
+**Logic:**
+1. Validates admin role (user.role = 'admin')
+2. Verifies campaign exists and is not already 'failed' or 'cancelled'
+3. Fetches all confirmed investments for campaign
+4. Calculates total refund amount
+5. Verifies campaign_wallets has sufficient escrow_balance_fc
+6. For each investment:
+   - Updates investor wallet (decrease locked_fc, increase balance_fc)
+   - Updates investment (status = 'refunded', refund details)
+   - Records token_transactions and transactions
+7. Updates campaign_wallets (decrease escrow_balance_fc)
+8. Updates platform_wallet (decrease locked_fc)
+9. Updates campaign (status = 'failed')
+10. Returns refund summary
+
+**Used By:** Admin panel, campaign failure handling
+
+---
+
+## 🛠️ Local Development
+
 **Local testing with Supabase CLI:**
 ```bash
 supabase functions serve [function-name]
@@ -414,6 +518,11 @@ curl -i --location --request POST 'http://localhost:54321/functions/v1/[function
 ---
 
 ## 🔄 Recent Updates
+
+### December 2024 - Escrow & Milestone Management
+- Added `release-milestone-funds` function for admin milestone approvals
+- Added `refund-campaign-investors` function for bulk campaign refunds
+- Enhanced escrow balance tracking across platform, campaign, and user wallets
 
 ### December 2024 - Solana Integration
 - Added `buy-fc-tokens` function for SOL → FC conversion
