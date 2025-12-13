@@ -135,6 +135,16 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // FIXED: Load user profile without state dependencies
+  // Refresh profile data (for use after KYC submission, etc.)
+  const refreshProfile = useCallback(async (userId) => {
+    if (!userId) return null;
+    profileLoadRef.current = null; // Clear the ref to allow reload
+    roleLoadRef.current = null; // Also clear role status ref
+    const profileData = await loadUserProfile(userId);
+    await loadUserRoleStatus(userId); // Also reload role status
+    return profileData;
+  }, []);
+
   const loadUserProfile = useCallback(
     async (userId, sessionUser = null) => {
       if (!userId) return null;
@@ -629,6 +639,7 @@ export const AuthProvider = ({ children }) => {
       resetPassword,
       clearError,
       refreshWallet: () => refreshWallet(currentUser?.id),
+      refreshProfile: () => refreshProfile(currentUser?.id),
       isAuthenticated: !!user,
       isEmailConfirmed: !!user?.email_confirmed_at,
       needsProfileCompletion,
@@ -651,6 +662,7 @@ export const AuthProvider = ({ children }) => {
       resetPassword,
       clearError,
       refreshWallet,
+      refreshProfile,
       user,
       needsProfileCompletion,
       needsRoleSelection,

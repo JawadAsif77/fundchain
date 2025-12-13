@@ -68,7 +68,7 @@ const AdminPanel = () => {
         .from('campaigns')
         .select(`
           *,
-          users:creator_id (full_name, email)
+          users!creator_id (full_name, email)
         `)
         .order('created_at', { ascending: false });
       
@@ -152,7 +152,15 @@ const AdminPanel = () => {
       
       console.log('Loading pending verifications...');
       
-      // First, let's just try to get verifications without joins
+      // First check if there are ANY verifications at all
+      const { data: allVerifications, error: allError } = await supabase
+        .from('user_verifications')
+        .select('*');
+      
+      console.log('Total verifications in database:', allVerifications?.length || 0);
+      console.log('All verifications:', allVerifications);
+      
+      // Get all pending verifications
       const { data: verificationsData, error: verificationsError } = await supabase
         .from('user_verifications')
         .select('*')
@@ -161,11 +169,12 @@ const AdminPanel = () => {
 
       if (verificationsError) {
         console.error('Error loading verifications:', verificationsError);
-        setError(`Database error: ${verificationsError.message}`);
+        setError(`Failed to load verifications: ${verificationsError.message}`);
         return;
       }
 
-      console.log('Verifications loaded:', verificationsData);
+      console.log('Pending verifications loaded:', verificationsData);
+      console.log('Number of pending verifications:', verificationsData?.length || 0);
 
       // If we have verifications, get the user details separately
       if (verificationsData && verificationsData.length > 0) {

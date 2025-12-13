@@ -293,13 +293,16 @@ export const kycApi = {
         selfie_image_url: kycData.selfie_image_url || null,
         verification_type: kycData.verification_type || 'individual',
         verification_status: 'pending',
-        submitted_at: new Date().toISOString()
+        submitted_at: new Date().toISOString(),
+        reviewed_at: null, // Reset reviewed_at when resubmitting
+        reviewed_by: null // Reset reviewed_by when resubmitting
       };
 
       const { data, error } = await supabase
         .from('user_verifications')
         .upsert(verificationData, {
-          onConflict: 'user_id'
+          onConflict: 'user_id',
+          ignoreDuplicates: false // Ensure updates happen
         })
         .select('*')
         .single();
@@ -307,6 +310,16 @@ export const kycApi = {
       if (error) {
         console.error('❌ KYC submission failed:', error);
         throw new Error(`KYC submission failed: ${error.message}`);
+      }
+
+      // Also update users.is_verified to 'pending'
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ is_verified: 'pending' })
+        .eq('id', kycData.user_id);
+
+      if (updateError) {
+        console.warn('⚠️ Failed to update user verification status:', updateError);
       }
 
       console.log('✅ KYC submitted successfully');

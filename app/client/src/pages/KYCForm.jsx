@@ -10,8 +10,9 @@ const KYCForm = () => {
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false); // Track if updating existing KYC
   const navigate = useNavigate();
-  const { user, refreshUserData } = useAuth();
+  const { user, refreshProfile } = useAuth();
 
   // Store timeout ref to clear it if needed
   const redirectTimeoutRef = React.useRef(null);
@@ -43,7 +44,7 @@ const KYCForm = () => {
           // Check user_verifications table for latest status
           const { data, error } = await supabase
             .from('user_verifications')
-            .select('verification_status')
+            .select('*')
             .eq('user_id', user.id)
             .single();
           if (!error && data?.verification_status) {
@@ -54,9 +55,25 @@ const KYCForm = () => {
               return;
             }
             if (data.verification_status === 'pending') {
-              setStatusMessage('Your verification is pending review. Redirecting to dashboard...');
-              setIsRedirecting(true);
-              navigate('/dashboard', { replace: true });
+              // Load existing KYC data for updates instead of redirecting
+              setFormData({
+                legal_name: data.legal_name || '',
+                phone: data.phone || '',
+                legal_email: data.legal_email || user?.email || '',
+                business_email: data.business_email || '',
+                address_line1: data.legal_address?.line1 || '',
+                address_line2: data.legal_address?.line2 || '',
+                city: data.legal_address?.city || '',
+                state: data.legal_address?.state || '',
+                postal_code: data.legal_address?.postal_code || '',
+                country: data.legal_address?.country || '',
+                id_document_url: data.id_document_url || '',
+                selfie_image_url: data.selfie_image_url || '',
+                verification_type: data.verification_type || 'individual'
+              });
+              setIsUpdating(true); // Mark as updating
+              setStatusMessage('You can update your verification details below.');
+              // Don't redirect - let them update
               return;
             }
           }
@@ -204,10 +221,10 @@ const KYCForm = () => {
 
     setIsSubmitting(true);
     setError('');
-    setStatusMessage('Submitting verification...');
+    setStatusMessage(isUpdating ? 'Updating verification...' : 'Submitting verification...');
 
     try {
-      console.log('🚀 Starting KYC submission for user:', user.id);
+      console.log(isUpdating ? '🔄 Updating KYC for user:' : '🚀 Starting KYC submission for user:', user.id);
 
       // Prepare KYC data according to your exact schema
       const kycData = {
@@ -231,26 +248,31 @@ const KYCForm = () => {
 
       console.log('📝 Submitting KYC data:', kycData);
 
-      // Submit using the new API
+      // Submit using the new API (upsert will handle both insert and update)
       const result = await kycApi.submitKyc(kycData);
       
       console.log('✅ KYC submitted successfully:', result);
 
       // Set success message
-      setStatusMessage('Verification submitted successfully! Redirecting...');
+      setStatusMessage(isUpdating ? 'Verification updated successfully! Refreshing your profile...' : 'Verification submitted successfully! Updating your profile...');
+      
+      // Refresh profile BEFORE redirecting to ensure Dashboard sees updated data
+      try {
+        await refreshProfile();
+        console.log('✅ Profile refreshed successfully');
+      } catch (error) {
+        console.warn('Failed to refresh user profile:', error);
+      }
+      
+      setStatusMessage(isUpdating ? 'Verification updated successfully! Redirecting...' : 'Verification submitted successfully! Redirecting...');
       setIsRedirecting(true);
       
-      // Immediate redirect after success (no timeout needed)
+      // Redirect after profile refresh
       if (user.role === 'creator') {
         navigate('/dashboard', { replace: true });
       } else {
         navigate('/explore', { replace: true });
       }
-
-      // Update user data in background (don't await to avoid delays)
-      refreshUserData().catch(error => {
-        console.warn('Failed to refresh user data:', error);
-      });
 
     } catch (error) {
       console.error('❌ KYC submission failed:', error);
@@ -661,12 +683,32 @@ const KYCForm = () => {
       }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px' }}>
-            KYC Verification
+            {isUpdating ? 'Update KYC Verification' : 'KYC Verification'}
           </h1>
           <p style={{ fontSize: '14px', color: '#6b7280' }}>
-            Complete your identity verification to access creator features
+            {isUpdating 
+              ? 'Update your verification details while your application is under review'
+              : 'Complete your identity verification to access creator features'}
           </p>
         </div>
+
+        {isUpdating && (
+          <div style={{
+            backgroundColor: '#fef3c7',
+            border: '1px solid #f59e0b',
+            borderRadius: '8px',
+            padding: '12px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span style={{ fontSize: '18px' }}>ℹ️</span>
+            <p style={{ fontSize: '13px', color: '#92400e', margin: 0 }}>
+              Your verification is currently under review. You can update your details, and the changes will be reviewed by our team.
+            </p>
+          </div>
+        )}
 
         {renderStepIndicator()}
 
@@ -775,7 +817,9 @@ const KYCForm = () => {
                     cursor: isSubmitting ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  {isSubmitting ? 'Submitting...' : 'Submit Verification'}
+                  {isSubmitting 
+                    ? (isUpdating ? 'Updating...' : 'Submitting...') 
+                    : (isUpdating ? 'Update Verification' : 'Submit Verification')}
                 </button>
               )}
             </div>

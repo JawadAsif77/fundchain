@@ -259,6 +259,50 @@ const Dashboard = () => {
     );
   }, [userProjects]);
 
+  // Load creator-specific data (campaign wallets and milestones)
+  useEffect(() => {
+    const loadCreatorData = async () => {
+      if (!user?.id || !isCreator) return;
+      
+      const campaignIds = userProjects.map(p => p.id);
+      if (campaignIds.length === 0) return;
+
+      // Fetch campaign wallets
+      const { data: wallets } = await supabase
+        .from('campaign_wallets')
+        .select('*')
+        .in('campaign_id', campaignIds);
+      
+      if (wallets) {
+        const walletsMap = {};
+        wallets.forEach(w => {
+          walletsMap[w.campaign_id] = w;
+        });
+        setCampaignWallets(walletsMap);
+      }
+
+      // Fetch milestones
+      const { data: milestones } = await supabase
+        .from('milestones')
+        .select('*')
+        .in('campaign_id', campaignIds)
+        .order('order_index', { ascending: true });
+      
+      if (milestones) {
+        const milestonesMap = {};
+        milestones.forEach(m => {
+          if (!milestonesMap[m.campaign_id]) {
+            milestonesMap[m.campaign_id] = [];
+          }
+          milestonesMap[m.campaign_id].push(m);
+        });
+        setCampaignMilestones(milestonesMap);
+      }
+    };
+    
+    loadCreatorData();
+  }, [userProjects, user, isCreator]);
+
   const adaptProjectForCard = (c) => {
     const goalAmount =
       c.goal_amount != null ? Number(c.goal_amount) : Number(c.funding_goal || 0);
@@ -322,37 +366,12 @@ const Dashboard = () => {
       day: 'numeric'
     });
 
-  // Early return for admin users to prevent hook violations
-  if (!authLoading && profile?.role === 'admin') {
-    return (
-      <div
-        style={{
-          minHeight: '80vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
-      >
-        <div style={{ textAlign: 'center' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              border: '4px solid var(--color-bg-elev)',
-              borderTop: '4px solid var(--color-primary)',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              margin: '0 auto 16px'
-            }}
-          />
-          <p>Redirecting to admin panel...</p>
-        </div>
-      </div>
-    );
-  }
+  // Check if we should show loading state
+  const isAdminRedirecting = !authLoading && profile?.role === 'admin';
+  const isLoading = authLoading || dataLoading || isAdminRedirecting;
 
-  // Loading states
-  if (authLoading || dataLoading) {
+  // Single loading state to prevent hook violations
+  if (isLoading) {
     return (
       <div
         style={{
@@ -374,7 +393,7 @@ const Dashboard = () => {
               margin: '0 auto 16px'
             }}
           />
-          <p>Loading your dashboard...</p>
+          <p>{isAdminRedirecting ? 'Redirecting to admin panel...' : 'Loading your dashboard...'}</p>
         </div>
 
         <style>
@@ -700,50 +719,6 @@ const Dashboard = () => {
   );
 
   const renderCreatorDashboard = () => {
-    // Fetch campaign wallets and milestones for creator campaigns
-    useEffect(() => {
-      const loadCreatorData = async () => {
-        if (!user?.id || !isCreator) return;
-        
-        const campaignIds = userProjects.map(p => p.id);
-        if (campaignIds.length === 0) return;
-
-        // Fetch campaign wallets
-        const { data: wallets } = await supabase
-          .from('campaign_wallets')
-          .select('*')
-          .in('campaign_id', campaignIds);
-        
-        if (wallets) {
-          const walletsMap = {};
-          wallets.forEach(w => {
-            walletsMap[w.campaign_id] = w;
-          });
-          setCampaignWallets(walletsMap);
-        }
-
-        // Fetch milestones
-        const { data: milestones } = await supabase
-          .from('milestones')
-          .select('*')
-          .in('campaign_id', campaignIds)
-          .order('order_index', { ascending: true });
-        
-        if (milestones) {
-          const milestonesMap = {};
-          milestones.forEach(m => {
-            if (!milestonesMap[m.campaign_id]) {
-              milestonesMap[m.campaign_id] = [];
-            }
-            milestonesMap[m.campaign_id].push(m);
-          });
-          setCampaignMilestones(milestonesMap);
-        }
-      };
-      
-      loadCreatorData();
-    }, [userProjects, user, isCreator]);
-
     return (
     <div>
       {/* Creator Wallet Section */}
@@ -889,8 +864,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* KYC banner */}
-      {!isVerified && (
+      {/* KYC banner - only show if KYC not submitted yet (is_verified === 'no') */}
+      {kycStatus === 'not_submitted' && (
         <div
           style={{
             backgroundColor: 'var(--color-warning-bg)',
@@ -1110,6 +1085,8 @@ const Dashboard = () => {
             description={
               isVerified
                 ? 'Create your first project to start raising funds'
+                : kycStatus === 'pending'
+                ? 'Your verification is under review. You can prepare your campaign while we verify your account.'
                 : 'Complete your verification to start creating projects'
             }
             action={
@@ -1118,10 +1095,12 @@ const Dashboard = () => {
                     label: 'Start Your Campaign',
                     onClick: () => navigate('/create-project')
                   }
-                : {
+                : kycStatus === 'not_submitted'
+                ? {
                     label: 'Complete KYC',
                     href: '/kyc'
                   }
+                : undefined
             }
           />
         )}
