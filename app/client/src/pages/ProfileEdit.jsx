@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useCallback, useReducer } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
-import { withTimeout } from '../lib/api';
+import { withTimeout, userApi } from '../lib/api';
+import {
+  validateName,
+  validateUsername,
+  validatePhone,
+  validateUrl,
+  sanitizeInput
+} from '../utils/validation';
 
 const EMPTY_SOCIAL_LINKS = {
   website: '',
@@ -52,6 +59,18 @@ const profileReducer = (state, action) => {
         ...state,
         message: '',
         error: ''
+      };
+    case 'SET_VALIDATION_ERROR':
+      return {
+        ...state,
+        validationErrors: { ...state.validationErrors, ...action.payload }
+      };
+    case 'CLEAR_VALIDATION_ERROR':
+      const newErrors = { ...state.validationErrors };
+      delete newErrors[action.payload];
+      return {
+        ...state,
+        validationErrors: newErrors
       };
     case 'APPLY_PROFILE_DATA': {
       const { profileData, user, roleStatus } = action.payload;
@@ -133,7 +152,8 @@ const profileReducer = (state, action) => {
         ...state,
         formData: newFormData,
         profileMeta: newProfileMeta,
-        preferencesInput: newPreferencesInput
+        preferencesInput: newPreferencesInput,
+        originalUsername: newFormData.username
       };
     }
     default:
@@ -169,7 +189,9 @@ const initialState = {
   preferencesInput: '',
   message: '',
   error: '',
-  isSubmitting: false
+  isSubmitting: false,
+  validationErrors: {},
+  originalUsername: ''
 };
 
 const ProfileEdit = () => {
@@ -186,23 +208,21 @@ const ProfileEdit = () => {
   const location = useLocation();
 
   const [state, dispatch] = useReducer(profileReducer, initialState);
-  const { formData, profileMeta, preferencesInput, message, error, isSubmitting } = state;
-
-  const applyProfileToState = useCallback(
-    (profileData) => {
-      dispatch({
-        type: 'APPLY_PROFILE_DATA',
-        payload: { profileData, user, roleStatus }
-      });
-    },
-    [] // EMPTY dependencies to keep function stable
-  );
+  const { formData, profileMeta, preferencesInput, message, error, isSubmitting, validationErrors } = state;
 
   useEffect(() => {
     if (profile) {
-      applyProfileToState(profile);
+      dispatch({
+        type: 'APPLY_PROFILE_DATA',
+        payload: { profileData: profile, user, roleStatus }
+      });
+      // Store original username for comparison
+      dispatch({
+        type: 'SET_FORM_DATA',
+        payload: { originalUsername: profile.username || '' }
+      });
     }
-  }, [profile]); // Remove applyProfileToState from dependencies
+  }, [profile]); // Direct dispatch, no callback
 
   useEffect(() => {
     if (location?.state?.message) {
@@ -213,16 +233,92 @@ const ProfileEdit = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
-    if (name !== 'role') { // role is locked
+    if (name === 'role') return; // role is locked
+
+    // Apply input filtering based on field type
+    let filteredValue = value;
+    switch (name) {
+      case 'full_name':
+        filteredValue = sanitizeInput.name(value);
+        break;
+      case 'username':
+        filteredValue = sanitizeInput.username(value);
+        break;
+      case 'phone':
+        filteredValue = sanitizeInput.phone(value);
+        break;
+      case 'location':
+        filteredValue = sanitizeInput.name(value);
+        break;
+      default:
+        break;
+    }
+
+    dispatch({
+      type: 'SET_FORM_DATA',
+      payload: { [name]: filteredValue }
+    });
+
+    // Clear validation error when user types
+    if (validationErrors[name]) {
+      dispatch({ type: 'CLEAR_VALIDATION_ERROR', payload: name });
+    }
+  };
+
+  const handleBlur = async (e) => {
+    const { name, value } = e.target;
+    await validateField(name, value);
+  };
+
+  const validateField = async (fieldName, value) => {
+    let result = { valid: true, error: null };
+
+    switch (fieldName) {
+      case 'full_name':
+        if (value) {
+          result = validateName(value);
+        }
+        break;
+      case 'username':
+        if (value) {
+          result = validateUsername(value);
+          if (result.valid && value !== state.originalUsername) {
+            // Check username availability
+            const availabilityResult = await userApi.checkUsernameAvailability(value);
+            if (!availabilityResult.available) {
+              result = { valid: false, error: 'Username is already taken' };
+            }
+          }
+        }
+        break;
+      case 'phone':
+        if (value) {
+          result = validatePhone(value);
+        }
+        break;
+      default:
+        break;
+    }
+
+    if (!result.valid) {
       dispatch({
-        type: 'SET_FORM_DATA',
-        payload: { [name]: value }
+        type: 'SET_VALIDATION_ERROR',
+        payload: { [fieldName]: result.error }
       });
     }
+
+    return result.valid;
   };
 
   const handleSocialLinksChange = (e) => {
     const { name, value } = e.target;
+    
+    // Clear validation error when user types
+    const errorKey = `social_${name}`;
+    if (validationErrors[errorKey]) {
+      dispatch({ type: 'CLEAR_VALIDATION_ERROR', payload: errorKey });
+    }
+    
     dispatch({
       type: 'SET_FORM_DATA',
       payload: {
@@ -232,6 +328,19 @@ const ProfileEdit = () => {
         }
       }
     });
+  };
+
+  const handleSocialLinkBlur = (e) => {
+    const { name, value } = e.target;
+    if (value) {
+      const result = validateUrl(value, false);
+      if (!result.valid) {
+        dispatch({
+          type: 'SET_VALIDATION_ERROR',
+          payload: { [`social_${name}`]: result.error }
+        });
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -326,7 +435,10 @@ const ProfileEdit = () => {
         throw new Error('No data returned from profile update');
       }
 
-      applyProfileToState(updatedProfile);
+      dispatch({
+        type: 'APPLY_PROFILE_DATA',
+        payload: { profileData: updatedProfile, user, roleStatus }
+      });
       dispatch({ type: 'SET_MESSAGE', payload: 'Profile updated successfully!' });
 
       setTimeout(() => {
@@ -365,7 +477,10 @@ const ProfileEdit = () => {
 
   const handleReset = () => {
     if (profile) {
-      applyProfileToState(profile);
+      dispatch({
+        type: 'APPLY_PROFILE_DATA',
+        payload: { profileData: profile, user, roleStatus }
+      });
     }
     dispatch({ type: 'RESET_MESSAGES' });
   };
@@ -623,17 +738,27 @@ const ProfileEdit = () => {
                       name="full_name"
                       value={formData.full_name}
                       onChange={handleInputChange}
+                      onBlur={handleBlur}
                       required
+                      maxLength={50}
                       style={{
                         width: '100%',
                         padding: '0.75rem',
-                        border: '1px solid var(--color-border)',
+                        border: validationErrors.full_name ? '1px solid #ef4444' : '1px solid var(--color-border)',
                         borderRadius: '0.5rem',
                         fontSize: '1rem',
                         backgroundColor: 'var(--color-white)'
                       }}
                       placeholder="Enter your full name"
                     />
+                    {validationErrors.full_name && (
+                      <span style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem', display: 'block' }}>
+                        {validationErrors.full_name}
+                      </span>
+                    )}
+                    <small style={{ color: 'var(--color-muted)', fontSize: '0.75rem', display: 'block', marginTop: '0.25rem' }}>
+                      Letters, spaces, hyphens, and apostrophes only
+                    </small>
                   </div>
 
                   <div>
@@ -652,17 +777,27 @@ const ProfileEdit = () => {
                       name="username"
                       value={formData.username}
                       onChange={handleInputChange}
+                      onBlur={handleBlur}
                       required
+                      maxLength={20}
                       style={{
                         width: '100%',
                         padding: '0.75rem',
-                        border: '1px solid var(--color-border)',
+                        border: validationErrors.username ? '1px solid #ef4444' : '1px solid var(--color-border)',
                         borderRadius: '0.5rem',
                         fontSize: '1rem',
                         backgroundColor: 'var(--color-white)'
                       }}
                       placeholder="Choose a unique username"
                     />
+                    {validationErrors.username && (
+                      <span style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem', display: 'block' }}>
+                        {validationErrors.username}
+                      </span>
+                    )}
+                    <small style={{ color: 'var(--color-muted)', fontSize: '0.75rem', display: 'block', marginTop: '0.25rem' }}>
+                      3-20 characters: letters, numbers, dash, or underscore only
+                    </small>
                   </div>
 
                   <div>
@@ -832,16 +967,26 @@ const ProfileEdit = () => {
                         name="phone"
                         value={formData.phone}
                         onChange={handleInputChange}
+                        onBlur={handleBlur}
+                        maxLength={15}
                         style={{
                           width: '100%',
                           padding: '0.75rem',
-                          border: '1px solid var(--color-border)',
+                          border: validationErrors.phone ? '1px solid #ef4444' : '1px solid var(--color-border)',
                           borderRadius: '0.5rem',
                           fontSize: '1rem',
                           backgroundColor: 'var(--color-white)'
                         }}
                         placeholder="+1 (555) 123-4567"
                       />
+                      {validationErrors.phone && (
+                        <span style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem', display: 'block' }}>
+                          {validationErrors.phone}
+                        </span>
+                      )}
+                      <small style={{ color: 'var(--color-muted)', fontSize: '0.75rem', display: 'block', marginTop: '0.25rem' }}>
+                        Numbers, spaces, dashes, and + only
+                      </small>
                     </div>
 
                     <div>
@@ -940,16 +1085,22 @@ const ProfileEdit = () => {
                         name={platform}
                         value={formData.social_links[platform]}
                         onChange={handleSocialLinksChange}
+                        onBlur={handleSocialLinkBlur}
                         style={{
                           width: '100%',
                           padding: '0.75rem',
-                          border: '1px solid var(--color-border)',
+                          border: validationErrors[`social_${platform}`] ? '1px solid #ef4444' : '1px solid var(--color-border)',
                           borderRadius: '0.5rem',
                           fontSize: '1rem',
                           backgroundColor: 'var(--color-white)'
                         }}
                         placeholder={`https://${platform}.com/yourprofile`}
                       />
+                      {validationErrors[`social_${platform}`] && (
+                        <span style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem', display: 'block' }}>
+                          {validationErrors[`social_${platform}`]}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>

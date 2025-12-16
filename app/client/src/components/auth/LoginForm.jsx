@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../store/AuthContext';
+import { validateEmail, validateRequired } from '../../utils/validation';
 import './AuthForms.css';
 
 const LoginForm = ({ onSwitchToRegister, onClose }) => {
@@ -9,22 +10,27 @@ const LoginForm = ({ onSwitchToRegister, onClose }) => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
+  const [fieldTouched, setFieldTouched] = useState({});
   
   const { login, error, clearError } = useAuth();
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Apply input filtering for email
+    let filteredValue = value;
+    if (name === 'email') {
+      filteredValue = value.replace(/[^a-zA-Z0-9@._-]/g, '');
+    }
+    
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: filteredValue
     }));
     
-    // Clear validation error for this field
-    if (validationErrors[name]) {
-      setValidationErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
+    // Validate on change if field was touched
+    if (fieldTouched[name]) {
+      validateField(name, filteredValue);
     }
     
     // Clear auth error when user starts typing
@@ -33,20 +39,46 @@ const LoginForm = ({ onSwitchToRegister, onClose }) => {
     }
   };
 
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    setFieldTouched(prev => ({ ...prev, [name]: true }));
+    validateField(name, value);
+  };
+
+  const validateField = (fieldName, value) => {
+    let result = { valid: true, error: null };
+
+    switch (fieldName) {
+      case 'email':
+        result = validateEmail(value);
+        break;
+      case 'password':
+        result = validateRequired(value);
+        break;
+      default:
+        break;
+    }
+
+    setValidationErrors(prev => ({
+      ...prev,
+      [fieldName]: result.error || ''
+    }));
+
+    return result.valid;
+  };
+
   const validateForm = () => {
     const errors = {};
     
-    if (!formData.email.trim()) {
-      errors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = 'Please enter a valid email address';
-    }
+    const emailResult = validateEmail(formData.email);
+    if (!emailResult.valid) errors.email = emailResult.error;
     
-    if (!formData.password) {
-      errors.password = 'Password is required';
-    }
+    const passwordResult = validateRequired(formData.password);
+    if (!passwordResult.valid) errors.password = passwordResult.error;
     
     setValidationErrors(errors);
+    setFieldTouched({ email: true, password: true });
+    
     return Object.keys(errors).length === 0;
   };
 
@@ -89,13 +121,14 @@ const LoginForm = ({ onSwitchToRegister, onClose }) => {
         )}
         
         <div className="form-group">
-          <label htmlFor="email">Email Address</label>
+          <label htmlFor="email">Email Address *</label>
           <input
-            type="email"
+            type="text"
             id="email"
             name="email"
             value={formData.email}
             onChange={handleInputChange}
+            onBlur={handleBlur}
             className={validationErrors.email ? 'error' : ''}
             placeholder="Enter your email"
             autoComplete="email"
@@ -107,13 +140,14 @@ const LoginForm = ({ onSwitchToRegister, onClose }) => {
         </div>
         
         <div className="form-group">
-          <label htmlFor="password">Password</label>
+          <label htmlFor="password">Password *</label>
           <input
             type="password"
             id="password"
             name="password"
             value={formData.password}
             onChange={handleInputChange}
+            onBlur={handleBlur}
             className={validationErrors.password ? 'error' : ''}
             placeholder="Enter your password"
             autoComplete="current-password"

@@ -17,11 +17,8 @@ export async function swapSolForFc(wallet, userId, amountSol) {
     const solSignature = await sendSolToTreasury(wallet, amountSol);
     console.log('SOL sent to treasury:', solSignature);
 
-    // Step 2: Calculate FC amount (conversion rate from env or default)
-    const fcPerSol = Number(import.meta.env.VITE_FC_PER_SOL) || 100;
-    const amountFc = amountSol * fcPerSol;
-
-    // Step 3: Call Supabase edge function to update wallet balance
+    // Step 2: Call Supabase edge function to update wallet balance
+    // The edge function will calculate FC amount based on SOL (1 SOL = 100 FC)
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -34,8 +31,8 @@ export async function swapSolForFc(wallet, userId, amountSol) {
       body: JSON.stringify({
         userId,
         amountSol,
-        amountFc,
-        txSignature: solSignature
+        txSignature: solSignature,
+        purchaseType: 'sol'
       })
     });
 
@@ -48,8 +45,8 @@ export async function swapSolForFc(wallet, userId, amountSol) {
     return {
       success: true,
       solSignature,
-      amountFc,
-      newBalance: result.newBalance
+      amountFc: result.amountFc,
+      newBalance: result.wallet?.balance_fc
     };
 
   } catch (error) {

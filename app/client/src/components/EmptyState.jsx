@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const EmptyState = ({ 
   title = 'No results found', 
@@ -35,11 +36,11 @@ const EmptyState = ({
       );
     }
     
-    // If action is an object with href (Link)
+    // If action is an object with href (use Link for client-side navigation)
     if (action.href && action.label) {
       return (
-        <a 
-          href={action.href}
+        <Link 
+          to={action.href}
           style={{
             display: 'inline-block',
             padding: '12px 24px',
@@ -52,7 +53,7 @@ const EmptyState = ({
           }}
         >
           {action.label}
-        </a>
+        </Link>
       );
     }
     

@@ -9,28 +9,6 @@ const Header = () => {
   const { user, profile, logout, validateSession } = useAuth();
   const location = useLocation();
 
-  // Fix 6: Optimize session check with idle detection
-  useEffect(() => {
-    if (!user) return;
-    
-    const sessionCheck = setInterval(async () => {
-      // Skip check if page is hidden
-      if (document.hidden) return;
-      
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          console.warn('[Header] No session, refreshing...');
-          await supabase.auth.refreshSession();
-        }
-      } catch (err) {
-        console.warn('[Header] Session check failed:', err?.message);
-      }
-    }, 15 * 60 * 1000); // Increase to 15 minutes
-    
-    return () => clearInterval(sessionCheck);
-  }, [user]);
-
   const isActiveLink = (path) => {
     if (path === '/') {
       return location.pathname === '/';

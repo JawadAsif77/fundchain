@@ -3,6 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext.jsx';
 import { kycApi } from '../lib/api.js';
 import { supabase } from '../lib/supabase.js';
+import {
+  validateName,
+  validateEmail,
+  validatePhone,
+  validateRequired,
+  sanitizeInput
+} from '../utils/validation';
 
 const KYCForm = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -11,6 +18,8 @@ const KYCForm = () => {
   const [statusMessage, setStatusMessage] = useState('');
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false); // Track if updating existing KYC
+  const [validationErrors, setValidationErrors] = useState({});
+  const [fieldTouched, setFieldTouched] = useState({});
   const navigate = useNavigate();
   const { user, refreshProfile } = useAuth();
 
@@ -117,10 +126,86 @@ const KYCForm = () => {
   });
 
   const handleInputChange = (field, value) => {
+    // Apply input filtering based on field type
+    let filteredValue = value;
+    switch (field) {
+      case 'legal_name':
+        filteredValue = sanitizeInput.name(value);
+        break;
+      case 'phone':
+        filteredValue = sanitizeInput.phone(value);
+        break;
+      case 'legal_email':
+      case 'business_email':
+        filteredValue = sanitizeInput.email(value);
+        break;
+      case 'postal_code':
+        filteredValue = sanitizeInput.alphaNumeric(value);
+        break;
+      case 'city':
+      case 'state':
+      case 'country':
+        filteredValue = sanitizeInput.name(value);
+        break;
+      default:
+        break;
+    }
+
     setFormData(prev => ({
       ...prev,
-      [field]: value
+      [field]: filteredValue
     }));
+
+    // Clear validation error when user types
+    if (validationErrors[field]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleBlur = (field, value) => {
+    setFieldTouched(prev => ({ ...prev, [field]: true }));
+    validateField(field, value);
+  };
+
+  const validateField = (fieldName, value) => {
+    let result = { valid: true, error: null };
+
+    switch (fieldName) {
+      case 'legal_name':
+        result = validateName(value);
+        break;
+      case 'phone':
+        result = validatePhone(value);
+        break;
+      case 'legal_email':
+      case 'business_email':
+        if (value) {
+          result = validateEmail(value);
+        }
+        break;
+      case 'address_line1':
+      case 'city':
+      case 'state':
+      case 'postal_code':
+      case 'country':
+        result = validateRequired(value);
+        break;
+      default:
+        break;
+    }
+
+    if (!result.valid) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [fieldName]: result.error
+      }));
+    }
+
+    return result.valid;
   };
 
   const handleFileChange = (field, file) => {
@@ -327,15 +412,25 @@ const KYCForm = () => {
             type="text"
             value={formData.legal_name}
             onChange={(e) => handleInputChange('legal_name', e.target.value)}
+            onBlur={(e) => handleBlur('legal_name', e.target.value)}
+            maxLength={50}
             style={{
               width: '100%',
               padding: '12px',
-              border: '1px solid #d1d5db',
+              border: validationErrors.legal_name ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="Your full legal name as on government ID"
           />
+          {validationErrors.legal_name && (
+            <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              {validationErrors.legal_name}
+            </span>
+          )}
+          <small style={{ color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '2px' }}>
+            Letters, spaces, hyphens, and apostrophes only
+          </small>
         </div>
 
         <div>
@@ -346,15 +441,25 @@ const KYCForm = () => {
             type="tel"
             value={formData.phone}
             onChange={(e) => handleInputChange('phone', e.target.value)}
+            onBlur={(e) => handleBlur('phone', e.target.value)}
+            maxLength={15}
             style={{
               width: '100%',
               padding: '12px',
-              border: '1px solid #d1d5db',
+              border: validationErrors.phone ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="+1 (555) 123-4567"
           />
+          {validationErrors.phone && (
+            <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              {validationErrors.phone}
+            </span>
+          )}
+          <small style={{ color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '2px' }}>
+            Numbers, spaces, dashes, and + only
+          </small>
         </div>
 
         <div>
@@ -362,18 +467,24 @@ const KYCForm = () => {
             Legal Email Address *
           </label>
           <input
-            type="email"
+            type="text"
             value={formData.legal_email}
             onChange={(e) => handleInputChange('legal_email', e.target.value)}
+            onBlur={(e) => handleBlur('legal_email', e.target.value)}
             style={{
               width: '100%',
               padding: '12px',
-              border: '1px solid #d1d5db',
+              border: validationErrors.legal_email ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="your@email.com"
           />
+          {validationErrors.legal_email && (
+            <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              {validationErrors.legal_email}
+            </span>
+          )}
         </div>
 
         <div>
@@ -381,18 +492,24 @@ const KYCForm = () => {
             Business Email (Optional)
           </label>
           <input
-            type="email"
+            type="text"
             value={formData.business_email}
             onChange={(e) => handleInputChange('business_email', e.target.value)}
+            onBlur={(e) => handleBlur('business_email', e.target.value)}
             style={{
               width: '100%',
               padding: '12px',
-              border: '1px solid #d1d5db',
+              border: validationErrors.business_email ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="business@company.com"
           />
+          {validationErrors.business_email && (
+            <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              {validationErrors.business_email}
+            </span>
+          )}
         </div>
 
         <div>
@@ -433,15 +550,21 @@ const KYCForm = () => {
             type="text"
             value={formData.address_line1}
             onChange={(e) => handleInputChange('address_line1', e.target.value)}
+            onBlur={(e) => handleBlur('address_line1', e.target.value)}
             style={{
               width: '100%',
               padding: '12px',
-              border: '1px solid #d1d5db',
+              border: validationErrors.address_line1 ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="Street address"
           />
+          {validationErrors.address_line1 && (
+            <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              {validationErrors.address_line1}
+            </span>
+          )}
         </div>
 
         <div>
@@ -472,15 +595,21 @@ const KYCForm = () => {
               type="text"
               value={formData.city}
               onChange={(e) => handleInputChange('city', e.target.value)}
+              onBlur={(e) => handleBlur('city', e.target.value)}
               style={{
                 width: '100%',
                 padding: '12px',
-                border: '1px solid #d1d5db',
+                border: validationErrors.city ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '8px',
                 fontSize: '14px'
               }}
               placeholder="City"
             />
+            {validationErrors.city && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                {validationErrors.city}
+              </span>
+            )}
           </div>
 
           <div>
@@ -491,15 +620,21 @@ const KYCForm = () => {
               type="text"
               value={formData.state}
               onChange={(e) => handleInputChange('state', e.target.value)}
+              onBlur={(e) => handleBlur('state', e.target.value)}
               style={{
                 width: '100%',
                 padding: '12px',
-                border: '1px solid #d1d5db',
+                border: validationErrors.state ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '8px',
                 fontSize: '14px'
               }}
               placeholder="State/Province"
             />
+            {validationErrors.state && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                {validationErrors.state}
+              </span>
+            )}
           </div>
         </div>
 
@@ -512,15 +647,25 @@ const KYCForm = () => {
               type="text"
               value={formData.postal_code}
               onChange={(e) => handleInputChange('postal_code', e.target.value)}
+              onBlur={(e) => handleBlur('postal_code', e.target.value)}
+              maxLength={10}
               style={{
                 width: '100%',
                 padding: '12px',
-                border: '1px solid #d1d5db',
+                border: validationErrors.postal_code ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '8px',
                 fontSize: '14px'
               }}
               placeholder="Postal/ZIP code"
             />
+            {validationErrors.postal_code && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                {validationErrors.postal_code}
+              </span>
+            )}
+            <small style={{ color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '2px' }}>
+              Letters and numbers only
+            </small>
           </div>
 
           <div>
@@ -530,10 +675,11 @@ const KYCForm = () => {
             <select
               value={formData.country}
               onChange={(e) => handleInputChange('country', e.target.value)}
+              onBlur={(e) => handleBlur('country', e.target.value)}
               style={{
                 width: '100%',
                 padding: '12px',
-                border: '1px solid #d1d5db',
+                border: validationErrors.country ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '8px',
                 fontSize: '14px'
               }}
@@ -549,6 +695,11 @@ const KYCForm = () => {
               <option value="IN">India</option>
               <option value="other">Other</option>
             </select>
+            {validationErrors.country && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                {validationErrors.country}
+              </span>
+            )}
           </div>
         </div>
       </div>

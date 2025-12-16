@@ -23,7 +23,7 @@ export async function getWallet(userId) {
  * First converts USD to FC, then calls buy-fc-tokens
  */
 export async function buyTokens(userId, usdAmount) {
-  // Step 1: Convert USD to FC
+  // Step 1: Convert USD to FC (1 USD = 1 FC)
   const conversionResponse = await fetch(`${functionsBase}exchange-usd-to-fc`, {
     method: 'POST',
     headers,
@@ -33,10 +33,19 @@ export async function buyTokens(userId, usdAmount) {
   const fcAmount = conversionData.fc;
 
   // Step 2: Buy FC tokens
+  // For USD purchases, pass the FC amount directly (already converted)
+  const dummyTxSignature = `demo_usd_tx_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  
   const response = await fetch(`${functionsBase}buy-fc-tokens`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ userId, amountUsd: usdAmount })
+    body: JSON.stringify({ 
+      userId, 
+      amountFc: fcAmount,
+      usdAmount: usdAmount,
+      txSignature: dummyTxSignature,
+      purchaseType: 'usd'
+    })
   });
   return await response.json();
 }

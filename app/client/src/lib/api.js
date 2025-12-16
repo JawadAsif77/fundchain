@@ -62,10 +62,24 @@ export const withTimeoutPublic = async (promise, timeoutMs = 10000, retries = 2)
   }
 };
 
+// Connection pool management (Fix 7)
+let activeConnections = 0;
+const MAX_CONNECTIONS = 40;
+
+const waitForConnection = async () => {
+  while (activeConnections >= MAX_CONNECTIONS) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  activeConnections++;
+};
+
+const releaseConnection = () => {
+  activeConnections = Math.max(0, activeConnections - 1);
+};
+
 // Update withTimeout to include session check (for authenticated endpoints)
 export const withTimeout = async (promise, timeoutMs = 10000, retries = 2) => {
-  // FIRST: Ensure session is valid
-  await ensureValidSession();
+  await waitForConnection();
   
   let lastError;
   
@@ -75,24 +89,24 @@ export const withTimeout = async (promise, timeoutMs = 10000, retries = 2) => {
         setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
       );
       
-      return await Promise.race([promise, timeoutPromise]);
+      const result = await Promise.race([promise, timeoutPromise]);
+      releaseConnection();
+      return result;
     } catch (error) {
       lastError = error;
       
-      // If it's an auth error, refresh session and retry
-      if (error.message?.includes('JWT') || error.message?.includes('auth')) {
-        console.log('[API] Auth error detected, refreshing session...');
-        try {
-          await ensureValidSession();
-        } catch (authError) {
-          throw authError;
-        }
+      // Only validate session on auth errors (Fix 1)
+      if (error.message?.includes('JWT') || error.message?.includes('auth') || 
+          error.code === '401' || error.code === 'PGRST301') {
+        console.log('[API] Auth error, refreshing session once');
+        await ensureValidSession();
       }
       
       if (!error.message?.includes('timeout') && 
           !error.message?.includes('connection') &&
           !error.message?.includes('closed') &&
           !error.message?.includes('JWT')) {
+        releaseConnection();
         throw error;
       }
       
@@ -103,6 +117,7 @@ export const withTimeout = async (promise, timeoutMs = 10000, retries = 2) => {
     }
   }
   
+  releaseConnection();
   throw lastError;
 };
 
@@ -111,6 +126,11 @@ const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Fix 3: Request deduplication cache
 const requestCache = new Map();
+
+export const clearRequestCache = () => {
+  requestCache.clear();
+  console.log('[API] Request cache cleared');
+};
 
 const dedupeRequest = async (key, requestFn, ttl = 3000) => {
   if (requestCache.has(key)) {
@@ -227,6 +247,35 @@ export const userApi = {
     }
   },
 
+  // Check if username is available
+  async checkUsernameAvailability(username) {
+    try {
+      if (!username || username.trim().length === 0) {
+        return { available: false, error: 'Username is required' };
+      }
+
+      const { data, error } = await withTimeoutPublic(
+        supabase
+          .from('users')
+          .select('username')
+          .eq('username', username.trim())
+          .maybeSingle(),
+        5000,
+        1
+      );
+
+      if (error) {
+        console.error('Username check error:', error);
+        return { available: false, error: 'Error checking username availability' };
+      }
+
+      return { available: !data, error: null };
+    } catch (error) {
+      console.error('Username check failed:', error);
+      return { available: false, error: 'Error checking username availability' };
+    }
+  },
+
   // Create new user record
   async createUser(userData) {
     try {
@@ -258,6 +307,23 @@ export const userApi = {
       }
 
       console.log('✅ User created successfully:', data);
+      
+      // Auto-create wallet for new user
+      try {
+        console.log('💰 Creating wallet for new user:', data.id);
+        const { data: walletData, error: walletError } = await supabase.functions.invoke('create-user-wallet', {
+          body: { userId: data.id }
+        });
+        
+        if (walletError) {
+          console.error('⚠️ Wallet creation failed:', walletError);
+        } else {
+          console.log('✅ Wallet created successfully:', walletData);
+        }
+      } catch (walletErr) {
+        console.warn('⚠️ Wallet auto-creation error (non-fatal):', walletErr);
+      }
+      
       return { data, error: null };
     } catch (error) {
       console.error('💥 Create user error:', error);
@@ -610,12 +676,10 @@ export const campaignApi = {
   // Get all campaigns with filters
   async getCampaigns(filters = {}) {
     try {
+      // Simplified query without join for better performance
       let query = supabase
         .from('campaigns')
-        .select(`
-          *,
-          categories(name, icon)
-        `);
+        .select('*');
 
       // Apply status filter - default to active if not specified
       const status = filters.status || 'active';
@@ -635,8 +699,8 @@ export const campaignApi = {
 
       query = query.order('created_at', { ascending: false });
 
-      // Use public timeout for guest access
-      const { data, error } = await withTimeoutPublic(query, 15000);
+      // Use public timeout for guest access - increased timeout, no retries
+      const { data, error } = await withTimeoutPublic(query, 30000, 0);
 
       if (error) {
         console.error('❌ Failed to fetch campaigns:', error);

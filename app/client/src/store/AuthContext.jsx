@@ -8,7 +8,7 @@ import React, {
   useRef
 } from 'react';
 import { auth, db, supabase } from '../lib/supabase.js';
-import { getUserRoleStatus, userApi } from '../lib/api.js';
+import { getUserRoleStatus, userApi, clearRequestCache } from '../lib/api.js';
 import { getWallet } from '../services/walletService.js';
 
 const AuthContext = createContext(null);
@@ -110,10 +110,20 @@ export const AuthProvider = ({ children }) => {
   const profileLoadRef = useRef(null);
   const roleLoadRef = useRef(null);
   const logoutRef = useRef(false);
+  const walletRefreshTimeRef = useRef(0);
 
   // Load wallet data
   const refreshWallet = useCallback(async (userId) => {
     if (!userId) return;
+    
+    // Throttle: only allow refresh every 10 seconds
+    const now = Date.now();
+    const lastRefresh = walletRefreshTimeRef.current || 0;
+    if (now - lastRefresh < 10000) {
+      console.log('[Auth] Wallet refresh throttled');
+      return;
+    }
+    walletRefreshTimeRef.current = now;
     
     try {
       console.log('[Auth] Loading wallet for user:', userId);
@@ -176,14 +186,31 @@ export const AuthProvider = ({ children }) => {
               is_verified: 'no'
             };
 
-            const result = await userApi.createUser(newProfile);
-            if (result?.error) {
-              console.error('[Auth] createUser error:', result.error);
-              return null;
-            }
+            let created;
+            try {
+              const result = await userApi.createUser(newProfile);
+              if (result?.error) {
+                console.error('[Auth] createUser error:', result.error);
+                return null;
+              }
 
-            const created = result.data || result;
-            setProfile(created);
+              created = result.data || result;
+              setProfile(created);
+            } catch (createError) {
+              // If user already exists (duplicate), try fetching again
+              if (createError.message?.includes('duplicate') || createError.message?.includes('unique constraint')) {
+                console.warn('[Auth] User already exists, fetching existing profile');
+                const { data: existingData } = await db.users.getProfile(userId);
+                if (existingData) {
+                  setProfile(existingData);
+                  created = existingData;
+                } else {
+                  throw createError;
+                }
+              } else {
+                throw createError;
+              }
+            }
 
             /* ⭐ Create wallet AFTER profile creation */
             try {
@@ -344,13 +371,19 @@ export const AuthProvider = ({ children }) => {
         } catch (e) {
           console.error('[Auth] Session init error:', e);
           
-          // On error, clean everything
-          clearAllAuthData();
-          
-          if (mounted) {
-            setUser(null);
-            setProfile(null);
-            setRoleStatus(null);
+          // Don't logout on timeout - user might already be logged in
+          // Only clear if it's an actual auth error, not a timeout
+          if (e.message?.includes('JWT') || e.message?.includes('invalid') || e.message?.includes('expired')) {
+            console.warn('[Auth] Auth error detected, clearing session');
+            clearAllAuthData();
+            
+            if (mounted) {
+              setUser(null);
+              setProfile(null);
+              setRoleStatus(null);
+            }
+          } else {
+            console.warn('[Auth] Non-auth error during init, keeping existing session');
           }
         } finally {
           if (mounted) {
@@ -515,6 +548,7 @@ export const AuthProvider = ({ children }) => {
 
     // 2. Clear ALL auth data (always do this, even if signOut failed)
     clearAllAuthData();
+    clearRequestCache();
 
     // 3. Reset ALL state
     setUser(null);
@@ -601,7 +635,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (!user) return;
 
-    // Refresh session every 10 minutes when app is active
+    // Refresh session every 30 minutes when app is active
     const refreshInterval = setInterval(async () => {
       if (document.hidden) return; // Skip if tab is hidden
       
@@ -617,9 +651,44 @@ export const AuthProvider = ({ children }) => {
       } catch (err) {
         console.error('[Auth] Auto-refresh exception:', err);
       }
-    }, 10 * 60 * 1000); // 10 minutes
+    }, 30 * 60 * 1000); // 30 minutes
 
     return () => clearInterval(refreshInterval);
+  }, [user]);
+
+  // Fix 8: Idle state detection
+  useEffect(() => {
+    if (!user) return;
+    
+    let idleTimer;
+    const IDLE_TIME = 5 * 60 * 1000; // 5 minutes
+    
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(async () => {
+        console.log('[Auth] User idle, refreshing session...');
+        try {
+          await supabase.auth.refreshSession();
+        } catch (err) {
+          console.error('[Auth] Idle refresh failed:', err);
+        }
+      }, IDLE_TIME);
+    };
+    
+    // Reset on user activity
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach(event => {
+      document.addEventListener(event, resetIdleTimer);
+    });
+    
+    resetIdleTimer();
+    
+    return () => {
+      clearTimeout(idleTimer);
+      events.forEach(event => {
+        document.removeEventListener(event, resetIdleTimer);
+      });
+    };
   }, [user]);
 
   const value = useMemo(

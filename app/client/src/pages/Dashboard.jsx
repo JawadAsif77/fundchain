@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import CampaignCard from '../components/CampaignCard';
@@ -77,6 +77,7 @@ const Dashboard = () => {
   const [showApprovalBanner, setShowApprovalBanner] = useState(false);
   const [campaignWallets, setCampaignWallets] = useState({});
   const [campaignMilestones, setCampaignMilestones] = useState({});
+  const loadedRef = useRef(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -147,15 +148,14 @@ const Dashboard = () => {
 
   // Data loader for projects / investments
   useEffect(() => {
+    // Only load once per session
+    if (loadedRef.current || authLoading || !user?.id) return;
+    
+    loadedRef.current = true;
     let mounted = true;
     let timeoutId = null;
 
     const loadData = async () => {
-      // Don't load if still authenticating
-      if (authLoading || !user?.id) {
-        return;
-      }
-
       // Set timeout to prevent infinite loading
       timeoutId = setTimeout(() => {
         if (mounted && dataLoading) {
@@ -201,18 +201,16 @@ const Dashboard = () => {
       }
     };
 
-    // Only load once when conditions are met
-    if (!authLoading && user?.id) {
-      loadData();
-    }
+    loadData();
 
     return () => {
       mounted = false;
+      loadedRef.current = false;
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
     };
-  }, [user?.id, role, authLoading]); // MINIMAL dependencies
+  }, [sessionVersion, user?.id]); // Use sessionVersion instead of role
 
   // Refresh data after tab was hidden for a while
   useEffect(() => {

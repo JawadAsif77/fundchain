@@ -37,19 +37,11 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { userId, amountSol, txSignature } = body ?? {};
+    const { userId, amountSol, amountFc, usdAmount, txSignature, purchaseType } = body ?? {};
 
     if (!userId || typeof userId !== "string") {
       return new Response(
         JSON.stringify({ error: "userId is required and must be a string" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const parsedAmountSol = Number(amountSol);
-    if (!parsedAmountSol || parsedAmountSol <= 0) {
-      return new Response(
-        JSON.stringify({ error: "amountSol must be a positive number" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -61,8 +53,41 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Calculate FC to credit
-    const fcAmount = parsedAmountSol * FC_PER_SOL;
+    // Calculate FC to credit based on purchase type
+    let fcAmount: number;
+    let sourceAmount: number;
+    let sourceType: string;
+
+    if (purchaseType === 'usd' && amountFc) {
+      // USD purchase: FC amount is already calculated (1 USD = 1 FC)
+      fcAmount = Number(amountFc);
+      sourceAmount = Number(usdAmount || amountFc);
+      sourceType = 'USD';
+    } else if (amountSol) {
+      // SOL purchase: Convert SOL to FC (1 SOL = 100 FC)
+      const parsedAmountSol = Number(amountSol);
+      if (!parsedAmountSol || parsedAmountSol <= 0) {
+        return new Response(
+          JSON.stringify({ error: "amountSol must be a positive number" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      fcAmount = parsedAmountSol * FC_PER_SOL;
+      sourceAmount = parsedAmountSol;
+      sourceType = 'SOL';
+    } else {
+      return new Response(
+        JSON.stringify({ error: "Either amountFc (for USD) or amountSol (for SOL) is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!fcAmount || fcAmount <= 0) {
+      return new Response(
+        JSON.stringify({ error: "Invalid FC amount calculated" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // 1) Get or create wallet
     const { data: existingWallet, error: walletSelectError } = await supabase
@@ -131,10 +156,12 @@ Deno.serve(async (req) => {
         type: "buy_fc",
         amount_fc: fcAmount,
         metadata: {
-          amountSol: parsedAmountSol,
+          sourceAmount,
+          sourceType,
           txSignature,
-          fcRate: FC_PER_SOL,
-          network: "devnet",
+          fcRate: purchaseType === 'usd' ? 1 : FC_PER_SOL,
+          network: purchaseType === 'usd' ? 'fiat' : 'devnet',
+          purchaseType: purchaseType || 'sol',
         },
       });
 
@@ -147,8 +174,9 @@ Deno.serve(async (req) => {
       JSON.stringify({
         status: "success",
         userId,
-        amountSol: parsedAmountSol,
-        fcAmount,
+        sourceAmount,
+        sourceType,
+        amountFc: fcAmount,
         wallet: {
           balance_fc: wallet.balance_fc,
           locked_fc: wallet.locked_fc,
