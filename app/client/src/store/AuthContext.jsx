@@ -28,65 +28,29 @@ const defaultRoleStatus = {
   kycStatus: 'not_started'
 };
 
-// FIXED: More aggressive cache clearing
+// FIXED: Clean cache clearing that targets Supabase specifically
 const clearAllAuthData = () => {
   if (typeof window === 'undefined') return;
-
-  console.log('🧹 Clearing all auth data...');
+  console.log('🧹 Clearing auth data...');
 
   try {
-    // 1. Clear ALL localStorage (not just specific keys)
-    localStorage.clear();
+    // 1. Clear Supabase and App specific LocalStorage keys
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('sb-') || key.includes('supabase') || key === 'fundchain-auth') {
+        localStorage.removeItem(key);
+      }
+    });
     
-    // 2. Clear sessionStorage
+    // 2. Clear SessionStorage
     sessionStorage.clear();
 
-    // 3. Clear ALL cookies (more aggressive)
-    const cookies = document.cookie.split(';');
-    cookies.forEach(cookie => {
+    // 3. Clear Cookies (Targeted)
+    document.cookie.split(';').forEach(cookie => {
       const name = cookie.split('=')[0].trim();
-      if (!name) return;
-
-      // Clear for all possible domain/path combinations
-      const domains = [
-        '',
-        `domain=${window.location.hostname}`,
-        `domain=.${window.location.hostname}`,
-        'domain=localhost',
-        'domain=.localhost'
-      ];
-
-      const paths = ['/', '/login', '/dashboard', '/profile'];
-
-      domains.forEach(domain => {
-        paths.forEach(path => {
-          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${path}; ${domain}; SameSite=Lax;`;
-          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${path}; ${domain}; SameSite=None; Secure;`;
-        });
-      });
+      if (name.includes('sb-') || name.includes('supabase')) {
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+      }
     });
-
-    // 4. Clear IndexedDB (Supabase uses this)
-    if (window.indexedDB) {
-      indexedDB.databases().then(databases => {
-        databases.forEach(db => {
-          if (db.name && (db.name.includes('supabase') || db.name.includes('sb-'))) {
-            indexedDB.deleteDatabase(db.name);
-          }
-        });
-      }).catch(err => {
-        console.warn('IndexedDB clear failed:', err);
-      });
-    }
-
-    // 5. Clear all caches
-    if ('caches' in window) {
-      caches.keys().then(names => {
-        names.forEach(name => caches.delete(name));
-      }).catch(err => {
-        console.warn('Cache clear failed:', err);
-      });
-    }
 
     console.log('✅ Auth data cleared');
   } catch (e) {
@@ -427,23 +391,33 @@ export const AuthProvider = ({ children }) => {
 
       // Handle signin/signup/user change
       if (session?.user) {
+        // 🛑 STOP THE LOOP: If the user ID matches, do NOTHING.
+        // This prevents the infinite "Memoizing profile" logs you saw.
+        if (user && user.id === session.user.id) {
+            return; 
+        }
+
         const newUser = session.user;
-        const isUserChange = user && user.id !== newUser.id;
+        const isUserChange = !user || user.id !== newUser.id;
 
         if (isUserChange) {
           if (debug) console.log('[Auth] User changed, resetting');
-          setProfile(null);
+          // Only reset these if it's actually a different person
+          setProfile(null); 
           setRoleStatus(null);
           setSessionVersion((v) => v + 1);
         }
 
         setUser(newUser);
 
-        // Only reload profile if needed
+        // Only load profile if we don't have it or user changed
         if (isUserChange || !profile) {
+          // Pass the user object to avoid async race conditions
           const profileData = await loadUserProfile(newUser.id, newUser);
           if (mounted && profileData) {
             await loadUserRoleStatus(newUser.id);
+            // Load wallet if needed
+            await refreshWallet(newUser.id); 
           }
         }
 
@@ -457,28 +431,23 @@ export const AuthProvider = ({ children }) => {
     };
   }, []); // Empty dependencies - only run once
 
-  // Fix 1: Add session recovery for idle state
+  // FIXED: Passive visibility check
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (!document.hidden && user) {
-        console.log('[Auth] Tab became visible, refreshing session...');
-        
-        try {
-          // Verify session is still valid
-          const { data: { session }, error } = await supabase.auth.getSession();
-          
-          if (error || !session) {
-            console.warn('[Auth] Session invalid after idle, refreshing...');
-            await supabase.auth.refreshSession();
-          }
-        } catch (e) {
-          console.error('[Auth] Session refresh failed:', e);
+        // Just check if we have a session locally. 
+        // Supabase auto-refresh handles the rest.
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+           console.log('[Auth] Session missing, attempting recovery...');
+           const { error } = await supabase.auth.refreshSession();
+           // Only logout if recovery explicitly fails
+           if (error) logout(); 
         }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
@@ -631,65 +600,7 @@ export const AuthProvider = ({ children }) => {
     return true;
   }, [user, roleStatus]);
 
-  // Add this new useEffect for automatic session refresh
-  useEffect(() => {
-    if (!user) return;
 
-    // Refresh session every 30 minutes when app is active
-    const refreshInterval = setInterval(async () => {
-      if (document.hidden) return; // Skip if tab is hidden
-      
-      try {
-        console.log('[Auth] Automatic session refresh...');
-        const { error } = await supabase.auth.refreshSession();
-        
-        if (error) {
-          console.error('[Auth] Auto-refresh failed:', error);
-        } else {
-          console.log('[Auth] Session refreshed successfully');
-        }
-      } catch (err) {
-        console.error('[Auth] Auto-refresh exception:', err);
-      }
-    }, 30 * 60 * 1000); // 30 minutes
-
-    return () => clearInterval(refreshInterval);
-  }, [user]);
-
-  // Fix 8: Idle state detection
-  useEffect(() => {
-    if (!user) return;
-    
-    let idleTimer;
-    const IDLE_TIME = 5 * 60 * 1000; // 5 minutes
-    
-    const resetIdleTimer = () => {
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(async () => {
-        console.log('[Auth] User idle, refreshing session...');
-        try {
-          await supabase.auth.refreshSession();
-        } catch (err) {
-          console.error('[Auth] Idle refresh failed:', err);
-        }
-      }, IDLE_TIME);
-    };
-    
-    // Reset on user activity
-    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
-    events.forEach(event => {
-      document.addEventListener(event, resetIdleTimer);
-    });
-    
-    resetIdleTimer();
-    
-    return () => {
-      clearTimeout(idleTimer);
-      events.forEach(event => {
-        document.removeEventListener(event, resetIdleTimer);
-      });
-    };
-  }, [user]);
 
   const value = useMemo(
     () => ({

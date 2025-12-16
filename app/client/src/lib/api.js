@@ -62,24 +62,9 @@ export const withTimeoutPublic = async (promise, timeoutMs = 10000, retries = 2)
   }
 };
 
-// Connection pool management (Fix 7)
-let activeConnections = 0;
-const MAX_CONNECTIONS = 40;
-
-const waitForConnection = async () => {
-  while (activeConnections >= MAX_CONNECTIONS) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-  activeConnections++;
-};
-
-const releaseConnection = () => {
-  activeConnections = Math.max(0, activeConnections - 1);
-};
-
 // Update withTimeout to include session check (for authenticated endpoints)
-export const withTimeout = async (promise, timeoutMs = 10000, retries = 2) => {
-  await waitForConnection();
+export const withTimeout = async (promise, timeoutMs = 15000, retries = 2) => {
+  // Removed waitForConnection() - Browser handles this automatically
   
   let lastError;
   
@@ -89,27 +74,28 @@ export const withTimeout = async (promise, timeoutMs = 10000, retries = 2) => {
         setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
       );
       
+      // Race directly without blocking
       const result = await Promise.race([promise, timeoutPromise]);
-      releaseConnection();
       return result;
     } catch (error) {
       lastError = error;
       
-      // Only validate session on auth errors (Fix 1)
+      // Keep your existing auth error check
       if (error.message?.includes('JWT') || error.message?.includes('auth') || 
           error.code === '401' || error.code === 'PGRST301') {
         console.log('[API] Auth error, refreshing session once');
         await ensureValidSession();
       }
       
+      // If it's not a timeout/connection error, throw immediately
       if (!error.message?.includes('timeout') && 
           !error.message?.includes('connection') &&
           !error.message?.includes('closed') &&
           !error.message?.includes('JWT')) {
-        releaseConnection();
         throw error;
       }
       
+      // Retry delay
       if (i < retries) {
         console.log(`[API] Retry ${i + 1}/${retries} after error:`, error.message);
         await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
@@ -117,7 +103,6 @@ export const withTimeout = async (promise, timeoutMs = 10000, retries = 2) => {
     }
   }
   
-  releaseConnection();
   throw lastError;
 };
 

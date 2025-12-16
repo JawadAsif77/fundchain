@@ -187,6 +187,9 @@ const Dashboard = () => {
       } catch (error) {
         console.error('[Dashboard] Load error:', error);
         
+        // Allow the app to try fetching again if it failed!
+        loadedRef.current = false;
+        
         // If it's an auth error, redirect to login
         if (error.message?.includes('Authentication expired')) {
           navigate('/login', { replace: true });
