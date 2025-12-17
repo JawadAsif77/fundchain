@@ -1,75 +1,78 @@
-// Frontend service layer to call Supabase Edge Functions for wallet operations
-const functionsBase = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/`;
+import { supabase } from '../lib/supabase';
 
-const headers = {
-  'Content-Type': 'application/json',
-  'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+// Helper to handle the response from Supabase invoke
+const handleResponse = (data, error) => {
+  if (error) {
+    const msg = error.context?.message || error.message || 'Unknown error';
+    console.error('Wallet Service Error:', msg);
+    return { success: false, error: msg };
+  }
+  return { success: true, data };
 };
 
 /**
  * Get wallet balance for a user
  */
 export async function getWallet(userId) {
-  const response = await fetch(`${functionsBase}get-wallet`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ userId })
-  });
-  return await response.json();
+  try {
+    const { data, error } = await supabase.functions.invoke('get-wallet', {
+      body: { userId }
+    });
+    
+    if (error) return handleResponse(null, error);
+    return { success: true, ...data };
+  } catch (err) {
+    return { success: false, error: err.message, balance: 0 };
+  }
 }
 
 /**
- * Buy FC tokens with USD
- * First converts USD to FC, then calls buy-fc-tokens
+ * Buy FC tokens with USD (Dummy/Test)
+ * Uses Supabase invoke to automatically handle Authentication
  */
 export async function buyTokens(userId, usdAmount) {
-  // Step 1: Convert USD to FC (1 USD = 1 FC)
-  const conversionResponse = await fetch(`${functionsBase}exchange-usd-to-fc`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ usd: usdAmount })
-  });
-  const conversionData = await conversionResponse.json();
-  const fcAmount = conversionData.fc;
+  try {
+    const { data, error } = await supabase.functions.invoke('exchange-usd-to-fc', {
+      body: { amountUsd: Number(usdAmount) }
+    });
 
-  // Step 2: Buy FC tokens
-  // For USD purchases, pass the FC amount directly (already converted)
-  const dummyTxSignature = `demo_usd_tx_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-  
-  const response = await fetch(`${functionsBase}buy-fc-tokens`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ 
-      userId, 
-      amountFc: fcAmount,
-      usdAmount: usdAmount,
-      txSignature: dummyTxSignature,
-      purchaseType: 'usd'
-    })
-  });
-  return await response.json();
+    if (error) return handleResponse(null, error);
+    return { success: true, ...data };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 }
 
 /**
- * Get transaction history for a user
+ * Helper to preview conversion rate
+ */
+export async function exchangeUsdToFc(usdAmount) {
+  return new Promise((resolve) => {
+    resolve({ 
+      fc: Number(usdAmount), 
+      rate: 1, 
+      fee: 0 
+    });
+  });
+}
+
+/**
+ * Get transaction history
+ * FIXED: Always returns { success: true, data: [] } structure
  */
 export async function getTransactions(userId) {
-  const response = await fetch(`${functionsBase}get-transactions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ userId })
-  });
-  return await response.json();
-}
+  try {
+    const { data, error } = await supabase.functions.invoke('get-transactions', {
+      body: { userId }
+    });
 
-/**
- * Convert USD to FC tokens (preview/calculation only)
- */
-export async function exchangeUsdToFc(usd) {
-  const response = await fetch(`${functionsBase}exchange-usd-to-fc`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ usd })
-  });
-  return await response.json();
+    if (error) return { success: false, data: [], error: error.message };
+    
+    // Ensure we always return an array in 'data'
+    const txArray = Array.isArray(data) ? data : (data?.data || []);
+    return { success: true, data: txArray };
+  } catch (err) {
+    console.error('Service tx error:', err);
+    return { success: false, data: [], error: err.message };
+  }
 }
