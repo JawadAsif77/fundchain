@@ -13,16 +13,22 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // 1. FIXED: Handle potential null Authorization header
+    // 1. Get Authorization header
     const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Authorization header is required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
     
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader ?? '' } } }
+      { global: { headers: { Authorization: authHeader } } }
     )
 
-    // 2. FIXED: Safe JSON parsing
+    // 2. Parse and validate request
     const { amountUsd } = await req.json()
 
     if (!amountUsd || amountUsd <= 0) {
@@ -35,51 +41,86 @@ Deno.serve(async (req) => {
     const exchangeRate = 1 
     const tokenAmount = amountUsd * exchangeRate
 
+    // 3. Get authenticated user
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
-    if (userError || !user) throw new Error('User not authenticated')
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'User not authenticated' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
 
-    // 3. Update User Balance
-    const { data: profile } = await supabaseClient
-      .from('users')
-      .select('preferences')
-      .eq('id', user.id)
+    // 4. Check if wallet exists
+    const { data: existingWallet, error: walletError } = await supabaseClient
+      .from('wallets')
+      .select('balance_fc, locked_fc')
+      .eq('user_id', user.id)
       .single()
 
-    const currentBalance = Number(profile?.preferences?.wallet_balance || 0)
-    const newBalance = currentBalance + tokenAmount
+    let newBalance = tokenAmount
+    
+    if (walletError && walletError.code === 'PGRST116') {
+      // Wallet doesn't exist, create it
+      const { error: insertError } = await supabaseClient
+        .from('wallets')
+        .insert({
+          user_id: user.id,
+          balance_fc: tokenAmount,
+          locked_fc: 0,
+          updated_at: new Date().toISOString()
+        })
+      
+      if (insertError) throw new Error(`Failed to create wallet: ${insertError.message}`)
+    } else if (walletError) {
+      throw new Error(`Failed to fetch wallet: ${walletError.message}`)
+    } else {
+      // Wallet exists, update balance
+      newBalance = Number(existingWallet.balance_fc || 0) + tokenAmount
+      
+      const { error: updateError } = await supabaseClient
+        .from('wallets')
+        .update({
+          balance_fc: newBalance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id)
+      
+      if (updateError) throw new Error(`Failed to update wallet: ${updateError.message}`)
+    }
 
-    const { error: updateError } = await supabaseClient
-      .from('users')
-      .update({
-        preferences: { ...profile?.preferences, wallet_balance: newBalance },
-        updated_at: new Date().toISOString()
+    // 5. Log Transaction
+    const { error: txError } = await supabaseClient
+      .from('token_transactions')
+      .insert({
+        user_id: user.id,
+        amount_fc: tokenAmount,
+        type: 'buy_fc',
+        metadata: {
+          amount_usd: amountUsd,
+          exchange_rate: exchangeRate,
+          method: 'test_purchase',
+          description: `Bought ${tokenAmount} FC with ${amountUsd} USD (Test)`
+        }
       })
-      .eq('id', user.id)
 
-    if (updateError) throw updateError
-
-    // 4. Log Transaction
-    await supabaseClient.from('token_transactions').insert({
-      user_id: user.id,
-      amount: tokenAmount,
-      token_symbol: 'FC',
-      transaction_type: 'buy',
-      status: 'completed',
-      description: `Bought ${tokenAmount} FC with ${amountUsd} USD (Dummy)`
-    })
+    if (txError) {
+      console.error('Transaction log error:', txError)
+      // Don't fail the whole operation if logging fails
+    }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: `Successfully bought ${tokenAmount} FC`,
-        newBalance 
+        newBalance,
+        balanceFc: newBalance
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
 
   } catch (error) {
-    // 5. FIXED: TypeScript "Object is of type 'unknown'" error
     const message = error instanceof Error ? error.message : 'Unknown error occurred'
+    console.error('Exchange USD to FC error:', message)
     
     return new Response(
       JSON.stringify({ error: message }),

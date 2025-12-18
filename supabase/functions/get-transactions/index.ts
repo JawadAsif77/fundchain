@@ -47,11 +47,23 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to fetch transactions: ${transactionsError.message}`)
     }
 
+    // Transform data to match frontend expectations
+    const transformedTransactions = (transactions || []).map(tx => ({
+      id: tx.id,
+      transaction_type: tx.type,
+      amount: tx.amount_fc,
+      token_symbol: 'FC',
+      status: 'completed',
+      description: tx.metadata?.description || '',
+      created_at: tx.created_at,
+      metadata: tx.metadata
+    }))
+
     // Return transactions
     return new Response(
       JSON.stringify({ 
         status: 'success',
-        transactions: transactions || []
+        transactions: transformedTransactions
       }),
       { 
         status: 200,

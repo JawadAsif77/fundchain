@@ -15,8 +15,17 @@ const handleResponse = (data, error) => {
  */
 export async function getWallet(userId) {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      return { success: false, error: 'No active session' };
+    }
+
     const { data, error } = await supabase.functions.invoke('get-wallet', {
-      body: { userId }
+      body: { userId },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`
+      }
     });
     
     if (error) return handleResponse(null, error);
@@ -32,8 +41,18 @@ export async function getWallet(userId) {
  */
 export async function buyTokens(userId, usdAmount) {
   try {
+    // Get the current session to ensure we have a valid token
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      return { success: false, error: 'No active session. Please login again.' };
+    }
+
     const { data, error } = await supabase.functions.invoke('exchange-usd-to-fc', {
-      body: { amountUsd: Number(usdAmount) }
+      body: { amountUsd: Number(usdAmount) },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`
+      }
     });
 
     if (error) return handleResponse(null, error);
@@ -62,14 +81,23 @@ export async function exchangeUsdToFc(usdAmount) {
  */
 export async function getTransactions(userId) {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      return { success: false, data: [], error: 'No active session' };
+    }
+
     const { data, error } = await supabase.functions.invoke('get-transactions', {
-      body: { userId }
+      body: { userId },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`
+      }
     });
 
     if (error) return { success: false, data: [], error: error.message };
     
-    // Ensure we always return an array in 'data'
-    const txArray = Array.isArray(data) ? data : (data?.data || []);
+    // Handle the response structure from get-transactions
+    const txArray = data?.transactions || data?.data || (Array.isArray(data) ? data : []);
     return { success: true, data: txArray };
   } catch (err) {
     console.error('Service tx error:', err);
