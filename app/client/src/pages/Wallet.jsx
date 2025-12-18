@@ -81,14 +81,23 @@ const Wallet = () => {
     try {
       const result = await buyTokens(userId, Number(buyAmount));
 
+      // Add this logging
+      console.log('Buy tokens result:', result);
+
       if (result.success) {
         setSuccess(`Successfully bought ${Number(buyAmount).toLocaleString()} FC!`);
         setBuyAmount('');
         setPreviewFc(null);
         await loadWalletData(); 
       } else {
-        const errMsg = typeof result.error === 'object' ? JSON.stringify(result.error) : result.error;
-        setError(errMsg || 'Transaction failed');
+        // Better error formatting
+        let errMsg = 'Transaction failed';
+        if (typeof result.error === 'object') {
+          errMsg = result.error.message || JSON.stringify(result.error);
+        } else if (result.error) {
+          errMsg = result.error;
+        }
+        setError(errMsg);
       }
     } catch (err) {
       setError(err.message || 'An unexpected error occurred');
@@ -212,14 +221,14 @@ const Wallet = () => {
                         textTransform: 'capitalize',
                         padding: '2px 6px',
                         borderRadius: '4px',
-                        background: tx.transaction_type === 'buy' ? '#d1fae5' : '#fee2e2',
-                        color: tx.transaction_type === 'buy' ? '#065f46' : '#991b1b'
+                        background: tx.transaction_type?.includes('buy') ? '#d1fae5' : '#fee2e2',
+                        color: tx.transaction_type?.includes('buy') ? '#065f46' : '#991b1b'
                       }}>
                         {tx.transaction_type}
                       </span>
                     </td>
                     <td style={{ padding: '10px', fontWeight: '500' }}>
-                      {tx.transaction_type === 'buy' ? '+' : '-'}{tx.amount} {tx.token_symbol || 'FC'}
+                      {tx.transaction_type?.includes('buy') ? '+' : '-'}{tx.amount} {tx.token_symbol || 'FC'}
                     </td>
                     <td style={{ padding: '10px', fontSize: '13px' }}>{tx.status}</td>
                     <td style={{ padding: '10px', fontSize: '13px', color: '#666' }}>

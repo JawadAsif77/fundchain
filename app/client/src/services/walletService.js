@@ -41,24 +41,52 @@ export async function getWallet(userId) {
  */
 export async function buyTokens(userId, usdAmount) {
   try {
-    // Get the current session to ensure we have a valid token
-    const { data: { session } } = await supabase.auth.getSession();
+    // CRITICAL: Refresh session before making the call
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    if (!session) {
-      return { success: false, error: 'No active session. Please login again.' };
+    if (sessionError || !session) {
+      console.error('Session error:', sessionError);
+      return { success: false, error: 'Please login again. Your session has expired.' };
     }
 
+    // If session exists but might be expired, try refreshing it
+    const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+    const activeSession = refreshedSession || session;
+
+    if (!activeSession?.access_token) {
+      return { success: false, error: 'Authentication failed. Please logout and login again.' };
+    }
+
+    console.log('Making request with userId:', userId, 'amount:', usdAmount);
+
     const { data, error } = await supabase.functions.invoke('exchange-usd-to-fc', {
-      body: { amountUsd: Number(usdAmount) },
+      body: { 
+        userId: userId,
+        amountUsd: Number(usdAmount) 
+      },
       headers: {
-        Authorization: `Bearer ${session.access_token}`
+        Authorization: `Bearer ${activeSession.access_token}`
       }
     });
 
-    if (error) return handleResponse(null, error);
+    if (error) {
+      console.error('Edge Function error:', error);
+      
+      // Handle 401 specifically
+      if (error.status === 401 || error.message?.includes('401')) {
+        return { success: false, error: 'Session expired. Please refresh the page and try again.' };
+      }
+      
+      const errorMessage = error?.context?.body?.error || 
+                          error?.message || 
+                          'Transaction failed';
+      return { success: false, error: errorMessage };
+    }
+    
     return { success: true, ...data };
   } catch (err) {
-    return { success: false, error: err.message };
+    console.error('buyTokens catch error:', err);
+    return { success: false, error: err.message || 'An unexpected error occurred' };
   }
 }
 

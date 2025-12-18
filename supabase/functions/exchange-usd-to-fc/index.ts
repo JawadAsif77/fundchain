@@ -13,11 +13,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // 1. Get Authorization header
+    // At the very beginning of the function
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Authorization header is required' }),
+        JSON.stringify({ error: 'Missing authorization header' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       )
     }
@@ -27,6 +27,19 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     )
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
+
+    // Then use user.id instead of relying on userId from body
+    const userId = user.id
 
     // 2. Parse and validate request
     const { amountUsd } = await req.json()
@@ -41,20 +54,11 @@ Deno.serve(async (req) => {
     const exchangeRate = 1 
     const tokenAmount = amountUsd * exchangeRate
 
-    // 3. Get authenticated user
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'User not authenticated' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-      )
-    }
-
     // 4. Check if wallet exists
     const { data: existingWallet, error: walletError } = await supabaseClient
       .from('wallets')
       .select('balance_fc, locked_fc')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .single()
 
     let newBalance = tokenAmount
@@ -64,7 +68,7 @@ Deno.serve(async (req) => {
       const { error: insertError } = await supabaseClient
         .from('wallets')
         .insert({
-          user_id: user.id,
+          user_id: userId,
           balance_fc: tokenAmount,
           locked_fc: 0,
           updated_at: new Date().toISOString()
@@ -83,7 +87,7 @@ Deno.serve(async (req) => {
           balance_fc: newBalance,
           updated_at: new Date().toISOString()
         })
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
       
       if (updateError) throw new Error(`Failed to update wallet: ${updateError.message}`)
     }
@@ -92,7 +96,7 @@ Deno.serve(async (req) => {
     const { error: txError } = await supabaseClient
       .from('token_transactions')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         amount_fc: tokenAmount,
         type: 'buy_fc',
         metadata: {
