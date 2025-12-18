@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     if (!userId) {
       return new Response(JSON.stringify({ error: "userId is required" }), {
         status: 400,
-        headers: corsHeaders
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({
         status: "exists",
         wallet: existingWallet
-      }), { status: 200, headers: corsHeaders })
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     // PROPER INSERT FORMAT (without array wrapper)
@@ -70,13 +70,13 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({
         error: "Failed to create wallet",
         details: insertError.message
-      }), { status: 500, headers: corsHeaders })
+      }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     return new Response(JSON.stringify({
       status: "created",
       wallet: newWallet
-    }), { status: 200, headers: corsHeaders })
+    }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (err) {
     console.error("Error in create-user-wallet:", err)

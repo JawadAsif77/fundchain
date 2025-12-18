@@ -78,6 +78,33 @@ const handleSubmit = async (e) => {
 
     if (!userId) throw new Error("No user returned from signup");
 
+    // STEP 2 — Create user profile in public.users table
+    try {
+      console.log('[Register] Creating user profile...');
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({
+          id: userId,
+          email: formData.email,
+          username: formData.username,
+          full_name: formData.fullName,
+          role: selectedRole,
+          is_verified: 'no'
+        });
+
+      if (profileError) {
+        console.error('[Register] Profile creation error:', profileError);
+        throw profileError;
+      }
+      console.log('[Register] User profile created');
+      
+      // Wait a moment for the profile to be fully committed
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (profileError) {
+      console.error('[Register] Failed to create profile:', profileError);
+      throw new Error('Failed to create user profile');
+    }
+
     // STEP 3 — Now create wallet (users row exists, so foreign key will work)
     try {
       console.log('[Register] Creating wallet...');
