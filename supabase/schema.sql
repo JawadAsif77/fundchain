@@ -370,6 +370,10 @@ CREATE TABLE public.milestones (
   completion_notes text,
   attachments jsonb DEFAULT '[]'::jsonb,
   order_index integer NOT NULL,
+  is_voting_open boolean DEFAULT false,
+  approval_percentage numeric DEFAULT 0,
+  rejection_percentage numeric DEFAULT 0,
+  voting_result text DEFAULT 'pending',
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -382,7 +386,9 @@ CREATE TABLE public.milestone_votes (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   milestone_id uuid NOT NULL REFERENCES public.milestones(id) ON DELETE CASCADE,
   investor_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  campaign_id uuid REFERENCES public.campaigns(id) ON DELETE CASCADE,
   vote boolean NOT NULL,
+  investment_weight numeric DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
   
   UNIQUE(milestone_id, investor_id)
@@ -742,7 +748,38 @@ CREATE TRIGGER platform_wallet_updated_at BEFORE UPDATE ON public.platform_walle
 CREATE TRIGGER campaign_wallets_updated_at BEFORE UPDATE ON public.campaign_wallets
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
-CREATE TRIGGER user_verifications_updated_at BEFORE UPDATE ON public.user_verifications
+CREROW LEVEL SECURITY (RLS) POLICIES
+-- ============================================================
+
+-- Enable RLS on milestone_votes
+ALTER TABLE public.milestone_votes ENABLE ROW LEVEL SECURITY;
+
+-- Investor can vote
+CREATE POLICY investor_can_vote
+ON public.milestone_votes
+FOR INSERT
+WITH CHECK (auth.uid() = investor_id);
+
+-- Investor can read own vote
+CREATE POLICY investor_read_own_vote
+ON public.milestone_votes
+FOR SELECT
+USING (auth.uid() = investor_id);
+
+-- Admin can read all votes
+CREATE POLICY admin_read_all_votes
+ON public.milestone_votes
+FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM public.users
+    WHERE users.id = auth.uid()
+      AND users.role = 'admin'
+  )
+);
+
+-- ============================================================
+-- ATE TRIGGER user_verifications_updated_at BEFORE UPDATE ON public.user_verifications
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ============================================================
