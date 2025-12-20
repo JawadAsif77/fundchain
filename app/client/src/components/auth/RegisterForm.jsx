@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../store/AuthContext';
+import { 
+  validateEmail, 
+  validateName, 
+  validatePassword, 
+  validatePasswordMatch
+} from '../../utils/validation';
 import './AuthForms.css';
 
 const RegisterForm = ({ onSwitchToLogin, onClose }) => {
@@ -12,22 +18,31 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
+  const [fieldTouched, setFieldTouched] = useState({});
   
   const { register, error, clearError } = useAuth();
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Apply input filtering
+    let filteredValue = value;
+    if (name === 'fullName') {
+      // Allow letters, spaces, hyphens, and apostrophes only
+      filteredValue = value.replace(/[^a-zA-Z\s'-]/g, '');
+    } else if (name === 'email') {
+      // Allow valid email characters
+      filteredValue = value.replace(/[^a-zA-Z0-9@._-]/g, '');
+    }
+    
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: filteredValue
     }));
     
-    // Clear validation error for this field
-    if (validationErrors[name]) {
-      setValidationErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
+    // Validate on change if field was touched
+    if (fieldTouched[name]) {
+      validateField(name, filteredValue);
     }
     
     // Clear auth error when user starts typing
@@ -36,34 +51,71 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
     }
   };
 
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    setFieldTouched(prev => ({ ...prev, [name]: true }));
+    validateField(name, value);
+  };
+
+  const validateField = (fieldName, value) => {
+    let result = { valid: true, error: null };
+
+    switch (fieldName) {
+      case 'fullName':
+        result = validateName(value);
+        break;
+      case 'email':
+        result = validateEmail(value);
+        break;
+      case 'password':
+        result = validatePassword(value);
+        // Also validate confirm password if it exists
+        if (formData.confirmPassword) {
+          const confirmResult = validatePasswordMatch(value, formData.confirmPassword);
+          setValidationErrors(prev => ({
+            ...prev,
+            confirmPassword: confirmResult.error || ''
+          }));
+        }
+        break;
+      case 'confirmPassword':
+        result = validatePasswordMatch(formData.password, value);
+        break;
+      default:
+        break;
+    }
+
+    setValidationErrors(prev => ({
+      ...prev,
+      [fieldName]: result.error || ''
+    }));
+
+    return result.valid;
+  };
+
   const validateForm = () => {
     const errors = {};
     
-    if (!formData.fullName.trim()) {
-      errors.fullName = 'Full name is required';
-    } else if (formData.fullName.trim().length < 2) {
-      errors.fullName = 'Full name must be at least 2 characters';
-    }
+    const nameResult = validateName(formData.fullName);
+    if (!nameResult.valid) errors.fullName = nameResult.error;
     
-    if (!formData.email.trim()) {
-      errors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = 'Please enter a valid email address';
-    }
+    const emailResult = validateEmail(formData.email);
+    if (!emailResult.valid) errors.email = emailResult.error;
     
-    if (!formData.password) {
-      errors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      errors.password = 'Password must be at least 6 characters';
-    }
+    const passwordResult = validatePassword(formData.password);
+    if (!passwordResult.valid) errors.password = passwordResult.error;
     
-    if (!formData.confirmPassword) {
-      errors.confirmPassword = 'Please confirm your password';
-    } else if (formData.password !== formData.confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match';
-    }
+    const confirmResult = validatePasswordMatch(formData.password, formData.confirmPassword);
+    if (!confirmResult.valid) errors.confirmPassword = confirmResult.error;
     
     setValidationErrors(errors);
+    setFieldTouched({
+      fullName: true,
+      email: true,
+      password: true,
+      confirmPassword: true
+    });
+    
     return Object.keys(errors).length === 0;
   };
 
@@ -135,31 +187,35 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
         )}
         
         <div className="form-group">
-          <label htmlFor="fullName">Full Name</label>
+          <label htmlFor="fullName">Full Name *</label>
           <input
             type="text"
             id="fullName"
             name="fullName"
             value={formData.fullName}
             onChange={handleInputChange}
+            onBlur={handleBlur}
             className={validationErrors.fullName ? 'error' : ''}
             placeholder="Enter your full name"
             autoComplete="name"
             disabled={isSubmitting}
+            maxLength={50}
           />
           {validationErrors.fullName && (
             <span className="field-error">{validationErrors.fullName}</span>
           )}
+          <small className="field-hint">Letters, spaces, hyphens, and apostrophes only</small>
         </div>
         
         <div className="form-group">
-          <label htmlFor="email">Email Address</label>
+          <label htmlFor="email">Email Address *</label>
           <input
-            type="email"
+            type="text"
             id="email"
             name="email"
             value={formData.email}
             onChange={handleInputChange}
+            onBlur={handleBlur}
             className={validationErrors.email ? 'error' : ''}
             placeholder="Enter your email"
             autoComplete="email"
@@ -171,31 +227,34 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
         </div>
         
         <div className="form-group">
-          <label htmlFor="password">Password</label>
+          <label htmlFor="password">Password *</label>
           <input
             type="password"
             id="password"
             name="password"
             value={formData.password}
             onChange={handleInputChange}
+            onBlur={handleBlur}
             className={validationErrors.password ? 'error' : ''}
-            placeholder="Create a password (min. 6 characters)"
+            placeholder="Create a strong password"
             autoComplete="new-password"
             disabled={isSubmitting}
           />
           {validationErrors.password && (
             <span className="field-error">{validationErrors.password}</span>
           )}
+          <small className="field-hint">Min. 8 characters with uppercase, lowercase, number & special character</small>
         </div>
         
         <div className="form-group">
-          <label htmlFor="confirmPassword">Confirm Password</label>
+          <label htmlFor="confirmPassword">Confirm Password *</label>
           <input
             type="password"
             id="confirmPassword"
             name="confirmPassword"
             value={formData.confirmPassword}
             onChange={handleInputChange}
+            onBlur={handleBlur}
             className={validationErrors.confirmPassword ? 'error' : ''}
             placeholder="Confirm your password"
             autoComplete="new-password"

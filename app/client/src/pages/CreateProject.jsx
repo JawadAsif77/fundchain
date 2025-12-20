@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createProjectWithMilestones, generateSlug, validateMilestones } from '../lib/api.js';
 import { useAuth } from '../store/AuthContext.jsx';
+import { validateRequired, validateDecimal, sanitizeInput } from '../utils/validation';
 
 const CreateProject = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
+  const [validationErrors, setValidationErrors] = useState({});
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -28,24 +30,91 @@ const CreateProject = () => {
   ]);
 
   const handleProjectChange = (field, value) => {
+    // Apply input filtering
+    let filteredValue = value;
+    if (field === 'goalAmount') {
+      filteredValue = sanitizeInput.decimal(value);
+    }
+    
     setProjectData(prev => {
-      const updated = { ...prev, [field]: value };
+      const updated = { ...prev, [field]: filteredValue };
       
       // Auto-generate slug from title
       if (field === 'title') {
-        updated.slug = generateSlug(value);
+        updated.slug = generateSlug(filteredValue);
       }
       
       return updated;
     });
+    
+    // Clear validation error when user types
+    if (validationErrors[field]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  const validateProjectField = (field, value) => {
+    let result = { valid: true, error: null };
+    
+    switch (field) {
+      case 'title':
+      case 'summary':
+      case 'description':
+      case 'category':
+        result = validateRequired(value);
+        break;
+      case 'goalAmount':
+        result = validateDecimal(value, true);
+        if (result.valid && parseFloat(value) < 1000) {
+          result = { valid: false, error: 'Minimum funding goal is $1,000' };
+        }
+        break;
+      case 'deadline':
+        result = validateRequired(value);
+        if (result.valid && new Date(value) <= new Date()) {
+          result = { valid: false, error: 'Deadline must be in the future' };
+        }
+        break;
+      default:
+        break;
+    }
+    
+    if (!result.valid) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [field]: result.error
+      }));
+    }
+    
+    return result.valid;
   };
 
   const handleMilestoneChange = (index, field, value) => {
+    // Apply input filtering for percentage
+    let filteredValue = value;
+    if (field === 'payoutPercentage') {
+      filteredValue = sanitizeInput.decimal(value);
+    }
+    
     setMilestones(prev => 
       prev.map((milestone, i) => 
-        i === index ? { ...milestone, [field]: value } : milestone
+        i === index ? { ...milestone, [field]: filteredValue } : milestone
       )
     );
+    
+    // Clear validation error when user types
+    const errorKey = `milestone_${index}_${field}`;
+    if (validationErrors[errorKey]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[errorKey];
+        return newErrors;
+      });
+    }
   };
 
   const addMilestone = () => {
@@ -156,15 +225,22 @@ const CreateProject = () => {
             type="text"
             value={projectData.title}
             onChange={(e) => handleProjectChange('title', e.target.value)}
+            onBlur={(e) => validateProjectField('title', e.target.value)}
+            maxLength={100}
             style={{
               width: '100%',
               padding: '12px',
-              border: '1px solid #d1d5db',
+              border: validationErrors.title ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="Your project title"
           />
+          {validationErrors.title && (
+            <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              {validationErrors.title}
+            </span>
+          )}
         </div>
 
         <div>
@@ -216,19 +292,27 @@ const CreateProject = () => {
               Funding Goal (USD) *
             </label>
             <input
-              type="number"
-              min="1000"
+              type="text"
               value={projectData.goalAmount}
               onChange={(e) => handleProjectChange('goalAmount', e.target.value)}
+              onBlur={(e) => validateProjectField('goalAmount', e.target.value)}
               style={{
                 width: '100%',
                 padding: '12px',
-                border: '1px solid #d1d5db',
+                border: validationErrors.goalAmount ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '8px',
                 fontSize: '14px'
               }}
               placeholder="50000"
             />
+            {validationErrors.goalAmount && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                {validationErrors.goalAmount}
+              </span>
+            )}
+            <small style={{ color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '2px' }}>
+              Minimum $1,000
+            </small>
           </div>
 
           <div>

@@ -3,6 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext.jsx';
 import { kycApi } from '../lib/api.js';
 import { supabase } from '../lib/supabase.js';
+import {
+  validateName,
+  validateEmail,
+  validatePhone,
+  validateRequired,
+  sanitizeInput
+} from '../utils/validation';
 
 const KYCForm = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -10,8 +17,11 @@ const KYCForm = () => {
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false); // Track if updating existing KYC
+  const [validationErrors, setValidationErrors] = useState({});
+  const [fieldTouched, setFieldTouched] = useState({});
   const navigate = useNavigate();
-  const { user, refreshUserData } = useAuth();
+  const { user, refreshProfile } = useAuth();
 
   // Store timeout ref to clear it if needed
   const redirectTimeoutRef = React.useRef(null);
@@ -43,7 +53,7 @@ const KYCForm = () => {
           // Check user_verifications table for latest status
           const { data, error } = await supabase
             .from('user_verifications')
-            .select('verification_status')
+            .select('*')
             .eq('user_id', user.id)
             .single();
           if (!error && data?.verification_status) {
@@ -54,9 +64,25 @@ const KYCForm = () => {
               return;
             }
             if (data.verification_status === 'pending') {
-              setStatusMessage('Your verification is pending review. Redirecting to dashboard...');
-              setIsRedirecting(true);
-              navigate('/dashboard', { replace: true });
+              // Load existing KYC data for updates instead of redirecting
+              setFormData({
+                legal_name: data.legal_name || '',
+                phone: data.phone || '',
+                legal_email: data.legal_email || user?.email || '',
+                business_email: data.business_email || '',
+                address_line1: data.legal_address?.line1 || '',
+                address_line2: data.legal_address?.line2 || '',
+                city: data.legal_address?.city || '',
+                state: data.legal_address?.state || '',
+                postal_code: data.legal_address?.postal_code || '',
+                country: data.legal_address?.country || '',
+                id_document_url: data.id_document_url || '',
+                selfie_image_url: data.selfie_image_url || '',
+                verification_type: data.verification_type || 'individual'
+              });
+              setIsUpdating(true); // Mark as updating
+              setStatusMessage('You can update your verification details below.');
+              // Don't redirect - let them update
               return;
             }
           }
@@ -100,10 +126,86 @@ const KYCForm = () => {
   });
 
   const handleInputChange = (field, value) => {
+    // Apply input filtering based on field type
+    let filteredValue = value;
+    switch (field) {
+      case 'legal_name':
+        filteredValue = sanitizeInput.name(value);
+        break;
+      case 'phone':
+        filteredValue = sanitizeInput.phone(value);
+        break;
+      case 'legal_email':
+      case 'business_email':
+        filteredValue = sanitizeInput.email(value);
+        break;
+      case 'postal_code':
+        filteredValue = sanitizeInput.alphaNumeric(value);
+        break;
+      case 'city':
+      case 'state':
+      case 'country':
+        filteredValue = sanitizeInput.name(value);
+        break;
+      default:
+        break;
+    }
+
     setFormData(prev => ({
       ...prev,
-      [field]: value
+      [field]: filteredValue
     }));
+
+    // Clear validation error when user types
+    if (validationErrors[field]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleBlur = (field, value) => {
+    setFieldTouched(prev => ({ ...prev, [field]: true }));
+    validateField(field, value);
+  };
+
+  const validateField = (fieldName, value) => {
+    let result = { valid: true, error: null };
+
+    switch (fieldName) {
+      case 'legal_name':
+        result = validateName(value);
+        break;
+      case 'phone':
+        result = validatePhone(value);
+        break;
+      case 'legal_email':
+      case 'business_email':
+        if (value) {
+          result = validateEmail(value);
+        }
+        break;
+      case 'address_line1':
+      case 'city':
+      case 'state':
+      case 'postal_code':
+      case 'country':
+        result = validateRequired(value);
+        break;
+      default:
+        break;
+    }
+
+    if (!result.valid) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [fieldName]: result.error
+      }));
+    }
+
+    return result.valid;
   };
 
   const handleFileChange = (field, file) => {
@@ -204,10 +306,10 @@ const KYCForm = () => {
 
     setIsSubmitting(true);
     setError('');
-    setStatusMessage('Submitting verification...');
+    setStatusMessage(isUpdating ? 'Updating verification...' : 'Submitting verification...');
 
     try {
-      console.log('🚀 Starting KYC submission for user:', user.id);
+      console.log(isUpdating ? '🔄 Updating KYC for user:' : '🚀 Starting KYC submission for user:', user.id);
 
       // Prepare KYC data according to your exact schema
       const kycData = {
@@ -231,26 +333,31 @@ const KYCForm = () => {
 
       console.log('📝 Submitting KYC data:', kycData);
 
-      // Submit using the new API
+      // Submit using the new API (upsert will handle both insert and update)
       const result = await kycApi.submitKyc(kycData);
       
       console.log('✅ KYC submitted successfully:', result);
 
       // Set success message
-      setStatusMessage('Verification submitted successfully! Redirecting...');
+      setStatusMessage(isUpdating ? 'Verification updated successfully! Refreshing your profile...' : 'Verification submitted successfully! Updating your profile...');
+      
+      // Refresh profile BEFORE redirecting to ensure Dashboard sees updated data
+      try {
+        await refreshProfile();
+        console.log('✅ Profile refreshed successfully');
+      } catch (error) {
+        console.warn('Failed to refresh user profile:', error);
+      }
+      
+      setStatusMessage(isUpdating ? 'Verification updated successfully! Redirecting...' : 'Verification submitted successfully! Redirecting...');
       setIsRedirecting(true);
       
-      // Immediate redirect after success (no timeout needed)
+      // Redirect after profile refresh
       if (user.role === 'creator') {
         navigate('/dashboard', { replace: true });
       } else {
         navigate('/explore', { replace: true });
       }
-
-      // Update user data in background (don't await to avoid delays)
-      refreshUserData().catch(error => {
-        console.warn('Failed to refresh user data:', error);
-      });
 
     } catch (error) {
       console.error('❌ KYC submission failed:', error);
@@ -305,15 +412,25 @@ const KYCForm = () => {
             type="text"
             value={formData.legal_name}
             onChange={(e) => handleInputChange('legal_name', e.target.value)}
+            onBlur={(e) => handleBlur('legal_name', e.target.value)}
+            maxLength={50}
             style={{
               width: '100%',
               padding: '12px',
-              border: '1px solid #d1d5db',
+              border: validationErrors.legal_name ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="Your full legal name as on government ID"
           />
+          {validationErrors.legal_name && (
+            <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              {validationErrors.legal_name}
+            </span>
+          )}
+          <small style={{ color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '2px' }}>
+            Letters, spaces, hyphens, and apostrophes only
+          </small>
         </div>
 
         <div>
@@ -324,15 +441,25 @@ const KYCForm = () => {
             type="tel"
             value={formData.phone}
             onChange={(e) => handleInputChange('phone', e.target.value)}
+            onBlur={(e) => handleBlur('phone', e.target.value)}
+            maxLength={15}
             style={{
               width: '100%',
               padding: '12px',
-              border: '1px solid #d1d5db',
+              border: validationErrors.phone ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="+1 (555) 123-4567"
           />
+          {validationErrors.phone && (
+            <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              {validationErrors.phone}
+            </span>
+          )}
+          <small style={{ color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '2px' }}>
+            Numbers, spaces, dashes, and + only
+          </small>
         </div>
 
         <div>
@@ -340,18 +467,24 @@ const KYCForm = () => {
             Legal Email Address *
           </label>
           <input
-            type="email"
+            type="text"
             value={formData.legal_email}
             onChange={(e) => handleInputChange('legal_email', e.target.value)}
+            onBlur={(e) => handleBlur('legal_email', e.target.value)}
             style={{
               width: '100%',
               padding: '12px',
-              border: '1px solid #d1d5db',
+              border: validationErrors.legal_email ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="your@email.com"
           />
+          {validationErrors.legal_email && (
+            <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              {validationErrors.legal_email}
+            </span>
+          )}
         </div>
 
         <div>
@@ -359,18 +492,24 @@ const KYCForm = () => {
             Business Email (Optional)
           </label>
           <input
-            type="email"
+            type="text"
             value={formData.business_email}
             onChange={(e) => handleInputChange('business_email', e.target.value)}
+            onBlur={(e) => handleBlur('business_email', e.target.value)}
             style={{
               width: '100%',
               padding: '12px',
-              border: '1px solid #d1d5db',
+              border: validationErrors.business_email ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="business@company.com"
           />
+          {validationErrors.business_email && (
+            <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              {validationErrors.business_email}
+            </span>
+          )}
         </div>
 
         <div>
@@ -411,15 +550,21 @@ const KYCForm = () => {
             type="text"
             value={formData.address_line1}
             onChange={(e) => handleInputChange('address_line1', e.target.value)}
+            onBlur={(e) => handleBlur('address_line1', e.target.value)}
             style={{
               width: '100%',
               padding: '12px',
-              border: '1px solid #d1d5db',
+              border: validationErrors.address_line1 ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '8px',
               fontSize: '14px'
             }}
             placeholder="Street address"
           />
+          {validationErrors.address_line1 && (
+            <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              {validationErrors.address_line1}
+            </span>
+          )}
         </div>
 
         <div>
@@ -450,15 +595,21 @@ const KYCForm = () => {
               type="text"
               value={formData.city}
               onChange={(e) => handleInputChange('city', e.target.value)}
+              onBlur={(e) => handleBlur('city', e.target.value)}
               style={{
                 width: '100%',
                 padding: '12px',
-                border: '1px solid #d1d5db',
+                border: validationErrors.city ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '8px',
                 fontSize: '14px'
               }}
               placeholder="City"
             />
+            {validationErrors.city && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                {validationErrors.city}
+              </span>
+            )}
           </div>
 
           <div>
@@ -469,15 +620,21 @@ const KYCForm = () => {
               type="text"
               value={formData.state}
               onChange={(e) => handleInputChange('state', e.target.value)}
+              onBlur={(e) => handleBlur('state', e.target.value)}
               style={{
                 width: '100%',
                 padding: '12px',
-                border: '1px solid #d1d5db',
+                border: validationErrors.state ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '8px',
                 fontSize: '14px'
               }}
               placeholder="State/Province"
             />
+            {validationErrors.state && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                {validationErrors.state}
+              </span>
+            )}
           </div>
         </div>
 
@@ -490,15 +647,25 @@ const KYCForm = () => {
               type="text"
               value={formData.postal_code}
               onChange={(e) => handleInputChange('postal_code', e.target.value)}
+              onBlur={(e) => handleBlur('postal_code', e.target.value)}
+              maxLength={10}
               style={{
                 width: '100%',
                 padding: '12px',
-                border: '1px solid #d1d5db',
+                border: validationErrors.postal_code ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '8px',
                 fontSize: '14px'
               }}
               placeholder="Postal/ZIP code"
             />
+            {validationErrors.postal_code && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                {validationErrors.postal_code}
+              </span>
+            )}
+            <small style={{ color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '2px' }}>
+              Letters and numbers only
+            </small>
           </div>
 
           <div>
@@ -508,10 +675,11 @@ const KYCForm = () => {
             <select
               value={formData.country}
               onChange={(e) => handleInputChange('country', e.target.value)}
+              onBlur={(e) => handleBlur('country', e.target.value)}
               style={{
                 width: '100%',
                 padding: '12px',
-                border: '1px solid #d1d5db',
+                border: validationErrors.country ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '8px',
                 fontSize: '14px'
               }}
@@ -527,6 +695,11 @@ const KYCForm = () => {
               <option value="IN">India</option>
               <option value="other">Other</option>
             </select>
+            {validationErrors.country && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                {validationErrors.country}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -661,12 +834,32 @@ const KYCForm = () => {
       }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px' }}>
-            KYC Verification
+            {isUpdating ? 'Update KYC Verification' : 'KYC Verification'}
           </h1>
           <p style={{ fontSize: '14px', color: '#6b7280' }}>
-            Complete your identity verification to access creator features
+            {isUpdating 
+              ? 'Update your verification details while your application is under review'
+              : 'Complete your identity verification to access creator features'}
           </p>
         </div>
+
+        {isUpdating && (
+          <div style={{
+            backgroundColor: '#fef3c7',
+            border: '1px solid #f59e0b',
+            borderRadius: '8px',
+            padding: '12px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span style={{ fontSize: '18px' }}>ℹ️</span>
+            <p style={{ fontSize: '13px', color: '#92400e', margin: 0 }}>
+              Your verification is currently under review. You can update your details, and the changes will be reviewed by our team.
+            </p>
+          </div>
+        )}
 
         {renderStepIndicator()}
 
@@ -775,7 +968,9 @@ const KYCForm = () => {
                     cursor: isSubmitting ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  {isSubmitting ? 'Submitting...' : 'Submit Verification'}
+                  {isSubmitting 
+                    ? (isUpdating ? 'Updating...' : 'Submitting...') 
+                    : (isUpdating ? 'Update Verification' : 'Submit Verification')}
                 </button>
               )}
             </div>

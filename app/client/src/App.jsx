@@ -4,6 +4,7 @@ import { AuthProvider } from './store/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import NetworkStatus from './components/NetworkStatus';
 
 // Pages
 import Home from './pages/Home';
@@ -21,6 +22,7 @@ import AdminPanel from './pages/AdminPanel';
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Wallet from './pages/Wallet';
+import Portfolio from './pages/Portfolio';
 import HowItWorks from './pages/HowItWorks';
 import Governance from './pages/Governance';
 import Analytics from './pages/Analytics';
@@ -43,7 +45,7 @@ function App() {
   
   return (
     <ErrorBoundary>
-      <AuthProvider>
+        <NetworkStatus />
         <Router>
           <Routes>
             {/* Admin route - completely separate layout */}
@@ -127,6 +129,14 @@ function App() {
                           </ProtectedRoute>
                         }
                       />
+                      <Route 
+                        path="/portfolio" 
+                        element={
+                          <ProtectedRoute>
+                            <Portfolio />
+                          </ProtectedRoute>
+                        }
+                      />
                       
                       {/* 404 catch-all */}
                       <Route path="*" element={<NotFound />} />
@@ -138,7 +148,6 @@ function App() {
             />
           </Routes>
         </Router>
-      </AuthProvider>
     </ErrorBoundary>
   );
 }

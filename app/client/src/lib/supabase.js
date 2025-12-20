@@ -65,6 +65,7 @@ export const auth = {
       if (error) throw error;
       return { error: null };
     } catch (error) {
+      console.warn('[Auth] signOut error:', error);
       return { error };
     }
   },

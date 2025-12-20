@@ -2,30 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { supabase } from '../lib/supabase';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, profile, logout, validateSession } = useAuth();
   const location = useLocation();
-
-  // Session health monitor - do not auto-logout; Supabase client already refreshes tokens
-  useEffect(() => {
-    if (!user) return;
-    const sessionCheck = setInterval(async () => {
-      try {
-        if (document.hidden) return;
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          // Attempt a gentle refresh; avoid logging user out automatically
-          await supabase.auth.refreshSession();
-        }
-      } catch (err) {
-        // Log and continue; do not clear auth
-        console.warn('Header: session check warning:', err?.message || err);
-      }
-    }, 10 * 60 * 1000);
-    return () => clearInterval(sessionCheck);
-  }, [user]);
 
   const isActiveLink = (path) => {
     if (path === '/') {
@@ -201,17 +183,22 @@ const Header = () => {
             alignItems: 'center',
             gap: 'var(--space-3)'
           }}>
+            <div style={{ display: 'none' }} data-desktop-only="true">
+              <WalletMultiButton />
+            </div>
             {user ? (
               <>
-                <Link
-                  to="/wallet"
-                  className="btn btn--ghost btn--sm"
-                  onClick={closeMobileMenu}
-                  style={{ display: 'none' }}
-                  data-desktop-only="true"
-                >
-                  💼 Wallet
-                </Link>
+                {profile?.role !== 'admin' && (
+                  <Link
+                    to="/wallet"
+                    className="btn btn--ghost btn--sm"
+                    onClick={closeMobileMenu}
+                    style={{ display: 'none' }}
+                    data-desktop-only="true"
+                  >
+                    💼 Wallet
+                  </Link>
+                )}
                 <Link
                   to="/profile"
                   className="btn btn--ghost btn--sm"
@@ -374,21 +361,23 @@ const Header = () => {
                     Dashboard
                   </Link>
                   
-                  <Link
-                    to="/wallet"
-                    onClick={closeMobileMenu}
-                    style={{
-                      padding: 'var(--space-3) 0',
-                      borderBottom: '1px solid var(--color-border-light)',
-                      color: 'var(--color-text)',
-                      textDecoration: 'none',
-                      fontSize: 'var(--text-md)',
-                      fontWeight: 'var(--font-semibold)',
-                      transition: 'var(--transition-default)'
-                    }}
-                  >
-                    💼 Wallet
-                  </Link>
+                  {profile?.role !== 'admin' && (
+                    <Link
+                      to="/wallet"
+                      onClick={closeMobileMenu}
+                      style={{
+                        padding: 'var(--space-3) 0',
+                        borderBottom: '1px solid var(--color-border-light)',
+                        color: 'var(--color-text)',
+                        textDecoration: 'none',
+                        fontSize: 'var(--text-md)',
+                        fontWeight: 'var(--font-semibold)',
+                        transition: 'var(--transition-default)'
+                      }}
+                    >
+                      💼 Wallet
+                    </Link>
+                  )}
                   
                   <Link
                     to="/profile"

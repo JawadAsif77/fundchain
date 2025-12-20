@@ -21,16 +21,30 @@ const Explore = () => {
 
   useEffect(() => {
     let cancelled = false;
+    let timeoutId = null;
+
     const load = async () => {
       try {
         setLoading(true);
+        setError('');
+        
+        // Set maximum load time
+        timeoutId = setTimeout(() => {
+          if (!cancelled) {
+            console.warn('[Explore] Load timeout');
+            setError('Loading took too long. Please refresh the page.');
+            setLoading(false);
+          }
+        }, 20000);
+        
         const { data } = await campaignApi.getCampaigns({ 
           category: filters.category, 
           search: filters.search,
           status: filters.status 
         });
+        
         if (cancelled) return;
-        // Map DB campaigns to CampaignCard shape
+        
         const mapped = (data || []).map((c) => ({
           id: c.id,
           slug: c.slug,
@@ -46,17 +60,35 @@ const Explore = () => {
           image_url: c.image_url,
           created_at: c.created_at,
         }));
+        
         setAllCampaigns(mapped);
-        setError('');
       } catch (e) {
         if (cancelled) return;
-        setError(e.message || 'Failed to load campaigns');
+        console.error('[Explore] Load error:', e);
+        
+        if (e.message?.includes('Authentication expired')) {
+          setError('Your session expired. Please log in again.');
+        } else {
+          setError('Failed to load campaigns. Please try again.');
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
       }
     };
+    
     load();
-    return () => { cancelled = true; };
+    
+    return () => { 
+      cancelled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [filters.category, filters.search, filters.status]);
 
   // Filter and sort campaigns based on current filters (sort client-side, status handled by API)

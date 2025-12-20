@@ -31,165 +31,126 @@ const Register = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    if (!selectedRole) {
-      setError('Please select a role');
-      return;
-    }
+  if (formData.password !== formData.confirmPassword) {
+    setError('Passwords do not match');
+    return;
+  }
 
-    setIsSubmitting(true);
-    setStatusMessage('Creating your account...');
-    setError('');
-    
-    try {
-      console.log('Starting registration process...', { 
-        email: formData.email, 
-        username: formData.username, 
-        role: selectedRole 
-      });
-      
-      // Step 1: Create auth user
-      console.log('Step 1: Creating auth user...');
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.fullName,
-            username: formData.username,
-            role: selectedRole || 'investor'
-          }
+  if (!selectedRole) {
+    setError('Please select a role');
+    return;
+  }
+
+  setIsSubmitting(true);
+  setStatusMessage('Creating your account...');
+  setError('');
+
+  try {
+    console.log("Starting registration...", {
+      email: formData.email,
+      username: formData.username,
+      role: selectedRole,
+    });
+
+    // STEP 1 — Create auth user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: {
+          full_name: formData.fullName,
+          username: formData.username,
+          role: selectedRole,
         }
-      });
-
-      if (authError) {
-        console.error('Auth signup error:', authError);
-        throw authError;
       }
+    });
 
-      console.log('Step 1 Complete: Auth user created:', authData.user?.id);
+    if (authError) {
+      console.error("Auth signup error:", authError);
+      throw authError;
+    }
 
-      // Store pending profile info locally to ensure immediate profile creation/fetch on first session
-      try {
-        const pending = {
-          id: authData.user?.id,
+    const userId = authData.user?.id;
+    console.log("Auth user created:", userId);
+
+    if (!userId) throw new Error("No user returned from signup");
+
+    // STEP 2 — Create user profile in public.users table
+    try {
+      console.log('[Register] Creating user profile...');
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({
+          id: userId,
           email: formData.email,
           username: formData.username,
           full_name: formData.fullName,
-          role: selectedRole || 'investor'
-        };
-        localStorage.setItem('pendingUserProfile', JSON.stringify(pending));
-      } catch (e) {
-        console.warn('Failed to store pendingUserProfile:', e);
-      }
-
-      if (!authData.user) {
-        throw new Error('No user returned from signup');
-      }
-
-      // Step 2: Create profile immediately using RPC function
-      console.log('Step 2: Creating profile via RPC function...');
-      
-      try {
-        const { data: profileData, error: profileError } = await supabase
-          .rpc('create_user_profile', {
-            user_id: authData.user.id,
-            user_email: formData.email,
-            user_username: formData.username,
-            user_full_name: formData.fullName,
-            user_role: selectedRole,
-            user_verified: 'no'
-          });
-
-        console.log('RPC Response Details:', { 
-          profileData, 
-          profileError,
-          userId: authData.user.id,
-          email: formData.email,
-          username: formData.username,
-          role: selectedRole
+          role: selectedRole,
+          is_verified: 'no'
         });
 
-        if (profileError) {
-          console.error('RPC Profile creation failed:', profileError);
-          
-          // Try fallback method - direct insert
-          console.log('Trying fallback: direct insert...');
-          const { data: insertData, error: insertError } = await supabase
-            .from('users')
-            .insert({
-              id: authData.user.id,
-              email: formData.email,
-              username: formData.username,
-              full_name: formData.fullName,
-              role: selectedRole,
-              is_verified: 'no'
-            })
-            .select();
-
-          if (insertError) {
-            console.error('Direct insert also failed:', insertError);
-            console.log('Profile creation failed, but continuing with registration...');
-            setStatusMessage('Account created! Profile will be completed on first login.');
-          } else {
-            console.log('Profile created via direct insert:', insertData);
-            setStatusMessage('Account created successfully!');
-          }
-        } else if (profileData?.error) {
-          console.error('RPC returned error:', profileData);
-          console.log('RPC error occurred, but continuing with registration...');
-          setStatusMessage('Account created! Profile will be completed on first login.');
-        } else {
-          console.log('Step 2 Complete: Profile created successfully via RPC!', profileData);
-          setStatusMessage('Account created successfully!');
-        }
-      } catch (profileErr) {
-        console.error('Profile creation attempt failed:', profileErr);
-        console.log('Continuing with registration despite profile creation failure...');
-        setStatusMessage('Account created! Profile will be completed on first login.');
+      if (profileError) {
+        console.error('[Register] Profile creation error:', profileError);
+        throw profileError;
       }
-
-      // Step 3: Handle navigation - ALWAYS navigate regardless of profile creation success
-      console.log('Step 3: Handling navigation...');
+      console.log('[Register] User profile created');
       
-      if (authData.session) {
-        // Route based on role: investors -> dashboard, creators -> profile/KYC
-        const nextRole = selectedRole || 'investor';
-        if (nextRole === 'investor') {
-          console.log('Session available, investor role detected, redirecting to dashboard...');
-          setStatusMessage(prev => prev + ' Redirecting to your dashboard...');
-          navigate('/dashboard', { replace: true });
-        } else {
-          console.log('Session available, creator role detected, redirecting to profile setup...');
-          setStatusMessage(prev => prev + ' Redirecting to profile setup...');
-          navigate('/profile', { replace: true });
-        }
-      } else {
-        console.log('No session - email confirmation required, redirecting to login...');
-        setStatusMessage('Please check your email to confirm your account.');
-        // Immediate redirect
-        navigate('/login', {
-          replace: true,
-          state: {
-            message: 'Please check your email and click the confirmation link to complete your registration.'
-          }
-        });
-      }
-    } catch (err) {
-      console.error('Registration error:', err);
-      setError(err.message || 'An error occurred during registration');
-      setStatusMessage('');
-    } finally {
-      setIsSubmitting(false);
+      // Wait a moment for the profile to be fully committed
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (profileError) {
+      console.error('[Register] Failed to create profile:', profileError);
+      throw new Error('Failed to create user profile');
     }
-  };
+
+    // STEP 3 — Now create wallet (users row exists, so foreign key will work)
+    try {
+      console.log('[Register] Creating wallet...');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-user-wallet`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({ userId })
+      });
+
+      const walletResult = await response.json();
+      console.log('[Register] Wallet creation result:', walletResult);
+    } catch (walletError) {
+      console.error('[Register] Failed to create wallet:', walletError);
+      // Don't fail registration, just log the error
+    }
+
+    setStatusMessage("Account created successfully!");
+
+    // STEP 3 — Routing
+    if (authData.session) {
+      if (selectedRole === "investor") {
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate("/profile", { replace: true });
+      }
+    } else {
+      navigate("/login", {
+        replace: true,
+        state: {
+          message:
+            "Please check your email and click the confirmation link to complete your registration.",
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Registration error:", err);
+    setError(err.message || "An error occurred during registration");
+    setStatusMessage("");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const handleBackToRole = () => {
     setStep('role');
