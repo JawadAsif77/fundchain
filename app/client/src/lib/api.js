@@ -12,6 +12,8 @@ import { campaigns } from '../mock/campaigns.js';
 import { milestones } from '../mock/milestones.js';
 import { users } from '../mock/users.js';
 import { investments } from '../mock/investments.js';
+import { analyzeCampaignRisk } from '../services/riskAnalysis'
+
 
 // Simulate network delay for better UX
 const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
@@ -448,6 +450,12 @@ export const campaignApi = {
         .select('*')
         .single();
       if (error) throw error;
+      try {
+        await analyzeCampaignRisk(data.id);
+        console.log('AI risk analysis triggered');
+      } catch (err) {
+        console.error('Risk analysis failed:', err.message);
+      }
       return { success: true, data };
     } catch (error) {
       console.error('💥 Create campaign error:', error);
@@ -1146,6 +1154,61 @@ export const adminApi = {
       return { success: true, data };
     } catch (error) {
       console.error('💥 Reject campaign error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async setManualRiskLevel(campaignId, riskLevel) {
+    try {
+      console.log('🛡️ Admin: Setting manual risk level:', { campaignId, riskLevel });
+      
+      // Validate risk level
+      if (!['low', 'medium', 'high'].includes(riskLevel)) {
+        throw new Error('Invalid risk level. Must be low, medium, or high');
+      }
+
+      // Update campaign with manual risk override
+      const { data, error } = await supabase
+        .from('campaigns')
+        .update({ 
+          manual_risk_level: riskLevel,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', campaignId)
+        .select('*')
+        .single();
+      
+      if (error) throw error;
+      
+      console.log('✅ Manual risk level set successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('💥 Set manual risk level error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async clearManualRiskLevel(campaignId) {
+    try {
+      console.log('🛡️ Admin: Clearing manual risk override for campaign:', campaignId);
+      
+      // Remove manual override, return to AI analysis
+      const { data, error } = await supabase
+        .from('campaigns')
+        .update({ 
+          manual_risk_level: null,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', campaignId)
+        .select('*')
+        .single();
+      
+      if (error) throw error;
+      
+      console.log('✅ Manual risk override cleared:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('💥 Clear manual risk level error:', error);
       return { success: false, error: error.message };
     }
   }

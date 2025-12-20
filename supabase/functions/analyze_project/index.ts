@@ -36,7 +36,11 @@ Deno.serve(async (req) => {
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    const aiServiceUrl = Deno.env.get('AI_SERVICE_URL') ?? 'http://localhost:8001'
+    const aiServiceUrl = Deno.env.get('AI_SERVICE_URL') ?? 'https://fundchain-ai-service.onrender.com'
+
+    if (!aiServiceUrl) {
+      throw new Error('AI_SERVICE_URL environment variable is required')
+    }
     
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Missing Supabase environment variables')
@@ -67,9 +71,9 @@ Deno.serve(async (req) => {
     // ============================================================================
     const { data: campaign, error: campaignError } = await supabase
       .from('campaigns')
-      .select('id, description, creator_id, created_at')
+      .select('id, creator_id, created_at, description')
       .eq('id', campaign_id)
-      .single()
+      .maybeSingle()
 
     if (campaignError || !campaign) {
       console.error('Campaign fetch error:', campaignError)
@@ -88,13 +92,36 @@ Deno.serve(async (req) => {
     console.log(`Campaign found: ${campaign.id}`)
 
     // ============================================================================
-    // 3. Fetch creator wallet data
+    // 3. Fetch creator user data for wallet age
+    // ============================================================================
+    const { data: creator, error: creatorError } = await supabase
+      .from('users')
+      .select('created_at')
+      .eq('id', campaign.creator_id)
+      .single()
+
+    if (creatorError || !creator) {
+      console.error('Creator fetch error:', creatorError)
+      return new Response(
+        JSON.stringify({ 
+          error: 'Creator not found',
+          details: creatorError?.message 
+        }),
+        { 
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    // ============================================================================
+    // 4. Fetch creator wallet data
     // ============================================================================
     const { data: wallet, error: walletError } = await supabase
       .from('wallets')
-      .select('created_at, total_investments')
+      .select('balance_fc, locked_fc, updated_at')
       .eq('user_id', campaign.creator_id)
-      .single()
+      .maybeSingle()
 
     if (walletError || !wallet) {
       console.error('Wallet fetch error:', walletError)
@@ -111,13 +138,28 @@ Deno.serve(async (req) => {
     }
 
     // ============================================================================
-    // 4. Compute wallet age in days
+    // 5. Compute wallet age in days using creator account age
     // ============================================================================
-    const walletAgeDays = calculateWalletAgeDays(wallet.created_at)
+    const walletAgeDays = calculateWalletAgeDays(creator.created_at)
     console.log(`Wallet age: ${walletAgeDays} days`)
 
     // ============================================================================
-    // 5. Fetch last 20 campaign descriptions for plagiarism check
+    // 6. Count creator's past investments
+    // ============================================================================
+    const { count: pastInvestments, error: investmentCountError } = await supabase
+      .from('investments')
+      .select('*', { count: 'exact', head: true })
+      .eq('investor_id', campaign.creator_id)
+      .eq('status', 'confirmed')
+
+    if (investmentCountError) {
+      console.error('Investment count error:', investmentCountError)
+    }
+
+    console.log(`Past investments: ${pastInvestments || 0}`)
+
+    // ============================================================================
+    // 7. Fetch last 20 campaign descriptions for plagiarism check
     // ============================================================================
     const { data: existingCampaigns, error: existingError } = await supabase
       .from('campaigns')
@@ -134,19 +176,19 @@ Deno.serve(async (req) => {
     console.log(`Found ${existingDescriptions.length} existing descriptions for plagiarism check`)
 
     // ============================================================================
-    // 6. Build AI service request body
+    // 8. Build AI service request body
     // ============================================================================
     const aiRequestBody = {
       description: campaign.description || '',
       existing_descriptions: existingDescriptions,
       wallet_age_days: walletAgeDays,
-      past_investments: wallet.total_investments || 0
+      past_investments: pastInvestments || 0
     }
 
     console.log('Sending request to AI service...')
 
     // ============================================================================
-    // 7. Send POST request to AI microservice
+    // 9. Send POST request to AI microservice
     // ============================================================================
     const aiResponse = await fetch(`${aiServiceUrl}/analyze-project`, {
       method: 'POST',
@@ -173,7 +215,7 @@ Deno.serve(async (req) => {
     }
 
     // ============================================================================
-    // 8. Parse AI service response
+    // 10. Parse AI service response
     // ============================================================================
     let aiResult
     try {
@@ -214,13 +256,13 @@ Deno.serve(async (req) => {
     }
 
     // ============================================================================
-    // 9. Compute risk level
+    // 11. Compute risk level
     // ============================================================================
     const riskLevel = getRiskLevel(aiResult.final_risk_score)
     console.log(`Risk level determined: ${riskLevel}`)
 
     // ============================================================================
-    // 10. Update campaigns table with risk scores
+    // 12. Update campaigns table with risk scores
     // ============================================================================
     const { error: updateError } = await supabase
       .from('campaigns')
@@ -251,7 +293,7 @@ Deno.serve(async (req) => {
     console.log(`Campaign ${campaign_id} updated successfully`)
 
     // ============================================================================
-    // 11. Return success response with all scores
+    // 13. Return success response with all scores
     // ============================================================================
     return new Response(
       JSON.stringify({
@@ -266,7 +308,7 @@ Deno.serve(async (req) => {
         },
         metadata: {
           wallet_age_days: walletAgeDays,
-          past_investments: wallet.total_investments || 0,
+          past_investments: pastInvestments || 0,
           descriptions_checked: existingDescriptions.length,
           analyzed_at: new Date().toISOString()
         }

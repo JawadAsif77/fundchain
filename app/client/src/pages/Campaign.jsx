@@ -4,6 +4,12 @@ import MilestoneList from '../components/MilestoneList';
 import InvestPanel from '../components/InvestPanel';
 import Loader from '../components/Loader';
 import { campaignApi } from '../lib/api.js';
+import RiskBadge from '../components/RiskBadge'
+import { analyzeCampaignRisk } from '../services/riskAnalysis'
+import AdminRiskOverride from '../components/AdminRiskOverride';
+import { supabase } from '../lib/supabase';
+
+
 
 const Campaign = () => {
   const { slug } = useParams();
@@ -11,6 +17,7 @@ const Campaign = () => {
   const [loading, setLoading] = useState(true);
   const [campaign, setCampaign] = useState(null);
   const [campaignMilestones, setCampaignMilestones] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,10 +41,13 @@ const Campaign = () => {
           raisedAmount: Number(data.current_funding || 0),
           deadlineISO: data.end_date,
           status: data.status,
-          riskScore: data.risk_level ? Math.min(100, Math.max(0, Number(data.risk_level) * 20)) : 50,
           region: data.location || '—',
           minInvest: Number(data.min_investment || 0),
           maxInvest: Number(data.max_investment || (data.funding_goal ? Number(data.funding_goal) : 0)),
+          risk_level: data.risk_level,
+          final_risk_score: data.final_risk_score,
+          manual_risk_level: data.manual_risk_level,
+          analyzed_at: data.analyzed_at
         };
         setCampaign(mapped);
 
@@ -65,6 +75,31 @@ const Campaign = () => {
     return () => { cancelled = true; };
   }, [slug]);
 
+  // Check if current user is admin
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          
+          const adminRole = profile?.role === 'admin';
+          setIsAdmin(adminRole);
+          console.log('👤 User role:', profile?.role, '| Is Admin:', adminRole);
+        }
+      } catch (error) {
+        console.error('Error checking admin role:', error);
+        setIsAdmin(false);
+      }
+    };
+    
+    checkAdminRole();
+  }, []);
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -87,18 +122,6 @@ const Campaign = () => {
     return Math.min((campaign.raisedAmount / campaign.goalAmount) * 100, 100);
   };
 
-  const getRiskBadgeClass = (riskScore) => {
-    if (riskScore <= 30) return 'badge risk-low';
-    if (riskScore <= 60) return 'badge risk-medium';
-    return 'badge risk-high';
-  };
-
-  const getRiskLabel = (riskScore) => {
-    if (riskScore <= 30) return 'Low Risk';
-    if (riskScore <= 60) return 'Medium Risk';
-    return 'High Risk';
-  };
-
   const getStatusBadgeClass = (status) => {
     return `badge status-${status}`;
   };
@@ -114,6 +137,12 @@ const Campaign = () => {
   const progress = calculateProgress();
   const daysLeft = Math.ceil((new Date(campaign.deadlineISO) - new Date()) / (1000 * 60 * 60 * 24));
 
+  const displayedRiskLevel =
+  campaign.manual_risk_level || campaign.risk_level;
+
+  const displayedRiskScore =
+  campaign.manual_risk_level ? null : campaign.final_risk_score;
+
   return (
     <div className="main">
       <div className="page-content">
@@ -127,9 +156,6 @@ const Campaign = () => {
                   <span className="badge badge-secondary">{campaign.category}</span>
                   <span className={getStatusBadgeClass(campaign.status)}>
                     {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
-                  </span>
-                  <span className={getRiskBadgeClass(campaign.riskScore)}>
-                    {getRiskLabel(campaign.riskScore)}
                   </span>
                   <span className="badge badge-secondary">{campaign.region}</span>
                 </div>
@@ -150,7 +176,7 @@ const Campaign = () => {
                     <span className="text-gray-600">{progress.toFixed(1)}% of goal</span>
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-md">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-md">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-primary">{formatCurrency(campaign.goalAmount)}</div>
                       <div className="text-sm text-gray-600">Goal</div>
@@ -158,10 +184,6 @@ const Campaign = () => {
                     <div className="text-center">
                       <div className="text-2xl font-bold text-primary">{daysLeft > 0 ? daysLeft : 0}</div>
                       <div className="text-sm text-gray-600">Days left</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-primary">{campaign.riskScore}</div>
-                      <div className="text-sm text-gray-600">Risk Score</div>
                     </div>
                   </div>
                 </div>
@@ -213,6 +235,11 @@ const Campaign = () => {
                 </nav>
               </div>
 
+              <RiskBadge
+              level={displayedRiskLevel}
+              score={displayedRiskScore}
+              />
+
               {/* Tab Content */}
               <div>
                 {activeTab === 'overview' && (
@@ -260,7 +287,7 @@ const Campaign = () => {
                     <h3 className="card-title">Project Updates</h3>
                     <div className="empty-state">
                       <h4>No updates yet</h4>
-                      <p>The project creator hasn't posted any updates. Check back later for news and progress reports.</p>
+                      <p>The project creator has not posted any updates. Check back later for news and progress reports.</p>
                     </div>
                   </div>
                 )}
@@ -276,6 +303,49 @@ const Campaign = () => {
                 )}
               </div>
             </div>
+
+            {/* RiskBadge*/}
+            <div style={{ marginTop: '10px' }}>
+              <h4>AI Risk Analysis</h4>
+              <RiskBadge
+              level={campaign.risk_level}
+              score={campaign.final_risk_score}
+              />
+            </div>
+
+            {/* AnalyzeRisk*/}
+            <button
+            disabled={!!campaign.analyzed_at}
+            onClick={async () => {
+              try {
+                await analyzeCampaignRisk(campaign.id)
+                alert('Risk analysis completed')
+                window.location.reload()
+              } catch (err) {
+                alert(err.message)
+              }
+              }}
+            >
+              {campaign.analyzed_at ? 'Risk Analyzed' : 'Analyze Risk'}
+            </button>
+
+            {/* Admin Risk Override - Only visible to admins */}
+            {isAdmin && (
+              <AdminRiskOverride 
+                campaign={campaign}
+                onUpdate={(updatedCampaign) => {
+                  // Update campaign state with new risk data
+                  setCampaign(prev => ({
+                    ...prev,
+                    manual_risk_level: updatedCampaign.manual_risk_level,
+                    risk_level: updatedCampaign.risk_level,
+                    final_risk_score: updatedCampaign.final_risk_score
+                  }));
+                }}
+              />
+            )}
+
+
 
             {/* Sidebar */}
             <div>
