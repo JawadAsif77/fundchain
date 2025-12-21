@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import MilestoneList from '../components/MilestoneList';
+import CampaignQA from '../components/CampaignQA';
 import Loader from '../components/Loader';
 import { campaignApi } from '../lib/api.js';
 import { useAuth } from '../store/AuthContext';
@@ -48,6 +49,7 @@ const Campaign = () => {
           region: data.location || '—',
           minInvest: Number(data.min_investment || 0),
           maxInvest: Number(data.max_investment || (data.funding_goal ? Number(data.funding_goal) : 0)),
+          creatorId: data.creator_id
         };
         setCampaign(mapped);
 
@@ -440,13 +442,10 @@ const Campaign = () => {
                 )}
 
                 {activeTab === 'qa' && (
-                  <div className="card">
-                    <h3 className="card-title">Questions & Answers</h3>
-                    <div className="empty-state">
-                      <h4>No questions yet</h4>
-                      <p>Be the first to ask a question about this project. Q&A functionality will be available in Phase 2.</p>
-                    </div>
-                  </div>
+                  <CampaignQA 
+                    campaignId={campaign.id} 
+                    creatorId={campaign.creatorId} 
+                  />
                 )}
               </div>
             </div>

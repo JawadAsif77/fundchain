@@ -500,6 +500,156 @@ export const getUserRoleStatus = async (userId) => {
 };
 
 // =============================================================================
+// Q&A API
+// =============================================================================
+export const qaApi = {
+  /**
+   * Get all visible questions for a campaign
+   */
+  async getCampaignQuestions(campaignId) {
+    const { data: questions, error } = await supabase
+      .from('campaign_questions')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .eq('is_hidden', false)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    // Fetch user details separately
+    if (questions && questions.length > 0) {
+      const userIds = [...new Set(questions.map(q => q.user_id))];
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .in('id', userIds);
+      
+      // Map users to questions
+      const usersMap = {};
+      (users || []).forEach(u => usersMap[u.id] = u);
+      
+      return questions.map(q => ({
+        ...q,
+        users: usersMap[q.user_id] || null
+      }));
+    }
+    
+    return questions || [];
+  },
+
+  /**
+   * Get answers for a question
+   */
+  async getQuestionAnswers(questionId) {
+    const { data: answers, error } = await supabase
+      .from('campaign_answers')
+      .select('*')
+      .eq('question_id', questionId)
+      .eq('is_hidden', false)
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    
+    // Fetch creator details separately
+    if (answers && answers.length > 0) {
+      const creatorIds = [...new Set(answers.map(a => a.creator_id))];
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .in('id', creatorIds);
+      
+      // Map users to answers
+      const usersMap = {};
+      (users || []).forEach(u => usersMap[u.id] = u);
+      
+      return answers.map(a => ({
+        ...a,
+        users: usersMap[a.creator_id] || null
+      }));
+    }
+    
+    return answers || [];
+  },
+
+  /**
+   * Post a new question (requires auth)
+   */
+  async postQuestion(campaignId, questionText) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('campaign_questions')
+      .insert({
+        campaign_id: campaignId,
+        user_id: user.id,
+        question: questionText
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Post an answer to a question (creator only)
+   */
+  async postAnswer(questionId, answerText) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('campaign_answers')
+      .insert({
+        question_id: questionId,
+        creator_id: user.id,
+        answer: answerText
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+
+    // Mark question as answered
+    await supabase
+      .from('campaign_questions')
+      .update({ is_answered: true })
+      .eq('id', questionId);
+    
+    return data;
+  },
+
+  /**
+   * Report a question or answer
+   */
+  async reportContent(contentType, contentId, reason) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('content_reports')
+      .insert({
+        content_type: contentType,
+        content_id: contentId,
+        reported_by: user.id,
+        reason
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      if (error.code === '23505') { // Unique constraint violation
+        throw new Error('You have already reported this content');
+      }
+      throw error;
+    }
+    
+    return data;
+  }
+};
+
+// =============================================================================
 // ADMIN API (RESTORED)
 // =============================================================================
 export const adminApi = {
@@ -517,5 +667,169 @@ export const adminApi = {
       .eq('id', campaignId).select().single();
     if (error) return { success: false, error: error.message };
     return { success: true, data };
+  },
+
+  /**
+   * Hide a question (moderation)
+   */
+  async hideQuestion(questionId) {
+    const { data, error } = await supabase
+      .from('campaign_questions')
+      .update({ is_hidden: true })
+      .eq('id', questionId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Hide an answer (moderation)
+   */
+  async hideAnswer(answerId) {
+    const { data, error } = await supabase
+      .from('campaign_answers')
+      .update({ is_hidden: true })
+      .eq('id', answerId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Get all content reports (admin only)
+   */
+  async getContentReports() {
+    const { data: reports, error } = await supabase
+      .from('content_reports')
+      .select('*')
+      .eq('resolved', false)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    // Fetch reporter details separately
+    if (reports && reports.length > 0) {
+      const reporterIds = [...new Set(reports.map(r => r.reported_by))];
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, username, email')
+        .in('id', reporterIds);
+      
+      // Map users to reports
+      const usersMap = {};
+      (users || []).forEach(u => usersMap[u.id] = u);
+      
+      return reports.map(r => ({
+        ...r,
+        reporter: usersMap[r.reported_by] || null
+      }));
+    }
+    
+    return reports || [];
+  },
+
+  /**
+   * Get all questions for admin review (including hidden)
+   */
+  async getAllQuestions() {
+    const { data: questions, error } = await supabase
+      .from('campaign_questions')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
+    if (error) throw error;
+    
+    if (questions && questions.length > 0) {
+      // Fetch user details
+      const userIds = [...new Set(questions.map(q => q.user_id))];
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, username, full_name')
+        .in('id', userIds);
+      
+      // Fetch campaign details
+      const campaignIds = [...new Set(questions.map(q => q.campaign_id))];
+      const { data: campaigns } = await supabase
+        .from('campaigns')
+        .select('id, title, slug')
+        .in('id', campaignIds);
+      
+      const usersMap = {};
+      (users || []).forEach(u => usersMap[u.id] = u);
+      
+      const campaignsMap = {};
+      (campaigns || []).forEach(c => campaignsMap[c.id] = c);
+      
+      return questions.map(q => ({
+        ...q,
+        users: usersMap[q.user_id] || null,
+        campaigns: campaignsMap[q.campaign_id] || null
+      }));
+    }
+    
+    return questions || [];
+  },
+
+  /**
+   * Get all answers for admin review (including hidden)
+   */
+  async getAllAnswers() {
+    const { data: answers, error } = await supabase
+      .from('campaign_answers')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
+    if (error) throw error;
+    
+    if (answers && answers.length > 0) {
+      // Fetch creator details
+      const creatorIds = [...new Set(answers.map(a => a.creator_id))];
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, username, full_name')
+        .in('id', creatorIds);
+      
+      // Fetch question details
+      const questionIds = [...new Set(answers.map(a => a.question_id))];
+      const { data: questions } = await supabase
+        .from('campaign_questions')
+        .select('id, question, campaign_id')
+        .in('id', questionIds);
+      
+      const usersMap = {};
+      (users || []).forEach(u => usersMap[u.id] = u);
+      
+      const questionsMap = {};
+      (questions || []).forEach(q => questionsMap[q.id] = q);
+      
+      return answers.map(a => ({
+        ...a,
+        users: usersMap[a.creator_id] || null,
+        campaign_questions: questionsMap[a.question_id] || null
+      }));
+    }
+    
+    return answers || [];
+  },
+
+  /**
+   * Resolve a content report
+   */
+  async resolveReport(reportId) {
+    const { data, error } = await supabase
+      .from('content_reports')
+      .update({ resolved: true })
+      .eq('id', reportId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
   }
 };

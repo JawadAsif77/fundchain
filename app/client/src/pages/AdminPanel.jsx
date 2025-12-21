@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
-import { adminApi, milestoneVotingApi } from '../lib/api.js';
+import { adminApi, milestoneVotingApi, qaApi } from '../lib/api.js';
 import { useEscrowActions } from '../hooks/useEscrowActions';
 import EscrowFlow from '../components/EscrowFlow';
 import TransactionHistory from '../components/TransactionHistory';
@@ -29,6 +29,11 @@ const AdminPanel = () => {
   const [selectedCampaignForRefund, setSelectedCampaignForRefund] = useState(null);
   const [refundReason, setRefundReason] = useState('');
   const { releaseMilestone, refundCampaignInvestors, releaseLoading, refundLoading} = useEscrowActions();
+  // Moderation state
+  const [contentReports, setContentReports] = useState([]);
+  const [allQuestions, setAllQuestions] = useState([]);
+  const [allAnswers, setAllAnswers] = useState([]);
+  const [moderationLoading, setModerationLoading] = useState(false);
   const navigate = useNavigate();
 
   // Check if user is admin
@@ -46,8 +51,67 @@ const AdminPanel = () => {
       loadPendingCampaigns();
       loadPlatformWallet();
       loadAllCampaigns();
+      loadContentReports();
     }
   }, [profile]);
+
+  const loadContentReports = async () => {
+    try {
+      setModerationLoading(true);
+      const [reports, questions, answers] = await Promise.all([
+        adminApi.getContentReports(),
+        adminApi.getAllQuestions(),
+        adminApi.getAllAnswers()
+      ]);
+      setContentReports(reports);
+      setAllQuestions(questions);
+      setAllAnswers(answers);
+    } catch (err) {
+      console.error('Error loading content reports:', err);
+    } finally {
+      setModerationLoading(false);
+    }
+  };
+
+  const handleHideQuestion = async (questionId, reportId) => {
+    if (!confirm('Are you sure you want to hide this question?')) return;
+    
+    try {
+      await adminApi.hideQuestion(questionId);
+      if (reportId) {
+        await adminApi.resolveReport(reportId);
+      }
+      alert('Question hidden successfully');
+      loadContentReports();
+    } catch (err) {
+      alert('Failed to hide question: ' + err.message);
+    }
+  };
+
+  const handleHideAnswer = async (answerId, reportId) => {
+    if (!confirm('Are you sure you want to hide this answer?')) return;
+    
+    try {
+      await adminApi.hideAnswer(answerId);
+      if (reportId) {
+        await adminApi.resolveReport(reportId);
+      }
+      alert('Answer hidden successfully');
+      loadContentReports();
+    } catch (err) {
+      alert('Failed to hide answer: ' + err.message);
+    }
+  };
+
+  const handleResolveReport = async (reportId) => {
+    try {
+      await adminApi.resolveReport(reportId);
+      alert('Report marked as resolved');
+      loadContentReports();
+    } catch (err) {
+      alert('Failed to resolve report: ' + err.message);
+    }
+  };
 
   const loadPlatformWallet = async () => {
     try {
@@ -536,6 +600,22 @@ const AdminPanel = () => {
           >
             🔒 Token Tracking
           </button>
+          <button
+            onClick={() => setActiveTab('moderation')}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderBottom: activeTab === 'moderation' ? '3px solid #4299E1' : 'none',
+              color: activeTab === 'moderation' ? '#4299E1' : '#718096',
+              fontWeight: activeTab === 'moderation' ? 'bold' : 'normal',
+              cursor: 'pointer',
+              fontSize: '16px',
+              marginBottom: '-2px'
+            }}
+          >
+            🛡️ Content Moderation {contentReports.length > 0 && `(${contentReports.length})`}
+          </button>
         </div>
 
         {/* Verifications Tab Content */}
@@ -974,6 +1054,332 @@ const AdminPanel = () => {
                 📜 Recent Token Transactions
               </h3>
               <TransactionHistory limit={20} />
+            </div>
+          </div>
+        )}
+
+        {/* Content Moderation Tab */}
+        {activeTab === 'moderation' && (
+          <div>
+            {/* Reported Content Section */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              overflow: 'hidden',
+              marginBottom: '24px'
+            }}>
+              <div style={{
+                padding: '24px',
+                borderBottom: '1px solid #e5e7eb',
+                backgroundColor: '#f9fafb'
+              }}>
+                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+                  🚩 Reported Content
+                </h2>
+                <p style={{ margin: '8px 0 0 0', color: '#6b7280', fontSize: '14px' }}>
+                  Content that has been flagged by users
+                </p>
+              </div>
+
+              {moderationLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  Loading reports...
+                </div>
+              ) : contentReports.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  <p style={{ fontSize: '16px', marginBottom: '8px' }}>✅ No pending reports</p>
+                  <p style={{ fontSize: '14px' }}>All reported content has been reviewed</p>
+                </div>
+              ) : (
+                <div style={{ padding: '24px' }}>
+                  {contentReports.map((report) => (
+                    <div 
+                      key={report.id}
+                      style={{
+                        backgroundColor: '#fef3c7',
+                        border: '1px solid #fbbf24',
+                        borderRadius: '8px',
+                        padding: '20px',
+                        marginBottom: '16px'
+                      }}
+                    >
+                      <div style={{ marginBottom: '16px' }}>
+                        <div style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between',
+                          marginBottom: '8px'
+                        }}>
+                          <span style={{
+                            backgroundColor: '#dc2626',
+                            color: 'white',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            textTransform: 'uppercase'
+                          }}>
+                            {report.content_type}
+                          </span>
+                          <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                            Reported: {new Date(report.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>
+                          Reported by: {report.reporter?.username || report.reporter?.email || 'Unknown'}
+                        </div>
+                      </div>
+
+                      {report.reason && (
+                        <div style={{ 
+                          backgroundColor: 'white', 
+                          padding: '12px', 
+                          borderRadius: '6px',
+                          marginBottom: '12px',
+                          borderLeft: '3px solid #dc2626'
+                        }}>
+                          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px', fontWeight: 'bold' }}>
+                            REASON:
+                          </div>
+                          <div style={{ fontSize: '14px', color: '#1f2937' }}>
+                            {report.reason}
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ 
+                        display: 'flex', 
+                        gap: '12px',
+                        marginTop: '16px'
+                      }}>
+                        {report.content_type === 'question' && (
+                          <button
+                            onClick={() => handleHideQuestion(report.content_id, report.id)}
+                            style={{
+                              flex: 1,
+                              padding: '10px 16px',
+                              backgroundColor: '#dc2626',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🚫 Hide Question
+                          </button>
+                        )}
+                        {report.content_type === 'answer' && (
+                          <button
+                            onClick={() => handleHideAnswer(report.content_id, report.id)}
+                            style={{
+                              flex: 1,
+                              padding: '10px 16px',
+                              backgroundColor: '#dc2626',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🚫 Hide Answer
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleResolveReport(report.id)}
+                          style={{
+                            flex: 1,
+                            padding: '10px 16px',
+                            backgroundColor: '#10b981',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ✅ Resolve (No Action)
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* All Questions Section */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              overflow: 'hidden',
+              marginBottom: '24px'
+            }}>
+              <div style={{
+                padding: '24px',
+                borderBottom: '1px solid #e5e7eb',
+                backgroundColor: '#f9fafb'
+              }}>
+                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+                  💬 All Questions
+                </h2>
+                <p style={{ margin: '8px 0 0 0', color: '#6b7280', fontSize: '14px' }}>
+                  Recent questions from all campaigns (last 50)
+                </p>
+              </div>
+
+              {moderationLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  Loading questions...
+                </div>
+              ) : allQuestions.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  No questions yet
+                </div>
+              ) : (
+                <div style={{ padding: '24px' }}>
+                  {allQuestions.map((question) => (
+                    <div 
+                      key={question.id}
+                      style={{
+                        backgroundColor: question.is_hidden ? '#fee2e2' : '#f9fafb',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        marginBottom: '12px'
+                      }}
+                    >
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>
+                          By: {question.users?.full_name || question.users?.username || 'Anonymous'} • {new Date(question.created_at).toLocaleDateString()}
+                          {question.is_hidden && (
+                            <span style={{ marginLeft: '12px', color: '#dc2626', fontWeight: 'bold' }}>
+                              [HIDDEN]
+                            </span>
+                          )}
+                          {question.is_answered && (
+                            <span style={{ marginLeft: '12px', color: '#10b981', fontWeight: 'bold' }}>
+                              [ANSWERED]
+                            </span>
+                          )}
+                        </div>
+                        {question.campaigns && (
+                          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                            Campaign: {question.campaigns.title}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '15px', color: '#1f2937' }}>
+                          {question.question}
+                        </div>
+                      </div>
+                      {!question.is_hidden && (
+                        <button
+                          onClick={() => handleHideQuestion(question.id, null)}
+                          style={{
+                            padding: '8px 16px',
+                            backgroundColor: '#dc2626',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🚫 Hide
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* All Answers Section */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                padding: '24px',
+                borderBottom: '1px solid #e5e7eb',
+                backgroundColor: '#f9fafb'
+              }}>
+                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+                  💡 All Answers
+                </h2>
+                <p style={{ margin: '8px 0 0 0', color: '#6b7280', fontSize: '14px' }}>
+                  Recent answers from creators (last 50)
+                </p>
+              </div>
+
+              {moderationLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  Loading answers...
+                </div>
+              ) : allAnswers.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  No answers yet
+                </div>
+              ) : (
+                <div style={{ padding: '24px' }}>
+                  {allAnswers.map((answer) => (
+                    <div 
+                      key={answer.id}
+                      style={{
+                        backgroundColor: answer.is_hidden ? '#fee2e2' : '#f0fdf4',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        marginBottom: '12px'
+                      }}
+                    >
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>
+                          By: {answer.users?.full_name || answer.users?.username || 'Creator'} • {new Date(answer.created_at).toLocaleDateString()}
+                          {answer.is_hidden && (
+                            <span style={{ marginLeft: '12px', color: '#dc2626', fontWeight: 'bold' }}>
+                              [HIDDEN]
+                            </span>
+                          )}
+                        </div>
+                        {answer.campaign_questions && (
+                          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', fontStyle: 'italic' }}>
+                            Question: {answer.campaign_questions.question}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '15px', color: '#1f2937' }}>
+                          {answer.answer}
+                        </div>
+                      </div>
+                      {!answer.is_hidden && (
+                        <button
+                          onClick={() => handleHideAnswer(answer.id, null)}
+                          style={{
+                            padding: '8px 16px',
+                            backgroundColor: '#dc2626',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🚫 Hide
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
