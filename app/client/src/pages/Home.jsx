@@ -1,58 +1,78 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import CampaignCard from '../components/CampaignCard';
-import { campaigns } from '../mock/campaigns';
+import { campaignApi } from '../lib/api';
 
 const Home = () => {
   const { user } = useAuth();
   const [showChatbot, setShowChatbot] = useState(false);
+  const [featuredCampaigns, setFeaturedCampaigns] = useState([]);
+  const [loading, setLoading] = useState(true);
   
-  // Get featured campaigns (top 3)
-  const featuredCampaigns = campaigns.slice(0, 3);
+  // Fetch real campaigns from database
+  useEffect(() => {
+    const fetchCampaigns = async () => {
+      try {
+        const { data } = await campaignApi.getCampaigns({ status: 'active' });
+        // Get top 3 campaigns sorted by raised amount
+        const top3 = (data || [])
+          .sort((a, b) => (b.current_funding || 0) - (a.current_funding || 0))
+          .slice(0, 3);
+        setFeaturedCampaigns(top3);
+      } catch (error) {
+        console.error('Failed to fetch campaigns:', error);
+        setFeaturedCampaigns([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchCampaigns();
+  }, []);
 
   // Features data
   const features = [
     {
       icon: '📊',
-      title: 'Investment Risk Assessment',
-      description: 'AI-powered risk analysis provides comprehensive due diligence and investment scoring for informed decision-making.',
-      benefits: ['Real-time risk evaluation', '95% accuracy rate', 'Market sentiment analysis'],
+      title: 'AI Risk Assessment',
+      description: 'Machine learning algorithms analyze campaign viability, creator history, and market conditions to provide comprehensive risk scores.',
+      benefits: ['Real-time risk evaluation', '95% accuracy rate', 'Historical performance analysis'],
       color: '#10B981'
     },
     {
       icon: '🔒',
-      title: 'Milestone-based Capital Release',
-      description: 'Investments are released only when predefined business milestones are achieved, protecting investor capital.',
-      benefits: ['Automatic milestone tracking', 'Performance-based releases', 'Investor protection'],
+      title: 'Milestone-based Escrow',
+      description: 'FC tokens are held in smart contract escrow and released only when campaign milestones are approved by investor voting.',
+      benefits: ['Automated escrow management', 'Investor-controlled releases', 'Milestone verification'],
       color: '#3B82F6'
     },
     {
       icon: '👥',
-      title: 'Investment Governance',
-      description: 'Token holders participate in key investment decisions through decentralized voting on milestone approvals.',
-      benefits: ['Democratic milestone voting', 'Token-weighted governance', 'Transparent decisions'],
+      title: 'Voting Governance',
+      description: 'Investors vote on milestone completion using investment-weighted governance. Consensus determines fund release.',
+      benefits: ['Democratic milestone voting', 'Investment-weighted votes', 'Transparent consensus'],
       color: '#8B5CF6'
     },
     {
       icon: '⚡',
-      title: 'Solana-Powered Trading',
-      description: 'Lightning-fast investment transactions with minimal fees on the high-performance Solana blockchain.',
-      benefits: ['Sub-second settlements', 'Ultra-low fees', 'High liquidity'],
+      title: 'Solana-Powered Speed',
+      description: 'Lightning-fast FC token transactions with minimal fees on the high-performance Solana blockchain.',
+      benefits: ['Sub-second settlements', 'Low transaction fees', 'High throughput'],
       color: '#F59E0B'
     },
     {
       icon: '🤖',
-      title: 'AI Investment Assistant',
-      description: 'Get personalized investment recommendations and portfolio insights from our AI-powered investment advisor.',
-      benefits: ['24/7 portfolio monitoring', 'Investment recommendations', 'Risk optimization'],
+      title: 'Smart Contract Escrow',
+      description: 'Automated escrow system ensures funds are protected and released based on verified milestone completion.',
+      benefits: ['Trustless transactions', 'Automated releases', 'Immutable records'],
       color: '#6366F1'
     },
     {
       icon: '📈',
-      title: 'Portfolio Analytics',
-      description: 'Comprehensive dashboards with real-time analytics help track investment performance and optimize returns.',
-      benefits: ['Real-time portfolio tracking', 'ROI calculations', 'Performance benchmarks'],
+      title: 'Portfolio Tracking',
+      description: 'Real-time dashboards track your FC token investments, milestone progress, and campaign performance.',
+      benefits: ['Live portfolio updates', 'Milestone tracking', 'Performance analytics'],
       color: '#059669'
     }
   ];
@@ -61,45 +81,45 @@ const Home = () => {
   const steps = [
     {
       icon: '�',
-      title: 'Connect & Verify',
-      description: 'Connect your Solana wallet and complete investor accreditation to access premium investment opportunities.',
+      title: 'Connect & Get FC Tokens',
+      description: 'Connect your Solana wallet and exchange USD for FC tokens to start funding campaigns.',
       details: [
         'Connect Solana wallet (Phantom, Solflare, etc.)',
-        'Complete accredited investor verification',
-        'Set up your investment profile and preferences'
+        'Exchange USD to FC tokens (1 USD = 1 FC)',
+        'Complete KYC verification for access'
       ],
       color: '#3B82F6'
     },
     {
       icon: '🔍',
-      title: 'Discover & Analyze',
-      description: 'Browse vetted investment opportunities with AI-powered risk assessments and comprehensive due diligence.',
+      title: 'Discover Campaigns',
+      description: 'Browse verified campaigns with AI risk scores, milestone plans, and creator backgrounds.',
       details: [
-        'Access curated investment opportunities',
-        'Review AI-powered risk assessments',
-        'Analyze financial projections and business models'
+        'View active campaigns with risk ratings',
+        'Review campaign milestones and funding goals',
+        'Check creator profiles and past performance'
       ],
       color: '#10B981'
     },
     {
       icon: '📈',
-      title: 'Invest & Govern',
-      description: 'Make strategic investments using PlatformTokens and participate in milestone governance voting.',
+      title: 'Invest & Vote',
+      description: 'Fund campaigns with FC tokens and vote on milestone completion to control fund releases.',
       details: [
-        'Invest with PT tokens and secure equity',
-        'Participate in milestone approval voting',
-        'Monitor capital release schedules'
+        'Invest FC tokens in campaigns',
+        'Vote on milestone approval (investment-weighted)',
+        'Track milestone progress in real-time'
       ],
       color: '#8B5CF6'
     },
     {
       icon: '�',
-      title: 'Track & Profit',
-      description: 'Monitor portfolio performance, receive capital releases, and track ROI through comprehensive analytics.',
+      title: 'Track Performance',
+      description: 'Monitor campaign progress, vote on releases, and track your FC token portfolio performance.',
       details: [
-        'Real-time portfolio performance tracking',
-        'Automated milestone-based capital releases',
-        'Comprehensive ROI and exit analytics'
+        'Real-time portfolio dashboard',
+        'Milestone-based fund releases',
+        'Campaign success notifications'
       ],
       color: '#F59E0B'
     }
@@ -163,8 +183,8 @@ const Home = () => {
                   lineHeight: '1.6',
                   maxWidth: '500px'
                 }}>
-                  Discover high-growth investment opportunities with milestone-based capital release, 
-                  AI-powered risk assessment, and transparent portfolio management on Solana.
+                  Fund innovative campaigns with FC tokens. Milestone-based escrow releases, 
+                  AI-powered risk scoring, and investor voting governance on Solana blockchain.
                 </p>
               </div>
 
@@ -177,16 +197,16 @@ const Home = () => {
                 marginBottom: '32px'
               }}>
                 <div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#29C7AC' }}>$2.5M+</div>
-                  <div style={{ fontSize: '0.875rem', color: '#4a5568' }}>Total Invested</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#29C7AC' }}>2.5M+ FC</div>
+                  <div style={{ fontSize: '0.875rem', color: '#4a5568' }}>Total Funded</div>
                 </div>
                 <div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#29C7AC' }}>150+</div>
-                  <div style={{ fontSize: '0.875rem', color: '#4a5568' }}>Active Deals</div>
+                  <div style={{ fontSize: '0.875rem', color: '#4a5568' }}>Active Campaigns</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#29C7AC' }}>24%</div>
-                  <div style={{ fontSize: '0.875rem', color: '#4a5568' }}>Avg. ROI</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#29C7AC' }}>95%</div>
+                  <div style={{ fontSize: '0.875rem', color: '#4a5568' }}>Success Rate</div>
                 </div>
               </div>
 
@@ -365,8 +385,8 @@ const Home = () => {
                       fontSize: '0.75rem', 
                       color: '#64748b' 
                     }}>
-                      <span>75,000 PT raised</span>
-                      <span>100,000 PT target</span>
+                      <span>75,000 FC raised</span>
+                      <span>100,000 FC target</span>
                     </div>
                   </div>
 
@@ -404,9 +424,9 @@ const Home = () => {
                     </h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {[
-                        { title: 'Product Development', amount: '25,000 PT', status: 'released' },
-                        { title: 'Market Validation', amount: '30,000 PT', status: 'active' },
-                        { title: 'Scale & Growth', amount: '45,000 PT', status: 'pending' },
+                        { title: 'Product Development', amount: '25,000 FC', status: 'released' },
+                        { title: 'Market Validation', amount: '30,000 FC', status: 'active' },
+                        { title: 'Scale & Growth', amount: '45,000 FC', status: 'pending' },
                       ].map((milestone, index) => (
                         <div key={index} style={{
                           display: 'flex',
@@ -628,9 +648,19 @@ const Home = () => {
             gap: '30px',
             marginBottom: '60px'
           }}>
-            {featuredCampaigns.map(campaign => (
-              <CampaignCard key={campaign.id} campaign={campaign} />
-            ))}
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '40px', gridColumn: '1 / -1' }}>
+                <p style={{ color: '#4a5568', fontSize: '1.125rem' }}>Loading campaigns...</p>
+              </div>
+            ) : featuredCampaigns.length > 0 ? (
+              featuredCampaigns.map(campaign => (
+                <CampaignCard key={campaign.id} campaign={campaign} />
+              ))
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', gridColumn: '1 / -1' }}>
+                <p style={{ color: '#4a5568', fontSize: '1.125rem' }}>No active campaigns available yet.</p>
+              </div>
+            )}
           </div>
           
           <div style={{ textAlign: 'center' }}>

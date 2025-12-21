@@ -642,6 +642,49 @@ CREATE TABLE public.email_campaigns (
   created_at timestamptz DEFAULT now()
 );
 
+---------------------------------------------------------------
+-- CAMPAIGN QUESTIONS
+---------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.campaign_questions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id uuid NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  question text NOT NULL,
+  is_answered boolean DEFAULT false,
+  is_hidden boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+
+---------------------------------------------------------------
+-- CAMPAIGN ANSWERS
+---------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.campaign_answers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  question_id uuid NOT NULL REFERENCES public.campaign_questions(id) ON DELETE CASCADE,
+  creator_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  answer text NOT NULL,
+  is_hidden boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+
+---------------------------------------------------------------
+-- CONTENT REPORTS
+---------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.content_reports (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  content_type text NOT NULL,
+  content_id uuid NOT NULL,
+  reported_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  reason text,
+  resolved boolean DEFAULT false,
+  created_at timestamptz DEFAULT now(),
+  
+  UNIQUE(content_type, content_id, reported_by)
+);
+
 -- ============================================================
 -- INDEXES
 -- ============================================================
@@ -704,6 +747,20 @@ CREATE INDEX idx_notifications_read ON public.notifications(user_id, is_read);
 
 -- Campaign Media
 CREATE INDEX idx_campaign_media_campaign ON public.campaign_media(campaign_id);
+
+-- Campaign Questions
+CREATE INDEX idx_campaign_questions_campaign ON public.campaign_questions(campaign_id);
+CREATE INDEX idx_campaign_questions_user ON public.campaign_questions(user_id);
+CREATE INDEX idx_campaign_questions_answered ON public.campaign_questions(is_answered);
+
+-- Campaign Answers
+CREATE INDEX idx_campaign_answers_question ON public.campaign_answers(question_id);
+CREATE INDEX idx_campaign_answers_creator ON public.campaign_answers(creator_id);
+
+-- Content Reports
+CREATE INDEX idx_content_reports_content ON public.content_reports(content_type, content_id);
+CREATE INDEX idx_content_reports_reporter ON public.content_reports(reported_by);
+CREATE INDEX idx_content_reports_resolved ON public.content_reports(resolved);
 
 -- Favorites
 CREATE INDEX idx_favorites_user ON public.favorites(user_id);
@@ -779,8 +836,104 @@ USING (
 );
 
 -- ============================================================
--- ATE TRIGGER user_verifications_updated_at BEFORE UPDATE ON public.user_verifications
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+-- RLS POLICIES: CAMPAIGN Q&A
+-- ============================================================
+
+-- Enable RLS
+ALTER TABLE public.campaign_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.campaign_answers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.content_reports ENABLE ROW LEVEL SECURITY;
+
+-- Public read questions (not hidden)
+DROP POLICY IF EXISTS read_questions ON public.campaign_questions;
+CREATE POLICY read_questions
+ON public.campaign_questions
+FOR SELECT
+USING (is_hidden = false);
+
+-- Logged-in users ask questions
+DROP POLICY IF EXISTS ask_question ON public.campaign_questions;
+CREATE POLICY ask_question
+ON public.campaign_questions
+FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+-- Creator answers
+DROP POLICY IF EXISTS creator_answer ON public.campaign_answers;
+CREATE POLICY creator_answer
+ON public.campaign_answers
+FOR INSERT
+WITH CHECK (auth.uid() = creator_id);
+
+-- Public read answers (not hidden)
+DROP POLICY IF EXISTS read_answers ON public.campaign_answers;
+CREATE POLICY read_answers
+ON public.campaign_answers
+FOR SELECT
+USING (is_hidden = false);
+
+-- Admin moderation on questions
+DROP POLICY IF EXISTS admin_moderation_questions ON public.campaign_questions;
+CREATE POLICY admin_moderation_questions
+ON public.campaign_questions
+FOR UPDATE
+USING (
+  EXISTS (
+    SELECT 1 FROM public.users
+    WHERE users.id = auth.uid()
+    AND users.role = 'admin'
+  )
+);
+
+-- Admin moderation on answers
+DROP POLICY IF EXISTS admin_moderation_answers ON public.campaign_answers;
+CREATE POLICY admin_moderation_answers
+ON public.campaign_answers
+FOR UPDATE
+USING (
+  EXISTS (
+    SELECT 1 FROM public.users
+    WHERE users.id = auth.uid()
+    AND users.role = 'admin'
+  )
+);
+
+-- Users can report content
+DROP POLICY IF EXISTS report_content ON public.content_reports;
+CREATE POLICY report_content
+ON public.content_reports
+FOR INSERT
+WITH CHECK (auth.uid() = reported_by);
+
+-- Admin can view reports
+DROP POLICY IF EXISTS admin_view_reports ON public.content_reports;
+CREATE POLICY admin_view_reports
+ON public.content_reports
+FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM public.users
+    WHERE users.id = auth.uid()
+    AND users.role = 'admin'
+  )
+);
+
+-- Admin can resolve reports
+DROP POLICY IF EXISTS admin_resolve_reports ON public.content_reports;
+CREATE POLICY admin_resolve_reports
+ON public.content_reports
+FOR UPDATE
+USING (
+  EXISTS (
+    SELECT 1 FROM public.users
+    WHERE users.id = auth.uid()
+    AND users.role = 'admin'
+  )
+);
+
+-- ============================================================
+-- TRIGGERS
+-- ============================================================
 
 -- ============================================================
 -- SEED DATA

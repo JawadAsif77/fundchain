@@ -422,7 +422,11 @@ const Campaign = () => {
                 )}
 
                 {activeTab === 'milestones' && (
-                  <MilestoneList milestones={campaignMilestones} />
+                  <MilestoneList 
+                    milestones={campaignMilestones} 
+                    campaignId={campaign.id}
+                    showVoting={true}
+                  />
                 )}
 
                 {activeTab === 'updates' && (

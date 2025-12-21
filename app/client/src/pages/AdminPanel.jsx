@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
-import { adminApi } from '../lib/api.js';
+import { adminApi, milestoneVotingApi } from '../lib/api.js';
 import { useEscrowActions } from '../hooks/useEscrowActions';
 import EscrowFlow from '../components/EscrowFlow';
 import TransactionHistory from '../components/TransactionHistory';
@@ -25,6 +25,7 @@ const AdminPanel = () => {
   const [campaignWallets, setCampaignWallets] = useState({});
   const [selectedCampaignForMilestone, setSelectedCampaignForMilestone] = useState(null);
   const [campaignMilestones, setCampaignMilestones] = useState([]);
+  const [milestoneVoteStats, setMilestoneVoteStats] = useState({});
   const [selectedCampaignForRefund, setSelectedCampaignForRefund] = useState(null);
   const [refundReason, setRefundReason] = useState('');
   const { releaseMilestone, refundCampaignInvestors, releaseLoading, refundLoading} = useEscrowActions();
@@ -101,21 +102,41 @@ const AdminPanel = () => {
       .order('order_index', { ascending: true });
     
     setCampaignMilestones(milestones || []);
+
+    // Load voting stats for each milestone
+    const stats = {};
+    for (const milestone of milestones || []) {
+      try {
+        const voteStats = await milestoneVotingApi.getVoteStats(milestone.id);
+        stats[milestone.id] = voteStats;
+      } catch (err) {
+        console.error('Error loading vote stats for milestone:', milestone.id, err);
+      }
+    }
+    setMilestoneVoteStats(stats);
   };
 
   const handleReleaseMilestone = async (milestoneId, amountFc) => {
     if (!selectedCampaignForMilestone) return;
+    
+    // Check if milestone has approval consensus
+    const voteStats = milestoneVoteStats[milestoneId];
+    if (voteStats && voteStats.consensus !== 'approved') {
+      alert(`Cannot release milestone: ${voteStats.consensus === 'rejected' ? 'Milestone rejected by investors' : 'Waiting for investor approval (need ≥60% approval)'}`);
+      return;
+    }
     
     try {
       await releaseMilestone({
         campaignId: selectedCampaignForMilestone.id,
         milestoneId,
         amountFc,
-        notes: 'Released by admin'
+        notes: 'Released by admin after investor approval'
       });
       
       alert('Milestone funds released successfully!');
       setSelectedCampaignForMilestone(null);
+      setMilestoneVoteStats({});
       loadAllCampaigns();
       loadPlatformWallet();
     } catch (err) {
@@ -999,50 +1020,118 @@ const AdminPanel = () => {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {campaignMilestones.map((milestone) => (
-                  <div key={milestone.id} style={{
-                    padding: '16px',
-                    backgroundColor: milestone.is_completed ? '#f0fdf4' : '#fff',
-                    border: '1px solid ' + (milestone.is_completed ? '#10b981' : '#e5e7eb'),
-                    borderRadius: '8px'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, marginBottom: '8px' }}>{milestone.title}</div>
-                        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>
-                          {milestone.description}
-                        </div>
-                        <div style={{ fontSize: '14px', fontWeight: 500 }}>
-                          Target Amount: <span style={{ color: '#3b82f6' }}>{milestone.target_amount?.toLocaleString() || 0} FC</span>
-                        </div>
-                        {milestone.is_completed && (
-                          <div style={{ fontSize: '12px', color: '#10b981', marginTop: '8px' }}>
-                            ✅ Released on {new Date(milestone.completion_date).toLocaleDateString()}
+                {campaignMilestones.map((milestone) => {
+                  const voteStats = milestoneVoteStats[milestone.id];
+                  const canRelease = !milestone.is_completed && voteStats?.consensus === 'approved';
+                  const isRejected = voteStats?.consensus === 'rejected';
+                  const isPending = voteStats?.consensus === 'pending';
+
+                  return (
+                    <div key={milestone.id} style={{
+                      padding: '16px',
+                      backgroundColor: milestone.is_completed ? '#f0fdf4' : '#fff',
+                      border: '1px solid ' + (milestone.is_completed ? '#10b981' : '#e5e7eb'),
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: '8px' }}>{milestone.title}</div>
+                          <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>
+                            {milestone.description}
                           </div>
+                          <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>
+                            Target Amount: <span style={{ color: '#3b82f6' }}>{milestone.target_amount?.toLocaleString() || 0} FC</span>
+                          </div>
+
+                          {/* Vote Statistics */}
+                          {voteStats && voteStats.totalVotes > 0 && !milestone.is_completed && (
+                            <div style={{
+                              marginTop: '12px',
+                              padding: '12px',
+                              backgroundColor: '#f9fafb',
+                              borderRadius: '6px',
+                              border: '1px solid #e5e7eb'
+                            }}>
+                              <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: '#111827' }}>
+                                📊 Investor Voting Status
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                                {voteStats.totalVotes} votes • {voteStats.totalWeight.toLocaleString()} FC total weight
+                              </div>
+                              <div style={{ 
+                                display: 'flex', 
+                                height: '8px', 
+                                backgroundColor: '#e5e7eb', 
+                                borderRadius: '4px',
+                                overflow: 'hidden',
+                                marginBottom: '8px'
+                              }}>
+                                <div style={{ 
+                                  width: `${voteStats.approvalPercentage}%`,
+                                  backgroundColor: '#10b981',
+                                  transition: 'width 0.3s'
+                                }}></div>
+                                <div style={{ 
+                                  width: `${voteStats.rejectionPercentage}%`,
+                                  backgroundColor: '#ef4444',
+                                  transition: 'width 0.3s'
+                                }}></div>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                <span style={{ color: '#10b981' }}>
+                                  ✓ {voteStats.approvalPercentage}% Approve ({voteStats.approvalCount})
+                                </span>
+                                <span style={{ color: '#ef4444' }}>
+                                  ✗ {voteStats.rejectionPercentage}% Reject ({voteStats.rejectionCount})
+                                </span>
+                              </div>
+                              <div style={{ 
+                                marginTop: '8px', 
+                                padding: '6px 10px', 
+                                borderRadius: '4px',
+                                backgroundColor: canRelease ? '#d1fae5' : isRejected ? '#fee2e2' : '#fef3c7',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                color: canRelease ? '#065f46' : isRejected ? '#991b1b' : '#92400e'
+                              }}>
+                                {canRelease && '✓ Approved by Investors - Ready for Release'}
+                                {isRejected && '✗ Rejected by Investors - Cannot Release'}
+                                {isPending && '⏳ Pending Votes - Need ≥60% approval'}
+                              </div>
+                            </div>
+                          )}
+
+                          {milestone.is_completed && (
+                            <div style={{ fontSize: '12px', color: '#10b981', marginTop: '8px' }}>
+                              ✅ Released on {new Date(milestone.completion_date).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                        {!milestone.is_completed && (
+                          <button
+                            onClick={() => handleReleaseMilestone(milestone.id, milestone.target_amount)}
+                            disabled={releaseLoading || !canRelease}
+                            style={{
+                              padding: '8px 16px',
+                              backgroundColor: canRelease ? '#10b981' : '#9ca3af',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              cursor: (releaseLoading || !canRelease) ? 'not-allowed' : 'pointer',
+                              whiteSpace: 'nowrap',
+                              marginLeft: '12px',
+                              opacity: canRelease ? 1 : 0.6
+                            }}
+                            title={!canRelease ? 'Milestone must be approved by investors (≥60%) before release' : ''}
+                          >
+                            {releaseLoading ? 'Releasing...' : 'Release'}
+                          </button>
                         )}
                       </div>
-                      {!milestone.is_completed && (
-                        <button
-                          onClick={() => handleReleaseMilestone(milestone.id, milestone.target_amount)}
-                          disabled={releaseLoading}
-                          style={{
-                            padding: '8px 16px',
-                            backgroundColor: '#10b981',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '14px',
-                            cursor: releaseLoading ? 'not-allowed' : 'pointer',
-                            whiteSpace: 'nowrap',
-                            marginLeft: '12px'
-                          }}
-                        >
-                          {releaseLoading ? 'Releasing...' : 'Release'}
-                        </button>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

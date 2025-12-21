@@ -1,20 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { campaignApi } from '../lib/api';
 import '../styles/analytics.css';
 
 const Analytics = () => {
   const [trendPeriod, setTrendPeriod] = useState('monthly');
   const [showMethodology, setShowMethodology] = useState(false);
+  const [topCampaigns, setTopCampaigns] = useState([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(true);
+
+  // Fetch real campaigns from database
+  useEffect(() => {
+    const fetchTopCampaigns = async () => {
+      try {
+        const { data } = await campaignApi.getCampaigns({ status: 'active' });
+        // Get top 3 campaigns sorted by funding amount
+        const top3 = (data || [])
+          .sort((a, b) => (b.current_funding || 0) - (a.current_funding || 0))
+          .slice(0, 3)
+          .map(campaign => ({
+            id: campaign.id,
+            title: campaign.title,
+            creator: campaign.creator_name || 'Anonymous',
+            goal: campaign.goal_amount || 0,
+            raised: campaign.current_funding || 0,
+            fundedPercent: campaign.goal_amount ? Math.round((campaign.current_funding / campaign.goal_amount) * 100) : 0,
+            status: campaign.status || 'active',
+            slug: campaign.slug,
+            category: campaign.category,
+            region: campaign.region
+          }));
+        setTopCampaigns(top3);
+      } catch (error) {
+        console.error('Failed to fetch top campaigns:', error);
+        setTopCampaigns([]);
+      } finally {
+        setLoadingCampaigns(false);
+      }
+    };
+
+    fetchTopCampaigns();
+  }, []);
 
   // Placeholder data - structured to easily replace with Supabase views later
   const kpiData = [
     {
       icon: '💰',
       label: 'Total Funding Raised',
-      value: '$2.5M+',
+      value: '2.5M FC',
       delta: '+12.5%',
       deltaType: 'positive',
-      tooltip: 'Sum of campaigns.current_funding'
+      tooltip: 'Sum of campaigns.current_funding in FC tokens'
     },
     {
       icon: '🚀',
@@ -82,64 +118,6 @@ const Analytics = () => {
       { period: 'Q4', successful: 156, failed: 19 }
     ]
   };
-
-  const topCampaigns = [
-    {
-      id: 1,
-      title: 'EcoFarm Tech Platform',
-      creator: 'Sarah Chen',
-      goal: 500000,
-      raised: 420000,
-      fundedPercent: 84,
-      status: 'active',
-      slug: 'ecofarm-tech-platform',
-      thumbnail: '🌱'
-    },
-    {
-      id: 2,
-      title: 'AI-Powered Learning App',
-      creator: 'Marcus Johnson',
-      goal: 300000,
-      raised: 285000,
-      fundedPercent: 95,
-      status: 'active',
-      slug: 'ai-powered-learning-app',
-      thumbnail: '🤖'
-    },
-    {
-      id: 3,
-      title: 'Clean Energy Storage',
-      creator: 'Emma Rodriguez',
-      goal: 750000,
-      raised: 690000,
-      fundedPercent: 92,
-      status: 'funded',
-      slug: 'clean-energy-storage',
-      thumbnail: '⚡'
-    },
-    {
-      id: 4,
-      title: 'Healthcare Analytics',
-      creator: 'Dr. David Kim',
-      goal: 400000,
-      raised: 325000,
-      fundedPercent: 81,
-      status: 'active',
-      slug: 'healthcare-analytics',
-      thumbnail: '🏥'
-    },
-    {
-      id: 5,
-      title: 'Blockchain Voting System',
-      creator: 'Alex Thompson',
-      goal: 600000,
-      raised: 480000,
-      fundedPercent: 80,
-      status: 'active',
-      slug: 'blockchain-voting-system',
-      thumbnail: '🗳️'
-    }
-  ];
 
   const topInvestors = [
     { name: 'Investor A***', totalInvested: 125000, campaigns: 15 },
@@ -219,9 +197,9 @@ const Analytics = () => {
       <section className="analytics-hero">
         <div className="container">
           <div className="hero-content">
-            <h1>FundChain Analytics: Transparency Through Data</h1>
+            <h1>FundChain Analytics: Real-Time Platform Insights</h1>
             <p>
-              Real-time insight into funding, participation, and campaign performance—ready for investors and creators alike.
+              Track campaign funding in FC tokens, investor participation, milestone completions, and platform performance metrics—all transparently recorded on Solana.
             </p>
             <div className="data-legend">
               <span className="legend-item">
@@ -378,13 +356,17 @@ const Analytics = () => {
               <div>Status</div>
               <div></div>
             </div>
-            {topCampaigns.map((campaign) => (
+            {loadingCampaigns ? (
+              <div className="table-row" style={{ textAlign: 'center', padding: '40px' }}>
+                <div style={{ gridColumn: '1 / -1', color: '#6b7280' }}>Loading campaigns...</div>
+              </div>
+            ) : topCampaigns.length > 0 ? (
+              topCampaigns.map((campaign) => (
               <div key={campaign.id} className="table-row">
                 <div className="campaign-info">
-                  <span className="campaign-thumbnail">{campaign.thumbnail}</span>
                   <span className="campaign-title">{campaign.title}</span>
                 </div>
-                <div className="creator-name">{campaign.creator}</div>
+                <div className="creator-name">{campaign.creator || 'Anonymous'}</div>
                 <div className="goal-amount">{formatCurrency(campaign.goal)}</div>
                 <div className="raised-amount">{formatCurrency(campaign.raised)}</div>
                 <div className="funded-percent">
@@ -405,7 +387,12 @@ const Analytics = () => {
                   </Link>
                 </div>
               </div>
-            ))}
+            ))
+            ) : (
+              <div className="table-row" style={{ textAlign: 'center', padding: '40px' }}>
+                <div style={{ gridColumn: '1 / -1', color: '#6b7280' }}>No active campaigns available.</div>
+              </div>
+            )}
           </div>
         </div>
       </section>

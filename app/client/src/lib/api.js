@@ -344,7 +344,126 @@ export const validateMilestones = (milestones) => {
   }
   return { isValid: true };
 };
+// =============================================================================
+// MILESTONE VOTING API
+// =============================================================================
+export const milestoneVotingApi = {
+  /**
+   * Submit a vote for a milestone
+   */
+  async submitVote(milestoneId, campaignId, vote) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
 
+    // Check if user already voted
+    const { data: existing } = await supabase
+      .from('milestone_votes')
+      .select('id')
+      .eq('milestone_id', milestoneId)
+      .eq('investor_id', user.id)
+      .maybeSingle();
+
+    if (existing) {
+      throw new Error('You have already voted on this milestone');
+    }
+
+    // Get user's investment weight
+    const { data: investment } = await supabase
+      .from('investments')
+      .select('amount')
+      .eq('campaign_id', campaignId)
+      .eq('investor_id', user.id)
+      .eq('status', 'confirmed')
+      .maybeSingle();
+
+    const investmentWeight = investment?.amount || 0;
+
+    const { data, error } = await supabase
+      .from('milestone_votes')
+      .insert({
+        milestone_id: milestoneId,
+        investor_id: user.id,
+        campaign_id: campaignId,
+        vote,
+        investment_weight: investmentWeight
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Get user's vote for a milestone
+   */
+  async getUserVote(milestoneId, userId) {
+    const { data, error } = await supabase
+      .from('milestone_votes')
+      .select('*')
+      .eq('milestone_id', milestoneId)
+      .eq('investor_id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Get vote statistics for a milestone
+   */
+  async getVoteStats(milestoneId) {
+    const { data, error } = await supabase
+      .from('milestone_votes')
+      .select('vote, investment_weight')
+      .eq('milestone_id', milestoneId);
+
+    if (error) throw error;
+
+    const votes = data || [];
+    const totalWeight = votes.reduce((sum, v) => sum + (v.investment_weight || 0), 0);
+    const approveWeight = votes.filter(v => v.vote === true).reduce((sum, v) => sum + (v.investment_weight || 0), 0);
+    const rejectWeight = votes.filter(v => v.vote === false).reduce((sum, v) => sum + (v.investment_weight || 0), 0);
+
+    const approvalPercentage = totalWeight > 0 ? (approveWeight / totalWeight) * 100 : 0;
+    const rejectionPercentage = totalWeight > 0 ? (rejectWeight / totalWeight) * 100 : 0;
+
+    let consensus = 'pending';
+    if (approvalPercentage >= 60) {
+      consensus = 'approved';
+    } else if (rejectionPercentage >= 40) {
+      consensus = 'rejected';
+    }
+
+    return {
+      totalVotes: votes.length,
+      approvalCount: votes.filter(v => v.vote === true).length,
+      rejectionCount: votes.filter(v => v.vote === false).length,
+      approvalPercentage: Math.round(approvalPercentage),
+      rejectionPercentage: Math.round(rejectionPercentage),
+      consensus,
+      totalWeight,
+      approveWeight,
+      rejectWeight
+    };
+  },
+
+  /**
+   * Check if user has invested in campaign (required to vote)
+   */
+  async canUserVote(campaignId, userId) {
+    const { data, error } = await supabase
+      .from('investments')
+      .select('id')
+      .eq('campaign_id', campaignId)
+      .eq('investor_id', userId)
+      .eq('status', 'confirmed')
+      .maybeSingle();
+
+    if (error) return false;
+    return !!data;
+  }
+};
 export const createProjectWithMilestones = async (projectData, milestones) => {
   try {
     const campaignRes = await campaignApi.createCampaign(projectData);

@@ -162,7 +162,7 @@ const handleSubmit = async (e) => {
     return (
       <div style={{ 
         minHeight: '100vh', 
-        background: 'linear-gradient(135deg, #29C7AC, #0B132B)', 
+        background: '#ffffff', 
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
@@ -278,7 +278,7 @@ const handleSubmit = async (e) => {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #29C7AC, #0B132B)', 
+      background: '#ffffff', 
       display: 'flex', 
       alignItems: 'center', 
       justifyContent: 'center',

@@ -117,7 +117,7 @@ const Wallet = () => {
           {displayBalance} <span style={{ fontSize: '24px' }}>FC</span>
         </div>
         <div style={{ fontSize: '14px', color: '#999' }}>
-          ≈ ${displayBalance} USD
+          ≈ ${displayBalance} USD (Exchange Rate: 1 FC = 1 USD)
         </div>
         {lockedBalance > 0 && (
            <div style={{ marginTop: '10px', fontSize: '13px', color: '#f59e0b' }}>
@@ -129,9 +129,9 @@ const Wallet = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
         {/* LEFT: Dummy / Test Buy (USD) */}
         <div className="card">
-          <h3>Buy FC (Test USD)</h3>
+          <h3>Buy FC Tokens</h3>
           <p style={{ fontSize: '13px', color: '#666', marginBottom: '16px' }}>
-            Simulate buying FC tokens with USD. Rate: 1 USD = 1 FC.
+            Exchange USD to FC tokens. Fixed Rate: 1 USD = 1 FC. Use FC tokens to fund campaigns.
           </p>
           
           <div className="form-group">
