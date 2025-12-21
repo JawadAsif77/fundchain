@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
-import { adminApi, milestoneVotingApi, qaApi } from '../lib/api.js';
+import { adminApi, milestoneVotingApi, qaApi, milestoneUpdateApi } from '../lib/api.js';
 import { useEscrowActions } from '../hooks/useEscrowActions';
 import EscrowFlow from '../components/EscrowFlow';
 import TransactionHistory from '../components/TransactionHistory';
@@ -190,6 +190,13 @@ const AdminPanel = () => {
       return;
     }
     
+    // Check if campaign has any updates
+    const hasUpdates = await milestoneUpdateApi.milestoneHasUpdates(selectedCampaignForMilestone.id);
+    if (!hasUpdates) {
+      alert('Cannot release milestone: Creator must post at least one progress update before requesting funds.');
+      return;
+    }
+    
     try {
       await releaseMilestone({
         campaignId: selectedCampaignForMilestone.id,
@@ -300,7 +307,7 @@ const AdminPanel = () => {
     try {
       setCampaignLoading(true);
       setCampaignError('');
-      // Load campaigns in pending_review
+      // Load campaigns in pending_review status
       const { data: campaignsData, error: campaignsError } = await supabase
         .from('campaigns')
         .select('*')

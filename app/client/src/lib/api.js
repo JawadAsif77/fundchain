@@ -213,7 +213,20 @@ export const campaignApi = {
         finalCreatorId = data?.user?.id;
       }
       const category_id = await this.ensureCategoryByName(form.category);
-      const payload = { ...form, creator_id: finalCreatorId, category_id, status: 'pending_review' };
+      
+      // Map form fields to database column names
+      const { category, deadline, goalAmount, summary, imageUrl, ...campaignData } = form;
+      const payload = { 
+        ...campaignData, 
+        creator_id: finalCreatorId, 
+        category_id,
+        end_date: deadline,
+        funding_goal: goalAmount,
+        short_description: summary,
+        image_url: imageUrl,
+        status: 'pending_review' 
+      };
+      
       const { data, error } = await supabase.from('campaigns').insert(payload).select('*').single();
       if (error) throw error;
       return { success: true, data };
@@ -497,6 +510,123 @@ export const getUserRoleStatus = async (userId) => {
   const kycStatus = k.data?.verification_status === 'approved' ? 'approved' : 'pending';
   
   return { hasRole: !!p.data?.role, role, isKYCVerified: kycStatus === 'approved', companyData: k.data, success: true };
+};
+
+// =============================================================================
+// MILESTONE UPDATE API
+// =============================================================================
+export const milestoneUpdateApi = {
+  /**
+   * Upload media to Supabase Storage
+   */
+  async uploadMedia(campaignId, milestoneId, file) {
+    const timestamp = Date.now();
+    const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    const filePath = `campaign_${campaignId}/milestone_${milestoneId}/${fileName}`;
+    
+    const { data, error } = await supabase.storage
+      .from('milestone-media')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+    
+    if (error) throw error;
+    
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('milestone-media')
+      .getPublicUrl(filePath);
+    
+    return publicUrl;
+  },
+
+  /**
+   * Create milestone update
+   */
+  async createUpdate(campaignId, milestoneId, title, content, mediaFiles = []) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    // Upload all media files
+    const mediaUrls = [];
+    for (const file of mediaFiles) {
+      try {
+        const url = await this.uploadMedia(campaignId, milestoneId, file);
+        mediaUrls.push(url);
+      } catch (err) {
+        console.error('Failed to upload file:', file.name, err);
+      }
+    }
+
+    // Create update record
+    const { data, error } = await supabase
+      .from('campaign_updates')
+      .insert({
+        campaign_id: campaignId,
+        author_id: user.id,
+        title: title || 'Milestone Update',
+        content,
+        media_urls: mediaUrls,
+        is_public: true
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Get updates for a campaign
+   */
+  async getCampaignUpdates(campaignId, showAll = false) {
+    let query = supabase
+      .from('campaign_updates')
+      .select('*')
+      .eq('campaign_id', campaignId);
+    
+    if (!showAll) {
+      query = query.eq('is_public', true);
+    }
+    
+    const { data, error } = await query.order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    // Fetch author details
+    if (data && data.length > 0) {
+      const authorIds = [...new Set(data.map(u => u.author_id))];
+      const { data: authors } = await supabase
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .in('id', authorIds);
+      
+      const authorsMap = {};
+      (authors || []).forEach(a => authorsMap[a.id] = a);
+      
+      return data.map(update => ({
+        ...update,
+        author: authorsMap[update.author_id] || null
+      }));
+    }
+    
+    return data || [];
+  },
+
+  /**
+   * Check if milestone has any updates
+   */
+  async milestoneHasUpdates(campaignId) {
+    const { data, error } = await supabase
+      .from('campaign_updates')
+      .select('id')
+      .eq('campaign_id', campaignId)
+      .limit(1);
+    
+    if (error) return false;
+    return data && data.length > 0;
+  }
 };
 
 // =============================================================================

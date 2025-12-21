@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import MilestoneList from '../components/MilestoneList';
 import CampaignQA from '../components/CampaignQA';
+import MilestoneUpdateForm from '../components/MilestoneUpdateForm';
+import CampaignUpdates from '../components/CampaignUpdates';
 import Loader from '../components/Loader';
 import { campaignApi } from '../lib/api.js';
 import { useAuth } from '../store/AuthContext';
@@ -10,7 +12,7 @@ import { supabase } from '../lib/supabase';
 
 const Campaign = () => {
   const { slug } = useParams();
-  const { userId, user, wallet, refreshWallet } = useAuth();
+  const { userId, user, wallet, refreshWallet, profile } = useAuth();
   const { investInCampaign, investLoading, investError } = useEscrowActions();
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
@@ -22,6 +24,10 @@ const Campaign = () => {
   const [investAmount, setInvestAmount] = useState('');
   const [investmentLoading, setInvestmentLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [updatesKey, setUpdatesKey] = useState(0);
+
+  const isCreator = userId === campaign?.creatorId;
+  const isAdmin = profile?.role === 'admin';
 
   useEffect(() => {
     let cancelled = false;
@@ -432,12 +438,23 @@ const Campaign = () => {
                 )}
 
                 {activeTab === 'updates' && (
-                  <div className="card">
-                    <h3 className="card-title">Project Updates</h3>
-                    <div className="empty-state">
-                      <h4>No updates yet</h4>
-                      <p>The project creator hasn't posted any updates. Check back later for news and progress reports.</p>
-                    </div>
+                  <div className="space-y-lg">
+                    {/* Post Update Form (Creator Only) */}
+                    {isCreator && (
+                      <MilestoneUpdateForm
+                        campaignId={campaign.id}
+                        milestones={campaignMilestones}
+                        onSuccess={() => setUpdatesKey(prev => prev + 1)}
+                      />
+                    )}
+                    
+                    {/* Display Updates */}
+                    <CampaignUpdates
+                      key={updatesKey}
+                      campaignId={campaign.id}
+                      isCreator={isCreator}
+                      isAdmin={isAdmin}
+                    />
                   </div>
                 )}
 

@@ -1,0 +1,54 @@
+column_name,data_type,is_nullable,column_default
+id,uuid,NO,uuid_generate_v4()
+creator_id,uuid,NO,null
+category_id,uuid,YES,null
+title,text,NO,null
+slug,text,NO,null
+description,text,NO,null
+short_description,text,YES,null
+image_url,text,YES,null
+gallery_images,ARRAY,YES,null
+video_url,text,YES,null
+funding_goal,numeric,NO,null
+current_funding,numeric,YES,0
+min_investment,numeric,YES,100
+max_investment,numeric,YES,null
+investor_count,integer,YES,0
+equity_percentage,numeric,YES,null
+expected_return,numeric,YES,null
+status,USER-DEFINED,YES,'draft'::campaign_status
+start_date,timestamp with time zone,YES,null
+end_date,timestamp with time zone,YES,null
+documents,jsonb,YES,'[]'::jsonb
+business_plan_url,text,YES,null
+financial_projections,jsonb,YES,null
+team_members,jsonb,YES,'[]'::jsonb
+location,text,YES,null
+industry,text,YES,null
+tags,ARRAY,YES,null
+featured,boolean,YES,false
+verified,boolean,YES,false
+created_at,timestamp with time zone,YES,now()
+updated_at,timestamp with time zone,YES,now()
+campaign_type,USER-DEFINED,YES,'donation'::campaign_type
+funding_model,USER-DEFINED,YES,'all_or_nothing'::funding_model
+social_sharing_enabled,boolean,YES,true
+updates_count,integer,YES,0
+likes_count,integer,YES,0
+shares_count,integer,YES,0
+view_count,integer,YES,0
+comments_count,integer,YES,0
+seo_title,text,YES,null
+seo_description,text,YES,null
+external_links,jsonb,YES,'{}'::jsonb
+total_raised,numeric,YES,0
+ml_scam_score,double precision,YES,null
+plagiarism_score,double precision,YES,null
+wallet_risk_score,double precision,YES,null
+final_risk_score,double precision,YES,null
+admin_risk_override,double precision,YES,null
+analyzed_at,timestamp with time zone,YES,null
+risk_level,text,YES,null
+manual_risk_level,text,YES,null
+manual_risk_reason,text,YES,null
+manual_risk_updated_at,timestamp with time zone,YES,null
