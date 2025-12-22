@@ -21,7 +21,6 @@ const Campaign = () => {
   const [loading, setLoading] = useState(true);
   const [campaign, setCampaign] = useState(null);
   const [campaignMilestones, setCampaignMilestones] = useState([]);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [campaignWallet, setCampaignWallet] = useState(null);
   const [userInvestments, setUserInvestments] = useState([]);
   const [showInvestModal, setShowInvestModal] = useState(false);
@@ -112,31 +111,6 @@ const Campaign = () => {
     load();
     return () => { cancelled = true; };
   }, [slug]);
-
-  // Check if current user is admin
-  useEffect(() => {
-    const checkAdminRole = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase
-            .from('users')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-          
-          const adminRole = profile?.role === 'admin';
-          setIsAdmin(adminRole);
-          console.log('👤 User role:', profile?.role, '| Is Admin:', adminRole);
-        }
-      } catch (error) {
-        console.error('Error checking admin role:', error);
-        setIsAdmin(false);
-      }
-    };
-    
-    checkAdminRole();
-  }, []);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {

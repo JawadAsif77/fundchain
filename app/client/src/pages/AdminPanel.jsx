@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
-import { adminApi, milestoneVotingApi, qaApi, milestoneUpdateApi } from '../lib/api.js';
+import { adminApi, milestoneVotingApi, qaApi, milestoneUpdateApi, campaignApi } from '../lib/api.js';
 import { useEscrowActions } from '../hooks/useEscrowActions';
 import EscrowFlow from '../components/EscrowFlow';
 import TransactionHistory from '../components/TransactionHistory';
+import AdminRiskOverride from '../components/AdminRiskOverride';
+import RiskBadge from '../components/RiskBadge';
 
 const AdminPanel = () => {
   const { user, profile, logout, loading: authLoading } = useAuth();
@@ -34,6 +36,9 @@ const AdminPanel = () => {
   const [allQuestions, setAllQuestions] = useState([]);
   const [allAnswers, setAllAnswers] = useState([]);
   const [moderationLoading, setModerationLoading] = useState(false);
+  // Risk management state
+  const [riskCampaigns, setRiskCampaigns] = useState([]);
+  const [riskLoading, setRiskLoading] = useState(false);
   const navigate = useNavigate();
 
   // Check if user is admin
@@ -52,6 +57,7 @@ const AdminPanel = () => {
       loadPlatformWallet();
       loadAllCampaigns();
       loadContentReports();
+      loadRiskCampaigns();
     }
   }, [profile]);
 
@@ -70,6 +76,29 @@ const AdminPanel = () => {
       console.error('Error loading content reports:', err);
     } finally {
       setModerationLoading(false);
+    }
+  };
+
+  const loadRiskCampaigns = async () => {
+    try {
+      setRiskLoading(true);
+      const { data } = await campaignApi.getCampaigns({});
+      const mapped = (data || []).map((c) => ({
+        id: c.id,
+        slug: c.slug,
+        title: c.title,
+        status: c.status,
+        risk_level: c.risk_level,
+        final_risk_score: c.final_risk_score,
+        manual_risk_level: c.manual_risk_level,
+        analyzed_at: c.analyzed_at,
+        created_at: c.created_at,
+      }));
+      setRiskCampaigns(mapped);
+    } catch (err) {
+      console.error('Error loading campaigns for risk management:', err);
+    } finally {
+      setRiskLoading(false);
     }
   };
 
@@ -608,6 +637,22 @@ const AdminPanel = () => {
             🔒 Token Tracking
           </button>
           <button
+            onClick={() => setActiveTab('risk')}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderBottom: activeTab === 'risk' ? '3px solid #4299E1' : 'none',
+              color: activeTab === 'risk' ? '#4299E1' : '#718096',
+              fontWeight: activeTab === 'risk' ? 'bold' : 'normal',
+              cursor: 'pointer',
+              fontSize: '16px',
+              marginBottom: '-2px'
+            }}
+          >
+            ⚠️ Risk Management
+          </button>
+          <button
             onClick={() => setActiveTab('moderation')}
             style={{
               padding: '12px 24px',
@@ -1062,6 +1107,109 @@ const AdminPanel = () => {
               </h3>
               <TransactionHistory limit={20} />
             </div>
+          </div>
+        )}
+
+        {/* Content Moderation Tab */}
+        {/* Risk Management Tab */}
+        {activeTab === 'risk' && (
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb',
+            padding: '24px'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '24px'
+            }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Campaign Risk Management</h2>
+              <button
+                onClick={loadRiskCampaigns}
+                disabled={riskLoading}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#4299E1',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: riskLoading ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {riskLoading ? 'Refreshing...' : '🔄 Refresh'}
+              </button>
+            </div>
+
+            {riskLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <p>Loading campaigns...</p>
+              </div>
+            ) : riskCampaigns.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
+                <p>No campaigns found</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {riskCampaigns.map((campaign) => (
+                  <div
+                    key={campaign.id}
+                    style={{
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '20px',
+                      backgroundColor: '#fafafa'
+                    }}
+                  >
+                    <div style={{ marginBottom: '16px' }}>
+                      <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
+                        {campaign.title}
+                      </h3>
+                      <div style={{ display: 'flex', gap: '12px', fontSize: '14px', color: '#718096' }}>
+                        <span>Status: <strong>{campaign.status}</strong></span>
+                        <span>•</span>
+                        <span>Created: {new Date(campaign.created_at).toLocaleDateString()}</span>
+                        {campaign.analyzed_at && (
+                          <>
+                            <span>•</span>
+                            <span>Analyzed: {new Date(campaign.analyzed_at).toLocaleDateString()}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+                      {/* Current Risk Display */}
+                      <div style={{ flex: 1 }}>
+                        <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Current Risk Status</h4>
+                        {campaign.manual_risk_level ? (
+                          <div>
+                            <RiskBadge level={campaign.manual_risk_level} score={campaign.final_risk_score} />
+                            <p style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>Manual Override Active</p>
+                          </div>
+                        ) : campaign.risk_level ? (
+                          <div>
+                            <RiskBadge level={campaign.risk_level} score={campaign.final_risk_score} />
+                            <p style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>AI Analysis</p>
+                          </div>
+                        ) : (
+                          <p style={{ color: '#718096', fontSize: '14px' }}>Not analyzed yet</p>
+                        )}
+                      </div>
+
+                      {/* Admin Risk Override Component */}
+                      <div style={{ flex: 1 }}>
+                        <AdminRiskOverride
+                          campaign={campaign}
+                          onUpdate={loadRiskCampaigns}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

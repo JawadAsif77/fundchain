@@ -16,8 +16,22 @@ const Home = () => {
       try {
         const { data } = await campaignApi.getCampaigns({ status: 'active' });
         // Get top 3 campaigns sorted by raised amount
-        const top3 = (data || [])
-          .sort((a, b) => (b.current_funding || 0) - (a.current_funding || 0))
+        const mapped = (data || []).map((c) => ({
+          id: c.id,
+          slug: c.slug,
+          title: c.title,
+          summary: c.short_description || '',
+          category: c.categories?.name || 'General',
+          goalAmount: Number(c.funding_goal || 0),
+          raisedAmount: Number(c.current_funding || 0),
+          deadlineISO: c.end_date,
+          status: c.status,
+          region: c.location || '—',
+          image_url: c.image_url,
+          created_at: c.created_at,
+        }));
+        const top3 = mapped
+          .sort((a, b) => (b.raisedAmount || 0) - (a.raisedAmount || 0))
           .slice(0, 3);
         setFeaturedCampaigns(top3);
       } catch (error) {

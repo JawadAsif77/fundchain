@@ -808,7 +808,6 @@ export const qaApi = {
 
 // =============================================================================
 // ADMIN API (RESTORED)
->>>>>>> main
 // =============================================================================
 export const adminApi = {
   // Campaign approval/rejection
@@ -1043,6 +1042,5 @@ export const adminApi = {
     
     if (error) throw error;
     return data;
->>>>>>> main
   }
 };
