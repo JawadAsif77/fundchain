@@ -222,22 +222,20 @@ export const campaignApi = {
         finalCreatorId = data?.user?.id;
       }
       const category_id = await this.ensureCategoryByName(form.category);
-      const payload = {
-        creator_id: finalCreatorId,
+      
+      // Map form fields to database column names (from main)
+      const { category, deadline, goalAmount, summary, imageUrl, ...campaignData } = form;
+      const payload = { 
+        ...campaignData, 
+        creator_id: finalCreatorId, 
         category_id,
-        title: form.title,
-        slug: form.slug,
-        description: form.description,
-        short_description: form.summary || null,
-        image_url: form.imageUrl || null,
-        funding_goal: form.goalAmount,
-        min_investment: Math.max(10, Math.min(1000, Math.floor((form.goalAmount || 1000) / 100))),
-        end_date: form.deadline ? new Date(form.deadline).toISOString() : null,
-        status: 'pending_review',
-        verified: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        end_date: deadline,
+        funding_goal: goalAmount,
+        short_description: summary,
+        image_url: imageUrl,
+        status: 'pending_review' 
       };
+      
       const { data, error } = await supabase.from('campaigns').insert(payload).select('*').single();
       if (error) throw error;
       
@@ -386,7 +384,126 @@ export const validateMilestones = (milestones) => {
   }
   return { isValid: true };
 };
+// =============================================================================
+// MILESTONE VOTING API
+// =============================================================================
+export const milestoneVotingApi = {
+  /**
+   * Submit a vote for a milestone
+   */
+  async submitVote(milestoneId, campaignId, vote) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
 
+    // Check if user already voted
+    const { data: existing } = await supabase
+      .from('milestone_votes')
+      .select('id')
+      .eq('milestone_id', milestoneId)
+      .eq('investor_id', user.id)
+      .maybeSingle();
+
+    if (existing) {
+      throw new Error('You have already voted on this milestone');
+    }
+
+    // Get user's investment weight
+    const { data: investment } = await supabase
+      .from('investments')
+      .select('amount')
+      .eq('campaign_id', campaignId)
+      .eq('investor_id', user.id)
+      .eq('status', 'confirmed')
+      .maybeSingle();
+
+    const investmentWeight = investment?.amount || 0;
+
+    const { data, error } = await supabase
+      .from('milestone_votes')
+      .insert({
+        milestone_id: milestoneId,
+        investor_id: user.id,
+        campaign_id: campaignId,
+        vote,
+        investment_weight: investmentWeight
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Get user's vote for a milestone
+   */
+  async getUserVote(milestoneId, userId) {
+    const { data, error } = await supabase
+      .from('milestone_votes')
+      .select('*')
+      .eq('milestone_id', milestoneId)
+      .eq('investor_id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Get vote statistics for a milestone
+   */
+  async getVoteStats(milestoneId) {
+    const { data, error } = await supabase
+      .from('milestone_votes')
+      .select('vote, investment_weight')
+      .eq('milestone_id', milestoneId);
+
+    if (error) throw error;
+
+    const votes = data || [];
+    const totalWeight = votes.reduce((sum, v) => sum + (v.investment_weight || 0), 0);
+    const approveWeight = votes.filter(v => v.vote === true).reduce((sum, v) => sum + (v.investment_weight || 0), 0);
+    const rejectWeight = votes.filter(v => v.vote === false).reduce((sum, v) => sum + (v.investment_weight || 0), 0);
+
+    const approvalPercentage = totalWeight > 0 ? (approveWeight / totalWeight) * 100 : 0;
+    const rejectionPercentage = totalWeight > 0 ? (rejectWeight / totalWeight) * 100 : 0;
+
+    let consensus = 'pending';
+    if (approvalPercentage >= 60) {
+      consensus = 'approved';
+    } else if (rejectionPercentage >= 40) {
+      consensus = 'rejected';
+    }
+
+    return {
+      totalVotes: votes.length,
+      approvalCount: votes.filter(v => v.vote === true).length,
+      rejectionCount: votes.filter(v => v.vote === false).length,
+      approvalPercentage: Math.round(approvalPercentage),
+      rejectionPercentage: Math.round(rejectionPercentage),
+      consensus,
+      totalWeight,
+      approveWeight,
+      rejectWeight
+    };
+  },
+
+  /**
+   * Check if user has invested in campaign (required to vote)
+   */
+  async canUserVote(campaignId, userId) {
+    const { data, error } = await supabase
+      .from('investments')
+      .select('id')
+      .eq('campaign_id', campaignId)
+      .eq('investor_id', userId)
+      .eq('status', 'confirmed')
+      .maybeSingle();
+
+    if (error) return false;
+    return !!data;
+  }
+};
 export const createProjectWithMilestones = async (projectData, milestones) => {
   try {
     const campaignRes = await campaignApi.createCampaign(projectData);
@@ -423,7 +540,275 @@ export const getUserRoleStatus = async (userId) => {
 };
 
 // =============================================================================
-// ADMIN API (MERGED - includes both approval AND risk override functions)
+// MILESTONE UPDATE API
+// =============================================================================
+export const milestoneUpdateApi = {
+  /**
+   * Upload media to Supabase Storage
+   */
+  async uploadMedia(campaignId, milestoneId, file) {
+    const timestamp = Date.now();
+    const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    const filePath = `campaign_${campaignId}/milestone_${milestoneId}/${fileName}`;
+    
+    const { data, error } = await supabase.storage
+      .from('milestone-media')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+    
+    if (error) throw error;
+    
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('milestone-media')
+      .getPublicUrl(filePath);
+    
+    return publicUrl;
+  },
+
+  /**
+   * Create milestone update
+   */
+  async createUpdate(campaignId, milestoneId, title, content, mediaFiles = []) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    // Upload all media files
+    const mediaUrls = [];
+    for (const file of mediaFiles) {
+      try {
+        const url = await this.uploadMedia(campaignId, milestoneId, file);
+        mediaUrls.push(url);
+      } catch (err) {
+        console.error('Failed to upload file:', file.name, err);
+      }
+    }
+
+    // Create update record
+    const { data, error } = await supabase
+      .from('campaign_updates')
+      .insert({
+        campaign_id: campaignId,
+        author_id: user.id,
+        title: title || 'Milestone Update',
+        content,
+        media_urls: mediaUrls,
+        is_public: true
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Get updates for a campaign
+   */
+  async getCampaignUpdates(campaignId, showAll = false) {
+    let query = supabase
+      .from('campaign_updates')
+      .select('*')
+      .eq('campaign_id', campaignId);
+    
+    if (!showAll) {
+      query = query.eq('is_public', true);
+    }
+    
+    const { data, error } = await query.order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    // Fetch author details
+    if (data && data.length > 0) {
+      const authorIds = [...new Set(data.map(u => u.author_id))];
+      const { data: authors } = await supabase
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .in('id', authorIds);
+      
+      const authorsMap = {};
+      (authors || []).forEach(a => authorsMap[a.id] = a);
+      
+      return data.map(update => ({
+        ...update,
+        author: authorsMap[update.author_id] || null
+      }));
+    }
+    
+    return data || [];
+  },
+
+  /**
+   * Check if milestone has any updates
+   */
+  async milestoneHasUpdates(campaignId) {
+    const { data, error } = await supabase
+      .from('campaign_updates')
+      .select('id')
+      .eq('campaign_id', campaignId)
+      .limit(1);
+    
+    if (error) return false;
+    return data && data.length > 0;
+  }
+};
+
+// =============================================================================
+// Q&A API
+// =============================================================================
+export const qaApi = {
+  /**
+   * Get all visible questions for a campaign
+   */
+  async getCampaignQuestions(campaignId) {
+    const { data: questions, error } = await supabase
+      .from('campaign_questions')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .eq('is_hidden', false)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    // Fetch user details separately
+    if (questions && questions.length > 0) {
+      const userIds = [...new Set(questions.map(q => q.user_id))];
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .in('id', userIds);
+      
+      // Map users to questions
+      const usersMap = {};
+      (users || []).forEach(u => usersMap[u.id] = u);
+      
+      return questions.map(q => ({
+        ...q,
+        users: usersMap[q.user_id] || null
+      }));
+    }
+    
+    return questions || [];
+  },
+
+  /**
+   * Get answers for a question
+   */
+  async getQuestionAnswers(questionId) {
+    const { data: answers, error } = await supabase
+      .from('campaign_answers')
+      .select('*')
+      .eq('question_id', questionId)
+      .eq('is_hidden', false)
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    
+    // Fetch creator details separately
+    if (answers && answers.length > 0) {
+      const creatorIds = [...new Set(answers.map(a => a.creator_id))];
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .in('id', creatorIds);
+      
+      // Map users to answers
+      const usersMap = {};
+      (users || []).forEach(u => usersMap[u.id] = u);
+      
+      return answers.map(a => ({
+        ...a,
+        users: usersMap[a.creator_id] || null
+      }));
+    }
+    
+    return answers || [];
+  },
+
+  /**
+   * Post a new question (requires auth)
+   */
+  async postQuestion(campaignId, questionText) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('campaign_questions')
+      .insert({
+        campaign_id: campaignId,
+        user_id: user.id,
+        question: questionText
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Post an answer to a question (creator only)
+   */
+  async postAnswer(questionId, answerText) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('campaign_answers')
+      .insert({
+        question_id: questionId,
+        creator_id: user.id,
+        answer: answerText
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+
+    // Mark question as answered
+    await supabase
+      .from('campaign_questions')
+      .update({ is_answered: true })
+      .eq('id', questionId);
+    
+    return data;
+  },
+
+  /**
+   * Report a question or answer
+   */
+  async reportContent(contentType, contentId, reason) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('content_reports')
+      .insert({
+        content_type: contentType,
+        content_id: contentId,
+        reported_by: user.id,
+        reason
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      if (error.code === '23505') { // Unique constraint violation
+        throw new Error('You have already reported this content');
+      }
+      throw error;
+    }
+    
+    return data;
+  }
+};
+
+// =============================================================================
+// ADMIN API (RESTORED)
+>>>>>>> main
 // =============================================================================
 export const adminApi = {
   // Campaign approval/rejection
@@ -494,5 +879,170 @@ export const adminApi = {
       console.error('💥 Clear manual risk level error:', error);
       return { success: false, error: error.message };
     }
+  },
+
+  /**
+   * Hide a question (moderation)
+   */
+  async hideQuestion(questionId) {
+    const { data, error } = await supabase
+      .from('campaign_questions')
+      .update({ is_hidden: true })
+      .eq('id', questionId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Hide an answer (moderation)
+   */
+  async hideAnswer(answerId) {
+    const { data, error } = await supabase
+      .from('campaign_answers')
+      .update({ is_hidden: true })
+      .eq('id', answerId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Get all content reports (admin only)
+   */
+  async getContentReports() {
+    const { data: reports, error } = await supabase
+      .from('content_reports')
+      .select('*')
+      .eq('resolved', false)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    // Fetch reporter details separately
+    if (reports && reports.length > 0) {
+      const reporterIds = [...new Set(reports.map(r => r.reported_by))];
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, username, email')
+        .in('id', reporterIds);
+      
+      // Map users to reports
+      const usersMap = {};
+      (users || []).forEach(u => usersMap[u.id] = u);
+      
+      return reports.map(r => ({
+        ...r,
+        reporter: usersMap[r.reported_by] || null
+      }));
+    }
+    
+    return reports || [];
+  },
+
+  /**
+   * Get all questions for admin review (including hidden)
+   */
+  async getAllQuestions() {
+    const { data: questions, error } = await supabase
+      .from('campaign_questions')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
+    if (error) throw error;
+    
+    if (questions && questions.length > 0) {
+      // Fetch user details
+      const userIds = [...new Set(questions.map(q => q.user_id))];
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, username, full_name')
+        .in('id', userIds);
+      
+      // Fetch campaign details
+      const campaignIds = [...new Set(questions.map(q => q.campaign_id))];
+      const { data: campaigns } = await supabase
+        .from('campaigns')
+        .select('id, title, slug')
+        .in('id', campaignIds);
+      
+      const usersMap = {};
+      (users || []).forEach(u => usersMap[u.id] = u);
+      
+      const campaignsMap = {};
+      (campaigns || []).forEach(c => campaignsMap[c.id] = c);
+      
+      return questions.map(q => ({
+        ...q,
+        users: usersMap[q.user_id] || null,
+        campaigns: campaignsMap[q.campaign_id] || null
+      }));
+    }
+    
+    return questions || [];
+  },
+
+  /**
+   * Get all answers for admin review (including hidden)
+   */
+  async getAllAnswers() {
+    const { data: answers, error } = await supabase
+      .from('campaign_answers')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
+    if (error) throw error;
+    
+    if (answers && answers.length > 0) {
+      // Fetch creator details
+      const creatorIds = [...new Set(answers.map(a => a.creator_id))];
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, username, full_name')
+        .in('id', creatorIds);
+      
+      // Fetch question details
+      const questionIds = [...new Set(answers.map(a => a.question_id))];
+      const { data: questions } = await supabase
+        .from('campaign_questions')
+        .select('id, question, campaign_id')
+        .in('id', questionIds);
+      
+      const usersMap = {};
+      (users || []).forEach(u => usersMap[u.id] = u);
+      
+      const questionsMap = {};
+      (questions || []).forEach(q => questionsMap[q.id] = q);
+      
+      return answers.map(a => ({
+        ...a,
+        users: usersMap[a.creator_id] || null,
+        campaign_questions: questionsMap[a.question_id] || null
+      }));
+    }
+    
+    return answers || [];
+  },
+
+  /**
+   * Resolve a content report
+   */
+  async resolveReport(reportId) {
+    const { data, error } = await supabase
+      .from('content_reports')
+      .update({ resolved: true })
+      .eq('id', reportId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+>>>>>>> main
   }
 };

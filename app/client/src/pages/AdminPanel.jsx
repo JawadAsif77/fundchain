@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
-import { adminApi } from '../lib/api.js';
+import { adminApi, milestoneVotingApi, qaApi, milestoneUpdateApi } from '../lib/api.js';
 import { useEscrowActions } from '../hooks/useEscrowActions';
 import EscrowFlow from '../components/EscrowFlow';
 import TransactionHistory from '../components/TransactionHistory';
@@ -25,9 +25,15 @@ const AdminPanel = () => {
   const [campaignWallets, setCampaignWallets] = useState({});
   const [selectedCampaignForMilestone, setSelectedCampaignForMilestone] = useState(null);
   const [campaignMilestones, setCampaignMilestones] = useState([]);
+  const [milestoneVoteStats, setMilestoneVoteStats] = useState({});
   const [selectedCampaignForRefund, setSelectedCampaignForRefund] = useState(null);
   const [refundReason, setRefundReason] = useState('');
   const { releaseMilestone, refundCampaignInvestors, releaseLoading, refundLoading} = useEscrowActions();
+  // Moderation state
+  const [contentReports, setContentReports] = useState([]);
+  const [allQuestions, setAllQuestions] = useState([]);
+  const [allAnswers, setAllAnswers] = useState([]);
+  const [moderationLoading, setModerationLoading] = useState(false);
   const navigate = useNavigate();
 
   // Check if user is admin
@@ -45,8 +51,67 @@ const AdminPanel = () => {
       loadPendingCampaigns();
       loadPlatformWallet();
       loadAllCampaigns();
+      loadContentReports();
     }
   }, [profile]);
+
+  const loadContentReports = async () => {
+    try {
+      setModerationLoading(true);
+      const [reports, questions, answers] = await Promise.all([
+        adminApi.getContentReports(),
+        adminApi.getAllQuestions(),
+        adminApi.getAllAnswers()
+      ]);
+      setContentReports(reports);
+      setAllQuestions(questions);
+      setAllAnswers(answers);
+    } catch (err) {
+      console.error('Error loading content reports:', err);
+    } finally {
+      setModerationLoading(false);
+    }
+  };
+
+  const handleHideQuestion = async (questionId, reportId) => {
+    if (!confirm('Are you sure you want to hide this question?')) return;
+    
+    try {
+      await adminApi.hideQuestion(questionId);
+      if (reportId) {
+        await adminApi.resolveReport(reportId);
+      }
+      alert('Question hidden successfully');
+      loadContentReports();
+    } catch (err) {
+      alert('Failed to hide question: ' + err.message);
+    }
+  };
+
+  const handleHideAnswer = async (answerId, reportId) => {
+    if (!confirm('Are you sure you want to hide this answer?')) return;
+    
+    try {
+      await adminApi.hideAnswer(answerId);
+      if (reportId) {
+        await adminApi.resolveReport(reportId);
+      }
+      alert('Answer hidden successfully');
+      loadContentReports();
+    } catch (err) {
+      alert('Failed to hide answer: ' + err.message);
+    }
+  };
+
+  const handleResolveReport = async (reportId) => {
+    try {
+      await adminApi.resolveReport(reportId);
+      alert('Report marked as resolved');
+      loadContentReports();
+    } catch (err) {
+      alert('Failed to resolve report: ' + err.message);
+    }
+  };
 
   const loadPlatformWallet = async () => {
     try {
@@ -101,21 +166,48 @@ const AdminPanel = () => {
       .order('order_index', { ascending: true });
     
     setCampaignMilestones(milestones || []);
+
+    // Load voting stats for each milestone
+    const stats = {};
+    for (const milestone of milestones || []) {
+      try {
+        const voteStats = await milestoneVotingApi.getVoteStats(milestone.id);
+        stats[milestone.id] = voteStats;
+      } catch (err) {
+        console.error('Error loading vote stats for milestone:', milestone.id, err);
+      }
+    }
+    setMilestoneVoteStats(stats);
   };
 
   const handleReleaseMilestone = async (milestoneId, amountFc) => {
     if (!selectedCampaignForMilestone) return;
+    
+    // Check if milestone has approval consensus
+    const voteStats = milestoneVoteStats[milestoneId];
+    if (voteStats && voteStats.consensus !== 'approved') {
+      alert(`Cannot release milestone: ${voteStats.consensus === 'rejected' ? 'Milestone rejected by investors' : 'Waiting for investor approval (need ≥60% approval)'}`);
+      return;
+    }
+    
+    // Check if campaign has any updates
+    const hasUpdates = await milestoneUpdateApi.milestoneHasUpdates(selectedCampaignForMilestone.id);
+    if (!hasUpdates) {
+      alert('Cannot release milestone: Creator must post at least one progress update before requesting funds.');
+      return;
+    }
     
     try {
       await releaseMilestone({
         campaignId: selectedCampaignForMilestone.id,
         milestoneId,
         amountFc,
-        notes: 'Released by admin'
+        notes: 'Released by admin after investor approval'
       });
       
       alert('Milestone funds released successfully!');
       setSelectedCampaignForMilestone(null);
+      setMilestoneVoteStats({});
       loadAllCampaigns();
       loadPlatformWallet();
     } catch (err) {
@@ -215,7 +307,7 @@ const AdminPanel = () => {
     try {
       setCampaignLoading(true);
       setCampaignError('');
-      // Load campaigns in pending_review
+      // Load campaigns in pending_review status
       const { data: campaignsData, error: campaignsError } = await supabase
         .from('campaigns')
         .select('*')
@@ -514,6 +606,22 @@ const AdminPanel = () => {
             }}
           >
             🔒 Token Tracking
+          </button>
+          <button
+            onClick={() => setActiveTab('moderation')}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderBottom: activeTab === 'moderation' ? '3px solid #4299E1' : 'none',
+              color: activeTab === 'moderation' ? '#4299E1' : '#718096',
+              fontWeight: activeTab === 'moderation' ? 'bold' : 'normal',
+              cursor: 'pointer',
+              fontSize: '16px',
+              marginBottom: '-2px'
+            }}
+          >
+            🛡️ Content Moderation {contentReports.length > 0 && `(${contentReports.length})`}
           </button>
         </div>
 
@@ -956,6 +1064,332 @@ const AdminPanel = () => {
             </div>
           </div>
         )}
+
+        {/* Content Moderation Tab */}
+        {activeTab === 'moderation' && (
+          <div>
+            {/* Reported Content Section */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              overflow: 'hidden',
+              marginBottom: '24px'
+            }}>
+              <div style={{
+                padding: '24px',
+                borderBottom: '1px solid #e5e7eb',
+                backgroundColor: '#f9fafb'
+              }}>
+                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+                  🚩 Reported Content
+                </h2>
+                <p style={{ margin: '8px 0 0 0', color: '#6b7280', fontSize: '14px' }}>
+                  Content that has been flagged by users
+                </p>
+              </div>
+
+              {moderationLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  Loading reports...
+                </div>
+              ) : contentReports.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  <p style={{ fontSize: '16px', marginBottom: '8px' }}>✅ No pending reports</p>
+                  <p style={{ fontSize: '14px' }}>All reported content has been reviewed</p>
+                </div>
+              ) : (
+                <div style={{ padding: '24px' }}>
+                  {contentReports.map((report) => (
+                    <div 
+                      key={report.id}
+                      style={{
+                        backgroundColor: '#fef3c7',
+                        border: '1px solid #fbbf24',
+                        borderRadius: '8px',
+                        padding: '20px',
+                        marginBottom: '16px'
+                      }}
+                    >
+                      <div style={{ marginBottom: '16px' }}>
+                        <div style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between',
+                          marginBottom: '8px'
+                        }}>
+                          <span style={{
+                            backgroundColor: '#dc2626',
+                            color: 'white',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            textTransform: 'uppercase'
+                          }}>
+                            {report.content_type}
+                          </span>
+                          <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                            Reported: {new Date(report.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>
+                          Reported by: {report.reporter?.username || report.reporter?.email || 'Unknown'}
+                        </div>
+                      </div>
+
+                      {report.reason && (
+                        <div style={{ 
+                          backgroundColor: 'white', 
+                          padding: '12px', 
+                          borderRadius: '6px',
+                          marginBottom: '12px',
+                          borderLeft: '3px solid #dc2626'
+                        }}>
+                          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px', fontWeight: 'bold' }}>
+                            REASON:
+                          </div>
+                          <div style={{ fontSize: '14px', color: '#1f2937' }}>
+                            {report.reason}
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ 
+                        display: 'flex', 
+                        gap: '12px',
+                        marginTop: '16px'
+                      }}>
+                        {report.content_type === 'question' && (
+                          <button
+                            onClick={() => handleHideQuestion(report.content_id, report.id)}
+                            style={{
+                              flex: 1,
+                              padding: '10px 16px',
+                              backgroundColor: '#dc2626',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🚫 Hide Question
+                          </button>
+                        )}
+                        {report.content_type === 'answer' && (
+                          <button
+                            onClick={() => handleHideAnswer(report.content_id, report.id)}
+                            style={{
+                              flex: 1,
+                              padding: '10px 16px',
+                              backgroundColor: '#dc2626',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🚫 Hide Answer
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleResolveReport(report.id)}
+                          style={{
+                            flex: 1,
+                            padding: '10px 16px',
+                            backgroundColor: '#10b981',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ✅ Resolve (No Action)
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* All Questions Section */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              overflow: 'hidden',
+              marginBottom: '24px'
+            }}>
+              <div style={{
+                padding: '24px',
+                borderBottom: '1px solid #e5e7eb',
+                backgroundColor: '#f9fafb'
+              }}>
+                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+                  💬 All Questions
+                </h2>
+                <p style={{ margin: '8px 0 0 0', color: '#6b7280', fontSize: '14px' }}>
+                  Recent questions from all campaigns (last 50)
+                </p>
+              </div>
+
+              {moderationLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  Loading questions...
+                </div>
+              ) : allQuestions.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  No questions yet
+                </div>
+              ) : (
+                <div style={{ padding: '24px' }}>
+                  {allQuestions.map((question) => (
+                    <div 
+                      key={question.id}
+                      style={{
+                        backgroundColor: question.is_hidden ? '#fee2e2' : '#f9fafb',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        marginBottom: '12px'
+                      }}
+                    >
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>
+                          By: {question.users?.full_name || question.users?.username || 'Anonymous'} • {new Date(question.created_at).toLocaleDateString()}
+                          {question.is_hidden && (
+                            <span style={{ marginLeft: '12px', color: '#dc2626', fontWeight: 'bold' }}>
+                              [HIDDEN]
+                            </span>
+                          )}
+                          {question.is_answered && (
+                            <span style={{ marginLeft: '12px', color: '#10b981', fontWeight: 'bold' }}>
+                              [ANSWERED]
+                            </span>
+                          )}
+                        </div>
+                        {question.campaigns && (
+                          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                            Campaign: {question.campaigns.title}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '15px', color: '#1f2937' }}>
+                          {question.question}
+                        </div>
+                      </div>
+                      {!question.is_hidden && (
+                        <button
+                          onClick={() => handleHideQuestion(question.id, null)}
+                          style={{
+                            padding: '8px 16px',
+                            backgroundColor: '#dc2626',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🚫 Hide
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* All Answers Section */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                padding: '24px',
+                borderBottom: '1px solid #e5e7eb',
+                backgroundColor: '#f9fafb'
+              }}>
+                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+                  💡 All Answers
+                </h2>
+                <p style={{ margin: '8px 0 0 0', color: '#6b7280', fontSize: '14px' }}>
+                  Recent answers from creators (last 50)
+                </p>
+              </div>
+
+              {moderationLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  Loading answers...
+                </div>
+              ) : allAnswers.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  No answers yet
+                </div>
+              ) : (
+                <div style={{ padding: '24px' }}>
+                  {allAnswers.map((answer) => (
+                    <div 
+                      key={answer.id}
+                      style={{
+                        backgroundColor: answer.is_hidden ? '#fee2e2' : '#f0fdf4',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        marginBottom: '12px'
+                      }}
+                    >
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>
+                          By: {answer.users?.full_name || answer.users?.username || 'Creator'} • {new Date(answer.created_at).toLocaleDateString()}
+                          {answer.is_hidden && (
+                            <span style={{ marginLeft: '12px', color: '#dc2626', fontWeight: 'bold' }}>
+                              [HIDDEN]
+                            </span>
+                          )}
+                        </div>
+                        {answer.campaign_questions && (
+                          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', fontStyle: 'italic' }}>
+                            Question: {answer.campaign_questions.question}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '15px', color: '#1f2937' }}>
+                          {answer.answer}
+                        </div>
+                      </div>
+                      {!answer.is_hidden && (
+                        <button
+                          onClick={() => handleHideAnswer(answer.id, null)}
+                          style={{
+                            padding: '8px 16px',
+                            backgroundColor: '#dc2626',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🚫 Hide
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Release Milestone Modal */}
@@ -999,50 +1433,118 @@ const AdminPanel = () => {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {campaignMilestones.map((milestone) => (
-                  <div key={milestone.id} style={{
-                    padding: '16px',
-                    backgroundColor: milestone.is_completed ? '#f0fdf4' : '#fff',
-                    border: '1px solid ' + (milestone.is_completed ? '#10b981' : '#e5e7eb'),
-                    borderRadius: '8px'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, marginBottom: '8px' }}>{milestone.title}</div>
-                        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>
-                          {milestone.description}
-                        </div>
-                        <div style={{ fontSize: '14px', fontWeight: 500 }}>
-                          Target Amount: <span style={{ color: '#3b82f6' }}>{milestone.target_amount?.toLocaleString() || 0} FC</span>
-                        </div>
-                        {milestone.is_completed && (
-                          <div style={{ fontSize: '12px', color: '#10b981', marginTop: '8px' }}>
-                            ✅ Released on {new Date(milestone.completion_date).toLocaleDateString()}
+                {campaignMilestones.map((milestone) => {
+                  const voteStats = milestoneVoteStats[milestone.id];
+                  const canRelease = !milestone.is_completed && voteStats?.consensus === 'approved';
+                  const isRejected = voteStats?.consensus === 'rejected';
+                  const isPending = voteStats?.consensus === 'pending';
+
+                  return (
+                    <div key={milestone.id} style={{
+                      padding: '16px',
+                      backgroundColor: milestone.is_completed ? '#f0fdf4' : '#fff',
+                      border: '1px solid ' + (milestone.is_completed ? '#10b981' : '#e5e7eb'),
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: '8px' }}>{milestone.title}</div>
+                          <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>
+                            {milestone.description}
                           </div>
+                          <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>
+                            Target Amount: <span style={{ color: '#3b82f6' }}>{milestone.target_amount?.toLocaleString() || 0} FC</span>
+                          </div>
+
+                          {/* Vote Statistics */}
+                          {voteStats && voteStats.totalVotes > 0 && !milestone.is_completed && (
+                            <div style={{
+                              marginTop: '12px',
+                              padding: '12px',
+                              backgroundColor: '#f9fafb',
+                              borderRadius: '6px',
+                              border: '1px solid #e5e7eb'
+                            }}>
+                              <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: '#111827' }}>
+                                📊 Investor Voting Status
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                                {voteStats.totalVotes} votes • {voteStats.totalWeight.toLocaleString()} FC total weight
+                              </div>
+                              <div style={{ 
+                                display: 'flex', 
+                                height: '8px', 
+                                backgroundColor: '#e5e7eb', 
+                                borderRadius: '4px',
+                                overflow: 'hidden',
+                                marginBottom: '8px'
+                              }}>
+                                <div style={{ 
+                                  width: `${voteStats.approvalPercentage}%`,
+                                  backgroundColor: '#10b981',
+                                  transition: 'width 0.3s'
+                                }}></div>
+                                <div style={{ 
+                                  width: `${voteStats.rejectionPercentage}%`,
+                                  backgroundColor: '#ef4444',
+                                  transition: 'width 0.3s'
+                                }}></div>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                <span style={{ color: '#10b981' }}>
+                                  ✓ {voteStats.approvalPercentage}% Approve ({voteStats.approvalCount})
+                                </span>
+                                <span style={{ color: '#ef4444' }}>
+                                  ✗ {voteStats.rejectionPercentage}% Reject ({voteStats.rejectionCount})
+                                </span>
+                              </div>
+                              <div style={{ 
+                                marginTop: '8px', 
+                                padding: '6px 10px', 
+                                borderRadius: '4px',
+                                backgroundColor: canRelease ? '#d1fae5' : isRejected ? '#fee2e2' : '#fef3c7',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                color: canRelease ? '#065f46' : isRejected ? '#991b1b' : '#92400e'
+                              }}>
+                                {canRelease && '✓ Approved by Investors - Ready for Release'}
+                                {isRejected && '✗ Rejected by Investors - Cannot Release'}
+                                {isPending && '⏳ Pending Votes - Need ≥60% approval'}
+                              </div>
+                            </div>
+                          )}
+
+                          {milestone.is_completed && (
+                            <div style={{ fontSize: '12px', color: '#10b981', marginTop: '8px' }}>
+                              ✅ Released on {new Date(milestone.completion_date).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                        {!milestone.is_completed && (
+                          <button
+                            onClick={() => handleReleaseMilestone(milestone.id, milestone.target_amount)}
+                            disabled={releaseLoading || !canRelease}
+                            style={{
+                              padding: '8px 16px',
+                              backgroundColor: canRelease ? '#10b981' : '#9ca3af',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              cursor: (releaseLoading || !canRelease) ? 'not-allowed' : 'pointer',
+                              whiteSpace: 'nowrap',
+                              marginLeft: '12px',
+                              opacity: canRelease ? 1 : 0.6
+                            }}
+                            title={!canRelease ? 'Milestone must be approved by investors (≥60%) before release' : ''}
+                          >
+                            {releaseLoading ? 'Releasing...' : 'Release'}
+                          </button>
                         )}
                       </div>
-                      {!milestone.is_completed && (
-                        <button
-                          onClick={() => handleReleaseMilestone(milestone.id, milestone.target_amount)}
-                          disabled={releaseLoading}
-                          style={{
-                            padding: '8px 16px',
-                            backgroundColor: '#10b981',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '14px',
-                            cursor: releaseLoading ? 'not-allowed' : 'pointer',
-                            whiteSpace: 'nowrap',
-                            marginLeft: '12px'
-                          }}
-                        >
-                          {releaseLoading ? 'Releasing...' : 'Release'}
-                        </button>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

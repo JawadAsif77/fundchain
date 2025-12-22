@@ -70,7 +70,7 @@ const CreateProject = () => {
       case 'goalAmount':
         result = validateDecimal(value, true);
         if (result.valid && parseFloat(value) < 1000) {
-          result = { valid: false, error: 'Minimum funding goal is $1,000' };
+          result = { valid: false, error: 'Minimum funding goal is 1,000 FC tokens' };
         }
         break;
       case 'deadline':
@@ -289,7 +289,7 @@ const CreateProject = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>
-              Funding Goal (USD) *
+              Funding Goal (FC Tokens) *
             </label>
             <input
               type="text"
@@ -311,7 +311,7 @@ const CreateProject = () => {
               </span>
             )}
             <small style={{ color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '2px' }}>
-              Minimum $1,000
+              Minimum 1,000 FC (equivalent to $1,000 USD)
             </small>
           </div>
 

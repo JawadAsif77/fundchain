@@ -135,7 +135,7 @@ const Governance = () => {
                 </svg>
               </div>
               <h3>Voting Window</h3>
-              <p>Token holders cast votes according to established weight rules and timeframes.</p>
+              <p>Investors cast votes weighted by their FC token investment in the campaign.</p>
             </div>
             <div className="timeline-step">
               <div className="step-number">4</div>
@@ -187,7 +187,7 @@ const Governance = () => {
                 <li>Provide evidence of progress and deliverables</li>
                 <li>Respond to investor questions and concerns</li>
               </ul>
-              <p className="future-note">Future: Stake tokens for proposal creation</p>
+              <p className="future-note">Future: Stake FC tokens for proposal rights</p>
             </div>
             <div className="role-card">
               <div className="role-icon">

@@ -27,8 +27,8 @@ const HowItWorks = () => {
               Empowering Smart, Transparent, and Secure Investments
             </h1>
             <p className="hero-subtitle">
-              FundChain connects verified creators and smart investors through 
-              milestone-based funding and AI-powered trust scoring.
+              FundChain connects campaign creators and investors through 
+              FC token-based funding with milestone escrow and investor voting governance.
             </p>
             <div className="hero-buttons">
               <button 
@@ -80,10 +80,10 @@ const HowItWorks = () => {
             </div>
             <div className="pillar-card">
               <div className="pillar-icon">🪙</div>
-              <h3>FundChain Coin (FCT)</h3>
+              <h3>FundChain Token (FC)</h3>
               <p>
-                The platform's token ensures instant settlements, low fees, 
-                and cross-border accessibility.
+                FC tokens power all platform transactions with instant settlements, 
+                low fees, and seamless USD exchange (1 USD = 1 FC).
               </p>
             </div>
           </div>
@@ -241,8 +241,8 @@ const HowItWorks = () => {
                 <div className="timeline-item">
                   <div className="timeline-icon">💳</div>
                   <div className="timeline-content">
-                    <h4>Invest Using FCT or Supported Payment Methods</h4>
-                    <p>Secure, instant transactions.</p>
+                    <h4>Invest Using FC Tokens</h4>
+                    <p>Exchange USD to FC (1:1) and fund campaigns instantly.</p>
                   </div>
                 </div>
                 <div className="timeline-item">
