@@ -152,20 +152,6 @@ const Campaign = () => {
     return Math.min((campaign.raisedAmount / campaign.goalAmount) * 100, 100);
   };
 
-<<<<<<< HEAD
-=======
-  const getRiskBadgeClass = (riskScore) => {
-    if (riskScore <= 30) return 'badge risk-low';
-    if (riskScore <= 60) return 'badge risk-medium';
-    return 'badge risk-high';
-  };
-
-  const getRiskLabel = (riskScore) => {
-    if (riskScore <= 30) return 'Low Risk';
-    if (riskScore <= 60) return 'Medium Risk';
-    return 'High Risk';
-  };
-
   const handleInvestSubmit = async (e) => {
     e.preventDefault();
     const amount = parseFloat(investAmount);
@@ -228,7 +214,6 @@ const Campaign = () => {
     }
   };
 
->>>>>>> origin/main
   const getStatusBadgeClass = (status) => {
     return `badge status-${status}`;
   };

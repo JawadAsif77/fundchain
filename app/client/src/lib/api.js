@@ -291,10 +291,6 @@ export const campaignApi = {
     return { success: true, data: data || [] };
   }
 };
-    if (error) throw error;
-    return { success: true, data: data || [] };
-  }
-};
 
 // =============================================================================
 // INVESTMENT API
