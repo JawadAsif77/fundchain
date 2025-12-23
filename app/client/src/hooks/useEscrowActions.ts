@@ -141,6 +141,7 @@ export const useEscrowActions = () => {
       const result: InvestmentResponse = await response.json();
 
       if (!response.ok || !result.success) {
+        console.error('Investment API Error:', result);
         const errorMsg = result.error || result.details || 'Investment failed';
         setInvestError(errorMsg);
         throw new Error(errorMsg);

@@ -20,8 +20,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     refreshTokenRetries: 3
   },
   // Enable debug mode to see auth events
-  debug: process.env.NODE_ENV === 'development'
+  debug: import.meta.env.DEV
 });
+
+// Export URL and key for edge function calls
+supabase.supabaseUrl = supabaseUrl;
+supabase.supabaseKey = supabaseAnonKey;
 
 // Auth helper functions
 export const auth = {

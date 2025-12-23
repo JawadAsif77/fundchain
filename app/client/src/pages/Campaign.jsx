@@ -466,29 +466,77 @@ const Campaign = () => {
             </div>
 
             {/* RiskBadge*/}
-            <div style={{ marginTop: '10px' }}>
-              <h4>AI Risk Analysis</h4>
-              <RiskBadge
-              level={campaign.risk_level}
-              score={campaign.final_risk_score}
-              />
-            </div>
+            <div style={{ 
+              marginTop: '16px',
+              background: 'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid #BFDBFE',
+              maxHeight: '150px',
+              overflow: 'hidden'
+            }}>
+              <h4 style={{ 
+                margin: '0 0 12px 0',
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#1e40af'
+              }}>
+                AI Risk Analysis
+              </h4>
+              <div style={{ marginBottom: '12px' }}>
+                <RiskBadge
+                  level={campaign.risk_level}
+                  score={campaign.final_risk_score}
+                />
+              </div>
 
-            {/* AnalyzeRisk*/}
-            <button
-            disabled={!!campaign.analyzed_at}
-            onClick={async () => {
-              try {
-                await analyzeCampaignRisk(campaign.id)
-                alert('Risk analysis completed')
-                window.location.reload()
-              } catch (err) {
-                alert(err.message)
-              }
-              }}
-            >
-              {campaign.analyzed_at ? 'Risk Analyzed' : 'Analyze Risk'}
-            </button>
+              {/* AnalyzeRisk Button */}
+              <div
+                style={{
+                  padding: '8px 16px',
+                  background: campaign.analyzed_at 
+                    ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' 
+                    : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: campaign.analyzed_at ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  textAlign: 'center',
+                  transition: 'all 0.2s ease',
+                  userSelect: 'none',
+                  display: 'inline-block',
+                  width: 'auto',
+                  boxShadow: campaign.analyzed_at ? 'none' : '0 2px 8px rgba(139, 92, 246, 0.3)',
+                  opacity: campaign.analyzed_at ? 0.85 : 1
+                }}
+                onMouseEnter={(e) => {
+                  if (!campaign.analyzed_at) {
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.4)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!campaign.analyzed_at) {
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(139, 92, 246, 0.3)'
+                  }
+                }}
+                onClick={async () => {
+                  if (campaign.analyzed_at) return
+                  try {
+                    await analyzeCampaignRisk(campaign.id)
+                    alert('Risk analysis completed')
+                    window.location.reload()
+                  } catch (err) {
+                    alert(err.message)
+                  }
+                }}
+              >
+                {campaign.analyzed_at ? '✓ Analyzed' : 'Analyze Risk'}
+              </div>
+            </div>
 
             {/* Admin Risk Override - Only visible to admins */}
             {isAdmin && (

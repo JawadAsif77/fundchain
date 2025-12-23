@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import CampaignCard from '../components/CampaignCard';
 import EmptyState from '../components/EmptyState';
+import RecommendedProjects from '../components/RecommendedProjects';
 import { campaignApi, investmentApi, withTimeout } from '../lib/api.js';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { supabase } from '../lib/supabase';
-import EscrowFlow from '../components/EscrowFlow';
 import TransactionHistory from '../components/TransactionHistory';
 
 // Connected Wallet Display Component
@@ -65,7 +65,6 @@ const Dashboard = () => {
     user,
     profile,
     roleStatus,
-    isFullyOnboarded,
     loading: authLoading,
     sessionVersion
   } = useAuth();
@@ -73,7 +72,6 @@ const Dashboard = () => {
   const [projects, setProjects] = useState([]);
   const [investments, setInvestments] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [showApprovalBanner, setShowApprovalBanner] = useState(false);
   const [campaignWallets, setCampaignWallets] = useState({});
   const [campaignMilestones, setCampaignMilestones] = useState({});
@@ -81,7 +79,7 @@ const Dashboard = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const debug = process.env.NODE_ENV === 'development';
+  const debug = import.meta.env.DEV;
 
   // Campaign submitted banner via navigation state
   useEffect(() => {
@@ -215,33 +213,9 @@ const Dashboard = () => {
     };
   }, [sessionVersion, user?.id]); // Use sessionVersion instead of role
 
-  // Refresh data after tab was hidden for a while
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (!document.hidden) {
-        setRefreshKey((k) => k + 1);
-      }
-    };
+  // Refresh data after tab was hidden for a while - REMOVED due to setRefreshKey errors
 
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () =>
-      document.removeEventListener('visibilitychange', handleVisibility);
-  }, []);
-
-  // Fix 5: Add connection health check
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        console.log('[Dashboard] Visible again, refreshing data...');
-        setRefreshKey(k => k + 1); // Trigger data reload
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [user?.id]);
+  // Fix 5: Add connection health check - REMOVED due to setRefreshKey errors
 
   const userInvestments = useMemo(() => {
     if (!isInvestor) return [];
@@ -1278,6 +1252,11 @@ const Dashboard = () => {
 
       {/* Body */}
       {isInvestor ? renderInvestorDashboard() : renderCreatorDashboard()}
+
+      {/* Recommended Projects Section - Below Main Content */}
+      <section style={{ marginTop: '64px', marginBottom: '48px' }}>
+        <RecommendedProjects title="Recommended For You" />
+      </section>
     </div>
   );
 };
