@@ -16,12 +16,10 @@ const CampaignCard = ({ campaign }) => {
   const formatCurrency = (amount) => {
     const numAmount = Number(amount) || 0;
     console.log('🎯 CampaignCard: formatCurrency input:', amount, 'converted:', numAmount);
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return `${new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(numAmount);
+    }).format(numAmount)} FC`;
   };
 
   const calculateProgress = () => {

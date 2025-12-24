@@ -107,12 +107,10 @@ const Campaign = () => {
   }, [slug]);
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return `${new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(amount);
+    }).format(amount || 0)} FC`;
   };
 
   const formatDate = (dateISO) => {
@@ -512,11 +510,30 @@ const Campaign = () => {
       {/* Invest Modal */}
       {showInvestModal && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999
+          }}
           onClick={() => setShowInvestModal(false)}
         >
           <div 
-            className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '24px',
+              width: '90%',
+              maxWidth: '500px',
+              maxHeight: '90vh',
+              overflow: 'auto'
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">

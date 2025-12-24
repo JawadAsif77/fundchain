@@ -183,12 +183,10 @@ const Analytics = () => {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return `${new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(amount);
+    }).format(amount || 0)} FC`;
   };
 
   return (

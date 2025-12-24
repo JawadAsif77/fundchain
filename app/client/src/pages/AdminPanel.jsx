@@ -795,8 +795,8 @@ const AdminPanel = () => {
                         <h3 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: 600, color: '#111827' }}>{c.title}</h3>
                         <div style={{ display: 'grid', gap: '4px', fontSize: '14px', color: '#6b7280' }}>
                           <div>Creator: {c.creator_user?.full_name || c.creator_user?.email || c.creator_id}</div>
-                          <div>Goal: ${Number(c.funding_goal || 0).toLocaleString()}</div>
-                          <div>Min investment: ${Number(c.min_investment || 0).toLocaleString()}</div>
+                          <div>Goal: {Number(c.funding_goal || 0).toLocaleString()} FC</div>
+                          <div>Min investment: {Number(c.min_investment || 0).toLocaleString()} FC</div>
                           <div>Submitted: {new Date(c.created_at).toLocaleDateString()}</div>
                         </div>
                       </div>
@@ -917,7 +917,7 @@ const AdminPanel = () => {
                           {campaign.users?.full_name || campaign.users?.email || 'N/A'}
                         </td>
                         <td style={{ padding: '16px', textAlign: 'right', fontWeight: 500 }}>
-                          ${(campaign.current_funding || 0).toLocaleString()} / ${(campaign.funding_goal || 0).toLocaleString()}
+                          {(campaign.current_funding || 0).toLocaleString()} FC / {(campaign.funding_goal || 0).toLocaleString()} FC
                         </td>
                         <td style={{ padding: '16px', textAlign: 'right', fontWeight: 'bold', color: '#f59e0b' }}>
                           {wallet?.escrow_balance_fc?.toLocaleString() || 0} FC

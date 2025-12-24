@@ -21,12 +21,10 @@ const InvestPanel = ({ campaign, onInvestSuccess }) => {
   }, [user]);
 
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return `${new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(value);
+    }).format(value || 0)} FC`;
   };
 
   const handleAmountChange = (e) => {

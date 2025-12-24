@@ -973,7 +973,19 @@ const Dashboard = () => {
                   <div style={{ padding: '24px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
                       <div>
-                        <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>
+                        <h3 
+                          onClick={() => navigate(`/campaign/${project.slug}`)}
+                          style={{ 
+                            fontSize: '20px', 
+                            fontWeight: 'bold', 
+                            marginBottom: '8px',
+                            cursor: 'pointer',
+                            color: 'var(--color-primary)',
+                            transition: 'color 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.target.style.color = 'var(--color-primary-dark)'}
+                          onMouseLeave={(e) => e.target.style.color = 'var(--color-primary)'}
+                        >
                           {project.title}
                         </h3>
                         <span style={{
