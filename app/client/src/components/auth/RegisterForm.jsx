@@ -6,6 +6,7 @@ import {
   validatePassword, 
   validatePasswordMatch
 } from '../../utils/validation';
+import { calculatePasswordStrength } from '../../utils/passwordStrength';
 import './AuthForms.css';
 
 const RegisterForm = ({ onSwitchToLogin, onClose }) => {
@@ -19,8 +20,21 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
   const [validationErrors, setValidationErrors] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
   const [fieldTouched, setFieldTouched] = useState({});
+  const [passwordStrength, setPasswordStrength] = useState({ strength: 'weak', score: 0, feedback: '' });
   
   const { register, error, clearError } = useAuth();
+
+  // Check if form is valid for submit button
+  const isFormValid = () => {
+    return (
+      formData.fullName.trim() !== '' &&
+      formData.email.trim() !== '' &&
+      formData.password.trim() !== '' &&
+      formData.confirmPassword.trim() !== '' &&
+      passwordStrength.strength !== 'weak' &&
+      Object.values(validationErrors).every(error => !error)
+    );
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -39,6 +53,12 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
       ...prev,
       [name]: filteredValue
     }));
+    
+    // Calculate password strength for password field
+    if (name === 'password') {
+      const strength = calculatePasswordStrength(filteredValue);
+      setPasswordStrength(strength);
+    }
     
     // Validate on change if field was touched
     if (fieldTouched[name]) {
@@ -121,6 +141,19 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent empty submissions
+    if (!formData.fullName.trim() || !formData.email.trim() || 
+        !formData.password.trim() || !formData.confirmPassword.trim()) {
+      setValidationErrors(prev => ({
+        ...prev,
+        fullName: !formData.fullName.trim() ? 'Full name is required' : prev.fullName,
+        email: !formData.email.trim() ? 'Email is required' : prev.email,
+        password: !formData.password.trim() ? 'Password is required' : prev.password,
+        confirmPassword: !formData.confirmPassword.trim() ? 'Please confirm password' : prev.confirmPassword
+      }));
+      return;
+    }
     
     if (!validateForm()) {
       return;
@@ -243,6 +276,14 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
           {validationErrors.password && (
             <span className="field-error">{validationErrors.password}</span>
           )}
+          {formData.password && (
+            <div className={`password-strength password-strength-${passwordStrength.strength}`}>
+              <div className="strength-bar">
+                <div className="strength-fill" data-strength={passwordStrength.strength}></div>
+              </div>
+              <span className="strength-text">{passwordStrength.feedback}</span>
+            </div>
+          )}
           <small className="field-hint">Min. 8 characters with uppercase, lowercase, number & special character</small>
         </div>
         
@@ -268,7 +309,7 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
         <button 
           type="submit" 
           className="auth-submit-btn"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !isFormValid()}
         >
           {isSubmitting ? 'Creating Account...' : 'Create Account'}
         </button>

@@ -21,6 +21,7 @@ import CreateProject from './pages/CreateProject';
 import AdminPanel from './pages/AdminPanel';
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import PublicRoute from './components/PublicRoute';
 import Wallet from './pages/Wallet';
 import Portfolio from './pages/Portfolio';
 import HowItWorks from './pages/HowItWorks';
@@ -73,8 +74,16 @@ function App() {
                       <Route path="/governance" element={<Governance />} />
                       <Route path="/analytics" element={<Analytics />} />
                       <Route path="/campaign/:slug" element={<Campaign />} />
-                      <Route path="/login" element={<Login />} />
-                      <Route path="/register" element={<Register />} />
+                      <Route path="/login" element={
+                        <PublicRoute>
+                          <Login />
+                        </PublicRoute>
+                      } />
+                      <Route path="/register" element={
+                        <PublicRoute>
+                          <Register />
+                        </PublicRoute>
+                      } />
                       
                       {/* Profile routes */}
                       <Route 
