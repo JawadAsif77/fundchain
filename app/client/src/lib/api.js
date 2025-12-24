@@ -3,7 +3,16 @@
 // =============================================================================
 import { supabase } from './supabase.js';
 
-// --- SESSION HELPERS ---
+// Mock data imports (for fallback during development)
+import { campaigns } from '../mock/campaigns.js';
+import { milestones } from '../mock/milestones.js';
+import { users } from '../mock/users.js';
+import { investments } from '../mock/investments.js';
+import { analyzeCampaignRisk } from '../services/riskAnalysis'
+
+// =============================================================================
+// SESSION HELPERS (from main branch)
+// =============================================================================
 const ensureValidSession = async () => {
   try {
     const { data: { session }, error } = await supabase.auth.getSession();
@@ -214,7 +223,7 @@ export const campaignApi = {
       }
       const category_id = await this.ensureCategoryByName(form.category);
       
-      // Map form fields to database column names
+      // Map form fields to database column names (from main)
       const { category, deadline, goalAmount, summary, imageUrl, ...campaignData } = form;
       const payload = { 
         ...campaignData, 
@@ -229,22 +238,40 @@ export const campaignApi = {
       
       const { data, error } = await supabase.from('campaigns').insert(payload).select('*').single();
       if (error) throw error;
+      
+      // Trigger AI risk analysis (from AI branch)
+      try {
+        await analyzeCampaignRisk(data.id);
+        console.log('✅ AI risk analysis triggered');
+      } catch (err) {
+        console.error('⚠️ Risk analysis failed:', err.message);
+      }
+      
       return { success: true, data };
-    } catch (error) { return { success: false, error: error.message }; }
+    } catch (error) { 
+      console.error('💥 Create campaign error:', error);
+      return { success: false, error: error.message };
+    }
   },
 
   async getCampaigns(filters = {}) {
-    let query = supabase.from('campaigns').select('*');
+    let query = supabase.from('campaigns').select('*, categories(*)');
     if (filters.status) query = query.eq('status', filters.status || 'active');
     if (filters.search) query = query.ilike('title', `%${filters.search}%`);
+    query = query.order('created_at', { ascending: false });
     const { data, error } = await withTimeoutPublic(query);
-    if (error) return { data: [], error: error.message };
+    if (error) return { data: campaigns, error: error.message };
     return { data: data || [], count: data?.length || 0 };
   },
 
   async getUserCampaigns(userId) {
+    let uid = userId;
+    if (!uid) {
+      const { data: authData } = await supabase.auth.getUser();
+      uid = authData?.user?.id;
+    }
     const { data, error } = await withTimeout(
-      supabase.from('campaigns').select('*, categories(*)').eq('creator_id', userId)
+      supabase.from('campaigns').select('*, categories(*)').eq('creator_id', uid).order('created_at', { ascending: false })
     );
     if (error) throw error;
     return { success: true, data: data || [] };
@@ -783,9 +810,10 @@ export const qaApi = {
 // ADMIN API (RESTORED)
 // =============================================================================
 export const adminApi = {
+  // Campaign approval/rejection
   async approveCampaign(campaignId) {
     const { data, error } = await supabase.from('campaigns')
-      .update({ status: 'active', updated_at: new Date().toISOString() })
+      .update({ status: 'active', verified: true, updated_at: new Date().toISOString() })
       .eq('id', campaignId).select().single();
     if (error) return { success: false, error: error.message };
     return { success: true, data };
@@ -797,6 +825,59 @@ export const adminApi = {
       .eq('id', campaignId).select().single();
     if (error) return { success: false, error: error.message };
     return { success: true, data };
+  },
+
+  // Risk override functions (from AI branch)
+  async setManualRiskLevel(campaignId, riskLevel) {
+    try {
+      console.log('🛡️ Admin: Setting manual risk level:', { campaignId, riskLevel });
+      
+      if (!['low', 'medium', 'high'].includes(riskLevel)) {
+        throw new Error('Invalid risk level. Must be low, medium, or high');
+      }
+
+      const { data, error } = await supabase
+        .from('campaigns')
+        .update({ 
+          manual_risk_level: riskLevel,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', campaignId)
+        .select('*')
+        .single();
+      
+      if (error) throw error;
+      
+      console.log('✅ Manual risk level set successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('💥 Set manual risk level error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async clearManualRiskLevel(campaignId) {
+    try {
+      console.log('🛡️ Admin: Clearing manual risk override for campaign:', campaignId);
+      
+      const { data, error } = await supabase
+        .from('campaigns')
+        .update({ 
+          manual_risk_level: null,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', campaignId)
+        .select('*')
+        .single();
+      
+      if (error) throw error;
+      
+      console.log('✅ Manual risk override cleared:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('💥 Clear manual risk level error:', error);
+      return { success: false, error: error.message };
+    }
   },
 
   /**

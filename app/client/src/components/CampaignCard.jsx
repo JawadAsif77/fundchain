@@ -1,8 +1,17 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import RiskBadge from '../components/RiskBadge'
 
 const CampaignCard = ({ campaign }) => {
   const navigate = useNavigate();
+
+  // ==============================
+  // Risk display logic (manual override aware)
+  // ==============================
+  const displayedRiskLevel =
+  campaign.manual_risk_level || campaign.risk_level;
+
+  const displayedRiskScore =
+  campaign.manual_risk_level ? null : campaign.final_risk_score;
 
   // Add debugging for campaign data
   console.log('🎯 CampaignCard: Received campaign data:', campaign);
@@ -36,18 +45,6 @@ const CampaignCard = ({ campaign }) => {
     const progress = Math.min((raised / goal) * 100, 100);
     console.log('🎯 CampaignCard: calculateProgress result:', progress);
     return progress;
-  };
-
-  const getRiskBadgeClass = (riskScore) => {
-    if (riskScore <= 30) return 'badge badge--risk-low';
-    if (riskScore <= 60) return 'badge badge--risk-medium';
-    return 'badge badge--risk-high';
-  };
-
-  const getRiskLabel = (riskScore) => {
-    if (riskScore <= 30) return 'Low Risk';
-    if (riskScore <= 60) return 'Medium Risk';
-    return 'High Risk';
   };
 
   const getStatusBadgeClass = (status) => `status status--${String(status || '').toLowerCase()}`;
@@ -116,10 +113,8 @@ const CampaignCard = ({ campaign }) => {
         marginBottom: 'var(--space-2)',
         flexWrap: 'wrap'
       }}>
+        
         <span className="badge badge--primary">{campaign.category}</span>
-        <span className={getRiskBadgeClass(campaign.riskScore)}>
-          {getRiskLabel(campaign.riskScore)}
-        </span>
         {campaign.status && (
           <span className={getStatusBadgeClass(campaign.status)}>
             {campaign.status}
@@ -138,7 +133,12 @@ const CampaignCard = ({ campaign }) => {
         }}>
           {campaign.title}
         </h3>
-        
+
+        <RiskBadge
+        level={displayedRiskLevel}
+        score={displayedRiskScore}
+        />
+
         <p style={{
           color: 'var(--color-muted)',
           fontSize: 'var(--text-sm)',

@@ -6,9 +6,12 @@ import MilestoneUpdateForm from '../components/MilestoneUpdateForm';
 import CampaignUpdates from '../components/CampaignUpdates';
 import Loader from '../components/Loader';
 import { campaignApi } from '../lib/api.js';
+import RiskBadge from '../components/RiskBadge';
+import { analyzeCampaignRisk } from '../services/riskAnalysis';
+import AdminRiskOverride from '../components/AdminRiskOverride';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { useEscrowActions } from '../hooks/useEscrowActions';
-import { supabase } from '../lib/supabase';
 
 const Campaign = () => {
   const { slug } = useParams();
@@ -51,10 +54,13 @@ const Campaign = () => {
           raisedAmount: Number(data.current_funding || 0),
           deadlineISO: data.end_date,
           status: data.status,
-          riskScore: data.risk_level ? Math.min(100, Math.max(0, Number(data.risk_level) * 20)) : 50,
           region: data.location || '—',
           minInvest: Number(data.min_investment || 0),
           maxInvest: Number(data.max_investment || (data.funding_goal ? Number(data.funding_goal) : 0)),
+          risk_level: data.risk_level,
+          final_risk_score: data.final_risk_score,
+          manual_risk_level: data.manual_risk_level,
+          analyzed_at: data.analyzed_at,
           creatorId: data.creator_id
         };
         setCampaign(mapped);
@@ -124,18 +130,6 @@ const Campaign = () => {
   const calculateProgress = () => {
     if (!campaign) return 0;
     return Math.min((campaign.raisedAmount / campaign.goalAmount) * 100, 100);
-  };
-
-  const getRiskBadgeClass = (riskScore) => {
-    if (riskScore <= 30) return 'badge risk-low';
-    if (riskScore <= 60) return 'badge risk-medium';
-    return 'badge risk-high';
-  };
-
-  const getRiskLabel = (riskScore) => {
-    if (riskScore <= 30) return 'Low Risk';
-    if (riskScore <= 60) return 'Medium Risk';
-    return 'High Risk';
   };
 
   const handleInvestSubmit = async (e) => {
@@ -215,6 +209,12 @@ const Campaign = () => {
   const progress = calculateProgress();
   const daysLeft = Math.ceil((new Date(campaign.deadlineISO) - new Date()) / (1000 * 60 * 60 * 24));
 
+  const displayedRiskLevel =
+  campaign.manual_risk_level || campaign.risk_level;
+
+  const displayedRiskScore =
+  campaign.manual_risk_level ? null : campaign.final_risk_score;
+
   return (
     <div className="main">
       <div className="page-content">
@@ -228,9 +228,6 @@ const Campaign = () => {
                   <span className="badge badge-secondary">{campaign.category}</span>
                   <span className={getStatusBadgeClass(campaign.status)}>
                     {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
-                  </span>
-                  <span className={getRiskBadgeClass(campaign.riskScore)}>
-                    {getRiskLabel(campaign.riskScore)}
                   </span>
                   <span className="badge badge-secondary">{campaign.region}</span>
                 </div>
@@ -251,7 +248,7 @@ const Campaign = () => {
                     <span className="text-gray-600">{progress.toFixed(1)}% of goal</span>
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-md">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-md">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-primary">{formatCurrency(campaign.goalAmount)}</div>
                       <div className="text-sm text-gray-600">Goal</div>
@@ -259,10 +256,6 @@ const Campaign = () => {
                     <div className="text-center">
                       <div className="text-2xl font-bold text-primary">{daysLeft > 0 ? daysLeft : 0}</div>
                       <div className="text-sm text-gray-600">Days left</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-primary">{campaign.riskScore}</div>
-                      <div className="text-sm text-gray-600">Risk Score</div>
                     </div>
                   </div>
                 </div>
@@ -313,6 +306,11 @@ const Campaign = () => {
                   </button>
                 </nav>
               </div>
+
+              <RiskBadge
+              level={displayedRiskLevel}
+              score={displayedRiskScore}
+              />
 
               {/* Tab Content */}
               <div>
@@ -464,6 +462,97 @@ const Campaign = () => {
                 )}
               </div>
             </div>
+
+            {/* RiskBadge*/}
+            <div style={{ 
+              marginTop: '16px',
+              background: 'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid #BFDBFE',
+              maxHeight: '150px',
+              overflow: 'hidden'
+            }}>
+              <h4 style={{ 
+                margin: '0 0 12px 0',
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#1e40af'
+              }}>
+                AI Risk Analysis
+              </h4>
+              <div style={{ marginBottom: '12px' }}>
+                <RiskBadge
+                  level={campaign.risk_level}
+                  score={campaign.final_risk_score}
+                />
+              </div>
+
+              {/* AnalyzeRisk Button */}
+              <div
+                style={{
+                  padding: '8px 16px',
+                  background: campaign.analyzed_at 
+                    ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' 
+                    : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: campaign.analyzed_at ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  textAlign: 'center',
+                  transition: 'all 0.2s ease',
+                  userSelect: 'none',
+                  display: 'inline-block',
+                  width: 'auto',
+                  boxShadow: campaign.analyzed_at ? 'none' : '0 2px 8px rgba(139, 92, 246, 0.3)',
+                  opacity: campaign.analyzed_at ? 0.85 : 1
+                }}
+                onMouseEnter={(e) => {
+                  if (!campaign.analyzed_at) {
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.4)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!campaign.analyzed_at) {
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(139, 92, 246, 0.3)'
+                  }
+                }}
+                onClick={async () => {
+                  if (campaign.analyzed_at) return
+                  try {
+                    await analyzeCampaignRisk(campaign.id)
+                    alert('Risk analysis completed')
+                    window.location.reload()
+                  } catch (err) {
+                    alert(err.message)
+                  }
+                }}
+              >
+                {campaign.analyzed_at ? '✓ Analyzed' : 'Analyze Risk'}
+              </div>
+            </div>
+
+            {/* Admin Risk Override - Only visible to admins */}
+            {isAdmin && (
+              <AdminRiskOverride 
+                campaign={campaign}
+                onUpdate={(updatedCampaign) => {
+                  // Update campaign state with new risk data
+                  setCampaign(prev => ({
+                    ...prev,
+                    manual_risk_level: updatedCampaign.manual_risk_level,
+                    risk_level: updatedCampaign.risk_level,
+                    final_risk_score: updatedCampaign.final_risk_score
+                  }));
+                }}
+              />
+            )}
+
+
 
             {/* Sidebar */}
             <div>
