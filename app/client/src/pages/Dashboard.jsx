@@ -4,6 +4,7 @@ import { useAuth } from '../store/AuthContext';
 import CampaignCard from '../components/CampaignCard';
 import EmptyState from '../components/EmptyState';
 import RecommendedProjects from '../components/RecommendedProjects';
+import RecommendedProjectCard from '../components/RecommendedProjectCard';
 import { campaignApi, investmentApi, withTimeout } from '../lib/api.js';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { supabase } from '../lib/supabase';
@@ -71,6 +72,8 @@ const Dashboard = () => {
 
   const [projects, setProjects] = useState([]);
   const [investments, setInvestments] = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
   const [showApprovalBanner, setShowApprovalBanner] = useState(false);
   const [campaignWallets, setCampaignWallets] = useState({});
@@ -212,6 +215,44 @@ const Dashboard = () => {
       }
     };
   }, [sessionVersion, user?.id]); // Use sessionVersion instead of role
+
+  // Fetch personalized recommendations
+  useEffect(() => {
+    const loadRecommendations = async () => {
+      if (!user?.id) return;
+      
+      setRecommendationsLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recommend_projects`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ limit: 6 })
+          }
+        );
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data) {
+            setRecommendations(result.data);
+          }
+        }
+      } catch (error) {
+        console.error('[Dashboard] Failed to load recommendations:', error);
+      } finally {
+        setRecommendationsLoading(false);
+      }
+    };
+    
+    loadRecommendations();
+  }, [user?.id]);
 
   // Refresh data after tab was hidden for a while - REMOVED due to setRefreshKey errors
 
@@ -1255,7 +1296,60 @@ const Dashboard = () => {
 
       {/* Recommended Projects Section - Below Main Content */}
       <section style={{ marginTop: '64px', marginBottom: '48px' }}>
-        <RecommendedProjects title="Recommended For You" />
+        <h2 style={{ 
+          fontSize: '24px', 
+          fontWeight: 'bold', 
+          marginBottom: '24px',
+          color: 'var(--color-text)'
+        }}>
+          Recommended for You
+        </h2>
+        
+        {recommendationsLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                border: '4px solid var(--color-bg-elev)',
+                borderTop: '4px solid var(--color-primary)',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                margin: '0 auto'
+              }}
+            />
+          </div>
+        ) : recommendations.length > 0 ? (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: '24px'
+            }}
+          >
+            {recommendations.map((recommendation) => (
+              <RecommendedProjectCard
+                key={recommendation.campaign.id}
+                recommendation={recommendation}
+              />
+            ))}
+          </div>
+        ) : (
+          <div style={{
+            textAlign: 'center',
+            padding: '48px 24px',
+            backgroundColor: 'var(--color-white)',
+            borderRadius: '12px',
+            border: '1px solid var(--color-border)'
+          }}>
+            <p style={{ fontSize: '16px', color: 'var(--color-muted)', marginBottom: '8px' }}>
+              No recommendations available yet
+            </p>
+            <p style={{ fontSize: '14px', color: 'var(--color-muted)' }}>
+              Explore campaigns and investments to get personalized recommendations
+            </p>
+          </div>
+        )}
       </section>
     </div>
   );

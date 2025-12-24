@@ -154,24 +154,43 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    // 6) Insert investment record
+    // 6) Upsert investment record (allow multiple investments by same user)
+    const { data: existingInvestment } = await supabase
+      .from('investments')
+      .select('id, amount')
+      .eq('investor_id', userId)
+      .eq('campaign_id', campaignId)
+      .maybeSingle()
+
+    const newInvestmentAmount = (existingInvestment?.amount || 0) + amountNum
+
     const { data: investment, error: investmentError } = await supabase
       .from('investments')
-      .insert({
-        investor_id: userId,
-        campaign_id: campaignId,
-        amount: amountNum,
-        status: 'confirmed',
-        investment_date: new Date().toISOString(),
-        confirmed_at: new Date().toISOString()
-      })
+      .upsert(
+        {
+          investor_id: userId,
+          campaign_id: campaignId,
+          amount: newInvestmentAmount,
+          status: 'confirmed',
+          investment_date: existingInvestment?.id ? undefined : new Date().toISOString(),
+          confirmed_at: new Date().toISOString()
+        },
+        {
+          onConflict: 'investor_id,campaign_id'
+        }
+      )
       .select()
       .single()
 
     if (investmentError || !investment) {
-      console.error('Investment insert failed:', investmentError)
+      console.error('Investment upsert failed:', investmentError)
       return new Response(
-        JSON.stringify({ success: false, error: 'Failed to create investment' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to create investment',
+          details: investmentError?.message || 'No investment data returned',
+          code: investmentError?.code
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -184,46 +203,36 @@ Deno.serve(async (req: Request) => {
       .eq('investor_id', userId)
       .maybeSingle()
 
+    const isFirstInvestment = !existingCampaignInvestment
     const newCampaignInvestmentAmount = (existingCampaignInvestment?.amount_fc || 0) + amountNum
 
     const { error: campaignInvestmentError } = await supabase
       .from('campaign_investments')
-      .upsert({
-        campaign_id: campaignId,
-        investor_id: userId,
-        amount_fc: newCampaignInvestmentAmount
-      })
+      .upsert(
+        {
+          campaign_id: campaignId,
+          investor_id: userId,
+          amount_fc: newCampaignInvestmentAmount
+        },
+        {
+          onConflict: 'campaign_id,investor_id'
+        }
+      )
 
     if (campaignInvestmentError) {
       console.error('Campaign investment upsert failed:', campaignInvestmentError)
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to update campaign investment', 
+          details: campaignInvestmentError.message,
+          code: campaignInvestmentError.code 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
-    // 8) Upsert campaign_investors (unique investor tracking)
-    const { data: existingInvestor } = await supabase
-      .from('campaign_investors')
-      .select('total_invested, first_investment_at')
-      .eq('campaign_id', campaignId)
-      .eq('investor_id', userId)
-      .maybeSingle()
-
-    const isFirstInvestment = !existingInvestor
-    const newTotalInvested = (existingInvestor?.total_invested || 0) + amountNum
-
-    const { error: campaignInvestorError } = await supabase
-      .from('campaign_investors')
-      .upsert({
-        campaign_id: campaignId,
-        investor_id: userId,
-        total_invested: newTotalInvested,
-        first_investment_at: existingInvestor?.first_investment_at || new Date().toISOString(),
-        last_investment_at: new Date().toISOString()
-      })
-
-    if (campaignInvestorError) {
-      console.error('Campaign investor upsert failed:', campaignInvestorError)
-    }
-
-    // 9) Update campaigns (current_funding, total_raised, investor_count)
+    // 8) Update campaigns (current_funding, total_raised, investor_count)
     const newCurrentFunding = (campaign.current_funding || 0) + amountNum
     const newTotalRaised = (campaign.total_raised || 0) + amountNum
     const newInvestorCount = (campaign.investor_count || 0) + (isFirstInvestment ? 1 : 0)
@@ -241,7 +250,7 @@ Deno.serve(async (req: Request) => {
       console.error('Campaign update failed:', campaignUpdateError)
     }
 
-    // 10) Insert into transactions
+    // 9) Insert into transactions
     const { error: transactionError } = await supabase
       .from('transactions')
       .insert({
@@ -257,7 +266,7 @@ Deno.serve(async (req: Request) => {
       console.error('Transaction insert failed:', transactionError)
     }
 
-    // 11) Insert into token_transactions
+    // 10) Insert into token_transactions
     const { error: tokenTxError } = await supabase
       .from('token_transactions')
       .insert({

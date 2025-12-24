@@ -1,8 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import RiskBadge from '../components/RiskBadge'
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../store/AuthContext';
 
 const CampaignCard = ({ campaign }) => {
   const navigate = useNavigate();
+  const { userId } = useAuth();
 
   // ==============================
   // Risk display logic (manual override aware)
@@ -19,6 +22,27 @@ const CampaignCard = ({ campaign }) => {
   console.log('🎯 CampaignCard: raisedAmount:', campaign.raisedAmount, 'type:', typeof campaign.raisedAmount);
 
   const handleClick = () => {
+    // Fire & forget: Log click event (don't block navigation)
+    if (userId && campaign.id) {
+      supabase
+        .from('recommendation_events')
+        .insert({
+          user_id: userId,
+          campaign_id: campaign.id,
+          event_type: 'click',
+          source: 'campaign_card'
+        })
+        .then(({ error }) => {
+          if (error) {
+            console.error('Failed to log click event:', error);
+          }
+        })
+        .catch((err) => {
+          console.error('Click event logging error:', err);
+        });
+    }
+
+    // Navigate immediately (don't wait for logging)
     navigate(`/campaign/${campaign.slug}`);
   };
 

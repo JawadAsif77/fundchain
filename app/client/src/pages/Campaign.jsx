@@ -99,6 +99,21 @@ const Campaign = () => {
           if (!cancelled && investments) {
             setUserInvestments(investments);
           }
+
+          // Log campaign view event for analytics/recommendations
+          const { error: eventError } = await supabase
+            .from('recommendation_events')
+            .insert({
+              user_id: userId,
+              campaign_id: data.id,
+              event_type: 'view',
+              source: 'campaign_page'
+            });
+          
+          if (eventError) {
+            console.error('Failed to log view event:', eventError);
+            // Don't fail the page load if logging fails
+          }
         }
       } catch (e) {
         if (!cancelled) {

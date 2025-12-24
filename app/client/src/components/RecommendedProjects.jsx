@@ -232,6 +232,34 @@ const RecommendedProjects = ({ title = "Recommended For You" }) => {
 
               <CampaignCard campaign={campaign} />
 
+              {/* Reason Tags - Small badges under project title */}
+              {rec.reason_tags && rec.reason_tags.length > 0 && (
+                <div style={{
+                  marginTop: '12px',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px'
+                }}>
+                  {rec.reason_tags.slice(0, 3).map((tag, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        display: 'inline-block',
+                        padding: '4px 10px',
+                        backgroundColor: '#F0F4F8',
+                        color: '#4A5568',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        border: '1px solid #E2E8F0'
+                      }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {/* Recommendation Reasons */}
               {rec.reasons && rec.reasons.length > 0 && (
                 <div style={{

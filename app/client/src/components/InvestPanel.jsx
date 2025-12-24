@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../store/AuthContext';
 import { walletApi } from '../lib/api.js';
+import { supabase } from '../lib/supabase';
 
 const InvestPanel = ({ campaign, onInvestSuccess }) => {
   const { user } = useAuth();
@@ -47,6 +48,27 @@ const InvestPanel = ({ campaign, onInvestSuccess }) => {
       return;
     }
     setBalance(res.balance);
+    
+    // Log investment event (strong preference signal)
+    if (user?.id && campaign.id) {
+      supabase
+        .from('recommendation_events')
+        .insert({
+          user_id: user.id,
+          campaign_id: campaign.id,
+          event_type: 'invest',
+          source: 'invest_panel'
+        })
+        .then(({ error }) => {
+          if (error) {
+            console.error('Failed to log investment event:', error);
+          }
+        })
+        .catch((err) => {
+          console.error('Investment event logging error:', err);
+        });
+    }
+    
     try {
       // Optionally notify parent to refresh campaign stats (raisedAmount, investor_count)
       if (typeof onInvestSuccess === 'function') {
