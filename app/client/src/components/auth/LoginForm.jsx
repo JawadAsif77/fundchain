@@ -186,15 +186,25 @@ const LoginForm = ({ onSwitchToRegister, onClose }) => {
     setGoogleError('');
     
     try {
+      console.log('[OAuth] Initiating Google sign-in...');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
+          // Redirect to dashboard - ProtectedRoute will handle role selection if needed
           redirectTo: `${window.location.origin}/dashboard`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error('[OAuth] Google sign-in error:', error);
+        throw error;
+      }
       
+      console.log('[OAuth] Redirect initiated successfully');
       // OAuth will redirect automatically, no need to call onClose here
     } catch (error) {
       console.error('Google login failed:', error);

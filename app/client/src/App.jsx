@@ -22,6 +22,7 @@ import AdminPanel from './pages/AdminPanel';
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
+import RoleSelection from './components/RoleSelection';
 import Wallet from './pages/Wallet';
 import Portfolio from './pages/Portfolio';
 import HowItWorks from './pages/HowItWorks';
@@ -84,6 +85,16 @@ function App() {
                           <Register />
                         </PublicRoute>
                       } />
+                      
+                      {/* Role Selection - For Google OAuth users without a role */}
+                      <Route 
+                        path="/role-selection" 
+                        element={
+                          <ProtectedRoute>
+                            <RoleSelection />
+                          </ProtectedRoute>
+                        } 
+                      />
                       
                       {/* Profile routes */}
                       <Route 

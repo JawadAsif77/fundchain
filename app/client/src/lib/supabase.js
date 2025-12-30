@@ -14,6 +14,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
+    // Storage key for session
+    storageKey: 'fundchain-auth',
+    // Storage method
+    storage: window.localStorage,
+    // Flow type for OAuth
+    flowType: 'pkce',
     // Refresh tokens 5 minutes before expiry
     tokenRefreshMargin: 300, // 5 minutes in seconds
     // Retry failed refresh attempts

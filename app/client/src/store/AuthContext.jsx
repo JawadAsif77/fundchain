@@ -82,25 +82,53 @@ export const AuthProvider = ({ children }) => {
       
       // A. Load Profile
       let userProfile = null;
-      // Use the safe API method we fixed
-      const { data, error } = await userApi.getProfile(userId);
-
-      if (!error && data) {
-        userProfile = data;
-      } else if (sessionUser) {
-        // Create profile if missing
-        if (debug) console.log('[Auth] No profile found, creating default...');
+      
+      try {
+        // Try to get existing profile
+        const { data, error } = await userApi.getProfile(userId);
+        
+        if (!error && data) {
+          userProfile = data;
+          console.log('[Auth] Profile loaded:', userProfile);
+        }
+      } catch (profileError) {
+        // Profile doesn't exist (PGRST116 error) - this is OK, we'll create it
+        console.log('[Auth] Profile not found (expected for new users):', profileError.code);
+      }
+      
+      // If no profile and we have session user data, create the profile
+      if (!userProfile && sessionUser) {
+        console.log('[Auth] No profile found, creating for user:', sessionUser.email);
+        
+        // Check if this is OAuth (Google) user - they shouldn't have a default role
+        const isOAuthUser = sessionUser.app_metadata?.provider === 'google';
+        
         const newProfile = {
           id: userId,
           email: sessionUser.email,
-          full_name: sessionUser.user_metadata?.full_name || '',
+          full_name: sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || '',
           username: sessionUser.user_metadata?.username || null,
-          role: sessionUser.user_metadata?.role || 'investor',
-          avatar_url: sessionUser.user_metadata?.avatar_url || null,
+          // OAuth users start with NULL role for role selection flow
+          role: isOAuthUser ? null : 'investor',
+          avatar_url: sessionUser.user_metadata?.avatar_url || sessionUser.user_metadata?.picture || null,
           is_verified: 'no'
         };
-        const result = await userApi.createUser(newProfile);
-        userProfile = result.data || result;
+        
+        console.log('[Auth] Creating new profile:', { 
+          email: newProfile.email, 
+          role: newProfile.role, 
+          isOAuth: isOAuthUser,
+          provider: sessionUser.app_metadata?.provider 
+        });
+        
+        try {
+          const result = await userApi.createUser(newProfile);
+          userProfile = result.data || result;
+          console.log('[Auth] Profile created successfully:', userProfile);
+        } catch (createError) {
+          console.error('[Auth] Failed to create profile:', createError);
+          throw createError;
+        }
       }
 
       // Update Profile State
@@ -120,6 +148,11 @@ export const AuthProvider = ({ children }) => {
 
     } catch (e) {
       console.error('[Auth] loadUserData error:', e);
+      console.error('[Auth] Error details:', {
+        message: e.message,
+        userId,
+        hasSessionUser: !!sessionUser
+      });
     } finally {
       fetchingUserDataRef.current = null;
     }
@@ -160,10 +193,11 @@ export const AuthProvider = ({ children }) => {
     // --- 3. THE CRITICAL FIX: LOOP-PROOF AUTH LISTENER ---
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-      console.log(`[Auth] Auth Event: ${event}`);
+      console.log(`[Auth] Auth Event: ${event}`, session?.user?.email || 'no user');
 
       if (event === 'SIGNED_OUT' || !session) {
         // Clean Reset
+        console.log('[Auth] User signed out, cleaning state');
         setUser(null);
         setProfile(null);
         setRoleStatus(null);
@@ -174,6 +208,12 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (session?.user) {
+        console.log('[Auth] Session detected:', {
+          userId: session.user.id,
+          email: session.user.email,
+          provider: session.user.app_metadata?.provider
+        });
+        
         // ⭐ THE FIX: STRICT ID CHECK ⭐
         // This stops the infinite loop. If the user ID hasn't changed, 
         // DO NOT update state and DO NOT fetch data.
@@ -278,8 +318,12 @@ export const AuthProvider = ({ children }) => {
 
   const needsRoleSelection = useMemo(() => {
     if (!user || !roleStatus) return false;
+    // Check if role is null or not a valid role
     const valid = ['investor', 'creator', 'admin'];
-    return !(roleStatus.role && valid.includes(roleStatus.role));
+    const hasValidRole = roleStatus.role && valid.includes(roleStatus.role);
+    
+    // Only require role selection if user has no valid role
+    return !hasValidRole;
   }, [user, roleStatus]);
 
   const needsKYC = useMemo(() => {

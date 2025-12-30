@@ -111,14 +111,14 @@ const ProtectedRoute = ({
     return <Loader message="Redirecting to profile..." />;
   }
 
-  // If user needs role selection and not on profile page
-  if (needsRoleSelectionValue && currentPath !== '/profile' && currentPath !== '/profile-edit') {
-    if (shouldRedirect('/profile')) {
-      return <Navigate to="/profile" state={{ 
-        message: "Please complete your profile setup." 
+  // If user needs role selection (Google OAuth without role)
+  if (needsRoleSelectionValue && currentPath !== '/role-selection') {
+    if (shouldRedirect('/role-selection')) {
+      return <Navigate to="/role-selection" state={{ 
+        message: "Please select your role to continue." 
       }} replace />;
     }
-    return <Loader message="Redirecting to profile setup..." />;
+    return <Loader message="Redirecting to role selection..." />;
   }
 
   // If user needs KYC and not on KYC page (only applies to creators)
