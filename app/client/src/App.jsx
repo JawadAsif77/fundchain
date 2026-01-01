@@ -5,6 +5,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import NetworkStatus from './components/NetworkStatus';
+import ChatWidget from './components/ChatWidget';
 
 // Pages
 import Home from './pages/Home';
@@ -163,6 +164,9 @@ function App() {
                     </Routes>
                   </main>
                   <Footer />
+                  
+                  {/* Global Chat Widget - visible on all non-admin pages for authenticated users */}
+                  <ChatWidget />
                 </div>
               }
             />
