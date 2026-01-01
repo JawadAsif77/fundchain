@@ -39,6 +39,9 @@ Deno.serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
 
+    // Startup check - log API key status without exposing the value
+    console.log('🔑 GEMINI_API_KEY status:', geminiApiKey ? 'SET ✅' : 'NOT SET ❌');
+
     if (!supabaseUrl || !supabaseAnonKey || !geminiApiKey) {
       throw new Error('Missing environment variables');
     }
