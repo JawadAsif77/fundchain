@@ -72,26 +72,6 @@ const ProtectedRoute = ({
 
   const currentPath = location.pathname;
 
-  // Not authenticated - redirect to login
-  if (!isAuthenticated) {
-    if (shouldRedirect('/login')) {
-      if (debug) console.log('[ProtectedRoute] Not authenticated, redirecting to login');
-      return <Navigate to="/login" state={{ from: location }} replace />;
-    }
-    return <Loader message="Authenticating..." />;
-  }
-
-  // Email not confirmed - redirect to login with message
-  if (requireEmailConfirmed && !isEmailConfirmed) {
-    if (shouldRedirect('/login')) {
-      return <Navigate to="/login" state={{ 
-        from: location,
-        message: "Please confirm your email before continuing." 
-      }} replace />;
-    }
-    return <Loader message="Checking email confirmation..." />;
-  }
-
   // Get memoized values to prevent function call loops
   const needsProfileCompletionValue = typeof needsProfileCompletion === 'function' 
     ? needsProfileCompletion() 
@@ -103,50 +83,35 @@ const ProtectedRoute = ({
     ? needsKYC() 
     : needsKYC;
 
-  // Force profile completion before accessing other protected areas
+  // 1. Not authenticated - redirect to login
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // 2. PRIORITY: Role Selection - User has no role (Google OAuth)
+  // They MUST select a role before doing anything else
+  if (needsRoleSelectionValue) {
+    // If already on role selection page, let them stay
+    if (currentPath === '/role-selection') {
+      return children;
+    }
+    // Otherwise, redirect to role selection
+    return <Navigate to="/role-selection" replace />;
+  }
+
+  // 3. Profile Completion (after role is selected)
   if (needsProfileCompletionValue && currentPath !== '/profile' && currentPath !== '/profile-edit') {
     if (shouldRedirect('/profile')) {
-      return <Navigate to="/profile" state={{ message: 'Please complete your profile to continue.' }} replace />;
+      return <Navigate to="/profile" state={{ message: 'Please complete your profile.' }} replace />;
     }
-    return <Loader message="Redirecting to profile..." />;
   }
 
-  // If user needs role selection (Google OAuth without role)
-  if (needsRoleSelectionValue && currentPath !== '/role-selection') {
-    if (shouldRedirect('/role-selection')) {
-      return <Navigate to="/role-selection" state={{ 
-        message: "Please select your role to continue." 
-      }} replace />;
-    }
-    return <Loader message="Redirecting to role selection..." />;
+  // 4. KYC Check (only for creators) - MUST complete KYC before accessing any protected page
+  if (needsKYCValue && currentPath !== '/kyc') {
+    return <Navigate to="/kyc" replace />;
   }
 
-  // If user needs KYC and not on KYC page (only applies to creators)
-  if (needsKYCValue && currentPath !== '/kyc' && currentPath !== '/dashboard' && currentPath !== '/profile') {
-    if (shouldRedirect('/kyc')) {
-      return <Navigate to="/kyc" replace />;
-    }
-    return <Loader message="Redirecting to verification..." />;
-  }
-  
-  // If route requires specific role but user has different role
-  if (typeof requireRole === 'string' && roleStatus?.role !== requireRole) {
-    if (shouldRedirect('/dashboard')) {
-      return <Navigate to="/dashboard" state={{ 
-        message: `This page is only accessible to ${requireRole}s.` 
-      }} replace />;
-    }
-    return <Loader message="Checking permissions..." />;
-  }
-  
-  // If route requires KYC but user isn't verified (strict check for certain routes)
-  if (requireKYC && needsKYCValue && currentPath !== '/dashboard' && currentPath !== '/kyc') {
-    if (shouldRedirect('/kyc')) {
-      return <Navigate to="/kyc" replace />;
-    }
-    return <Loader message="Verification required..." />;
-  }
-
+  // All checks passed - allow access
   return children;
 };
 

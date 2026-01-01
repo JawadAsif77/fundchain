@@ -16,18 +16,12 @@ export async function getRecommendedProjects(filters = {}, limit = 10) {
   try {
     console.log('🎯 Fetching recommendations with filters:', filters, 'limit:', limit);
 
-    // Force refresh the session to get a fresh token
-    const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+    // Get existing session - NO need to refresh, Supabase handles token refresh automatically
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError) {
-      console.error('❌ Session refresh error:', sessionError);
-      // Try getting existing session as fallback
-      const { data: { session: existingSession } } = await supabase.auth.getSession();
-      if (!existingSession) {
-        throw new Error('You must be logged in to get recommendations');
-      }
-      // Use existing session
-      return await fetchRecommendations(existingSession, filters, limit);
+      console.error('❌ Session error:', sessionError);
+      throw new Error('You must be logged in to get recommendations');
     }
     
     if (!session || !session.access_token) {
@@ -35,7 +29,7 @@ export async function getRecommendedProjects(filters = {}, limit = 10) {
       throw new Error('You must be logged in to get recommendations');
     }
 
-    console.log('✅ Fresh session obtained, calling Edge Function...');
+    console.log('✅ Session obtained, calling Edge Function...');
     return await fetchRecommendations(session, filters, limit);
 
   } catch (error) {

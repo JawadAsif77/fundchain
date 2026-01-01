@@ -10,9 +10,12 @@ const RecommendedProjects = ({ title = "Recommended For You" }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Extract user ID to prevent re-running on every token refresh
+  const userId = user?.id;
+
   const loadRecommendations = useCallback(async () => {
     // Don't load if auth is still loading or user not available
-    if (authLoading || !user) {
+    if (authLoading || !userId) {
       console.log('⏳ Waiting for authentication...');
       setLoading(true);
       return;
@@ -39,7 +42,7 @@ const RecommendedProjects = ({ title = "Recommended For You" }) => {
     } finally {
       setLoading(false);
     }
-  }, [profile, user, authLoading]);
+  }, [profile?.region, userId, authLoading]);
 
   useEffect(() => {
     loadRecommendations();

@@ -96,11 +96,14 @@ const dedupeRequest = async (key, requestFn, ttl = 2000) => {
 export const userApi = {
   async getProfile(userId) {
     return dedupeRequest(`profile-${userId}`, async () => {
-      const { data, error } = await withTimeout(
-        supabase.from('users').select('*').eq('id', userId).single()
-      );
-      if (error) throw error;
-      return { data };
+      // .maybeSingle() returns null instead of throwing an error if user isn't found
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle(); 
+      
+      return { data, error };
     });
   },
 
@@ -123,17 +126,19 @@ export const userApi = {
   },
 
   async createUser(userData) {
-    console.log('[API] Creating user with data:', userData);
-    const { data, error } = await supabase.from('users').insert(userData).select('*').single();
-    if (error) {
-      console.error('[API] User creation error:', error);
-      throw error;
+    console.log('[API] Creating user in public.users:', userData);
+    const { data, error } = await supabase
+      .from('users')
+      .insert(userData)
+      .select('*')
+      .single();
+    
+    if (!error && data) {
+      try {
+        supabase.functions.invoke('create-user-wallet', { body: { userId: data.id } });
+      } catch(e) { console.warn('Wallet creation trigger failed', e); }
     }
-    console.log('[API] User created successfully:', data);
-    try {
-      supabase.functions.invoke('create-user-wallet', { body: { userId: data.id } });
-    } catch(e) { console.warn('Wallet creation trigger failed', e); }
-    return { data };
+    return { data, error };
   },
 
   async updateWalletAddress(userId, address) {

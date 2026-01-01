@@ -70,93 +70,137 @@ export const AuthProvider = ({ children }) => {
   // Refs to prevent race conditions & loops
   const initializationRef = useRef(null);
   const fetchingUserDataRef = useRef(false);
+  const failedUserCreationsRef = useRef(new Set()); // Track users that failed creation
 
   // --- 1. CORE DATA LOADER (Prevents Duplicate Fetches) ---
   const loadUserData = useCallback(async (userId, sessionUser = null) => {
-    // If already fetching for this specific user, skip
     if (fetchingUserDataRef.current === userId) return;
+    
+    // Check if this user already failed creation - prevent infinite retries
+    if (failedUserCreationsRef.current.has(userId) && !sessionUser) {
+      console.log('[Auth] Skipping retry for user with failed creation:', userId);
+      setLoading(false);
+      return;
+    }
+    
     fetchingUserDataRef.current = userId;
 
     try {
-      console.log('[Auth] Loading full user data for:', userId);
+      console.log('[Auth] Loading user data for:', userId);
       
-      // A. Load Profile
-      let userProfile = null;
+      // Try to get existing profile from database
+      const { data: existingProfile, error } = await userApi.getProfile(userId);
       
-      try {
-        // Try to get existing profile
-        const { data, error } = await userApi.getProfile(userId);
-        
-        if (!error && data) {
-          userProfile = data;
-          console.log('[Auth] Profile loaded:', userProfile);
-        }
-      } catch (profileError) {
-        // Profile doesn't exist (PGRST116 error) - this is OK, we'll create it
-        console.log('[Auth] Profile not found (expected for new users):', profileError.code);
-      }
+      console.log('[Auth] Profile fetch result:', { existingProfile, error });
       
-      // If no profile and we have session user data, create the profile
-      if (!userProfile && sessionUser) {
-        console.log('[Auth] No profile found, creating for user:', sessionUser.email);
+      let userProfile = existingProfile;
+      
+      // If user doesn't exist in database, create them
+      if (!existingProfile && sessionUser) {
+        console.log('[Auth] New user, creating profile...');
         
-        // Check if this is OAuth (Google) user - they shouldn't have a default role
-        const isOAuthUser = sessionUser.app_metadata?.provider === 'google';
+        // Generate base username
+        let baseUsername = sessionUser.user_metadata?.username || 
+                           sessionUser.user_metadata?.preferred_username ||
+                           sessionUser.user_metadata?.name?.toLowerCase().replace(/\s+/g, '') ||
+                           `user_${userId.substring(0, 8)}`;
         
-        const newProfile = {
+        const newUser = {
           id: userId,
           email: sessionUser.email,
           full_name: sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || '',
-          username: sessionUser.user_metadata?.username || null,
-          // OAuth users start with NULL role for role selection flow
-          role: isOAuthUser ? null : 'investor',
+          username: baseUsername,
+          role: null, // Always NULL for new users - they must select
           avatar_url: sessionUser.user_metadata?.avatar_url || sessionUser.user_metadata?.picture || null,
           is_verified: 'no'
         };
         
-        console.log('[Auth] Creating new profile:', { 
-          email: newProfile.email, 
-          role: newProfile.role, 
-          isOAuth: isOAuthUser,
-          provider: sessionUser.app_metadata?.provider 
-        });
+        console.log('[Auth] Creating user with username:', newUser.username);
         
-        try {
-          const result = await userApi.createUser(newProfile);
-          userProfile = result.data || result;
-          console.log('[Auth] Profile created successfully:', userProfile);
-        } catch (createError) {
-          console.error('[Auth] Failed to create profile:', createError);
-          throw createError;
+        let { data: createdUser, error: createError } = await userApi.createUser(newUser);
+        
+        // Handle username conflict - generate unique username
+        if (createError?.code === '23505' && createError?.message?.includes('users_username_key')) {
+          console.log('[Auth] Username conflict detected, generating unique username...');
+          
+          // Try up to 5 times with random suffixes
+          for (let attempt = 1; attempt <= 5; attempt++) {
+            const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+            newUser.username = `${baseUsername}${randomSuffix}`;
+            
+            console.log(`[Auth] Retry ${attempt}/5 with username:`, newUser.username);
+            
+            const retry = await userApi.createUser(newUser);
+            createdUser = retry.data;
+            createError = retry.error;
+            
+            if (!createError) {
+              console.log('[Auth] Successfully created user with unique username:', newUser.username);
+              break;
+            }
+            
+            if (createError?.code !== '23505') {
+              // Different error, stop retrying
+              break;
+            }
+          }
         }
+        
+        if (createError) {
+          console.error('[Auth] Failed to create user after retries:', createError);
+          failedUserCreationsRef.current.add(userId);
+          
+          // Still set loading to false and return - user can't proceed without profile
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+        
+        userProfile = createdUser;
+        console.log('[Auth] User created successfully:', userProfile);
+        
+        // Clear from failed set if it was there
+        failedUserCreationsRef.current.delete(userId);
       }
-
-      // Update Profile State
-      setProfile(userProfile);
-
-      // B. Load Role Status (Parallel is fine here if API is stable, sequential is safer)
-      const status = await getUserRoleStatus(userId);
-      const userRoleStatus = { ...defaultRoleStatus, ...(status || {}) };
-      setRoleStatus(userRoleStatus);
       
-      // C. Load Wallet (Fire and forget, don't block auth)
-      getWallet(userId).then(w => {
-        if (w.status === 'success') {
-          setWallet({ balanceFc: w.balanceFc, lockedFc: w.lockedFc });
-        }
-      }).catch(e => console.warn('Wallet load warning:', e));
+      console.log('[Auth] Setting profile:', userProfile);
+      console.log('[Auth] Profile is_verified value:', userProfile?.is_verified, 'Type:', typeof userProfile?.is_verified);
+      
+      // Set profile state
+      setProfile(userProfile);
+      
+      // Set role status
+      if (userProfile) {
+        const isVerified = userProfile.is_verified === 'verified';
+        console.log('[Auth] KYC Check - is_verified:', userProfile.is_verified, '- isVerified:', isVerified);
+        const roleStatusValue = {
+          ...defaultRoleStatus,
+          hasRole: !!userProfile.role,
+          role: userProfile.role,
+          isKYCVerified: isVerified,
+          kycStatus: isVerified ? 'approved' : 'not_started'
+        };
+        console.log('[Auth] Setting roleStatus:', roleStatusValue);
+        setRoleStatus(roleStatusValue);
+      }
+      
+      // Load wallet if user exists
+      if (userProfile) {
+        getWallet(userId).then(w => {
+          if (w.status === 'success') {
+            setWallet({ balanceFc: w.balanceFc, lockedFc: w.lockedFc });
+          }
+        }).catch(e => console.warn('Wallet load warning:', e));
+      }
 
     } catch (e) {
       console.error('[Auth] loadUserData error:', e);
-      console.error('[Auth] Error details:', {
-        message: e.message,
-        userId,
-        hasSessionUser: !!sessionUser
-      });
     } finally {
       fetchingUserDataRef.current = null;
+      console.log('[Auth] Setting loading to false');
+      setLoading(false);
     }
-  }, [debug]);
+  }, []);
 
   // --- 2. INITIALIZATION ---
   useEffect(() => {
@@ -190,45 +234,33 @@ export const AuthProvider = ({ children }) => {
 
     initSession();
 
-    // --- 3. THE CRITICAL FIX: LOOP-PROOF AUTH LISTENER ---
+    // --- 3. AUTH LISTENER ---
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-      console.log(`[Auth] Auth Event: ${event}`, session?.user?.email || 'no user');
+      console.log(`[Auth] Auth Event: ${event}`);
 
       if (event === 'SIGNED_OUT' || !session) {
-        // Clean Reset
-        console.log('[Auth] User signed out, cleaning state');
         setUser(null);
         setProfile(null);
         setRoleStatus(null);
         setWallet(null);
+        failedUserCreationsRef.current.clear(); // Clear failed attempts on logout
         setLoading(false);
-        clearRequestCache();
         return;
       }
 
       if (session?.user) {
-        console.log('[Auth] Session detected:', {
-          userId: session.user.id,
-          email: session.user.email,
-          provider: session.user.app_metadata?.provider
-        });
+        // Set user immediately
+        setUser(session.user);
         
-        // ⭐ THE FIX: STRICT ID CHECK ⭐
-        // This stops the infinite loop. If the user ID hasn't changed, 
-        // DO NOT update state and DO NOT fetch data.
-        setUser(prevUser => {
-          if (prevUser?.id === session.user.id) {
-            return prevUser; // Return exact same object reference -> No Re-render
-          }
-          
-          // Only if ID is different (Real Login/User Switch):
-          console.log('[Auth] User identity changed, fetching new data...');
+        // Only load user data on meaningful events, NOT on token refresh
+        // TOKEN_REFRESHED happens every few seconds and doesn't mean user data changed
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          console.log(`[Auth] Loading user data for event: ${event}`);
           loadUserData(session.user.id, session.user);
-          return session.user;
-        });
-        
-        setLoading(false);
+        } else {
+          console.log(`[Auth] Skipping data load for ${event} event - user data unchanged`);
+        }
       }
     });
 
@@ -317,19 +349,16 @@ export const AuthProvider = ({ children }) => {
   }, [user, profile]);
 
   const needsRoleSelection = useMemo(() => {
-    if (!user || !roleStatus) return false;
-    // Check if role is null or not a valid role
-    const valid = ['investor', 'creator', 'admin'];
-    const hasValidRole = roleStatus.role && valid.includes(roleStatus.role);
-    
-    // Only require role selection if user has no valid role
-    return !hasValidRole;
-  }, [user, roleStatus]);
+    if (!user || !profile) return false;
+    // User needs to select role if role is NULL
+    return !profile.role;
+  }, [user, profile]);
 
   const needsKYC = useMemo(() => {
     if (!user || !roleStatus) return false;
     if (roleStatus.role !== 'creator') return false;
-    return !roleStatus.companyData && !roleStatus.isKYCVerified;
+    // Creators need KYC if they haven't been verified yet
+    return !roleStatus.isKYCVerified;
   }, [user, roleStatus]);
 
   const isFullyOnboarded = useMemo(() => {

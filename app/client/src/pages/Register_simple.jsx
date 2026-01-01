@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -16,7 +16,10 @@ const Register = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [error, setError] = useState('');
+  const [waitingForProfile, setWaitingForProfile] = useState(false);
+  const registrationRoleRef = useRef(null);
   const navigate = useNavigate();
+  const { profile, loading } = useAuth();
 
   const handleRoleSelection = (role) => {
     setSelectedRole(role);
@@ -49,13 +52,14 @@ const handleSubmit = async (e) => {
   setError('');
 
   try {
-    console.log("Starting registration...", {
+    console.log("[Register] Starting registration...", {
       email: formData.email,
       username: formData.username,
       role: selectedRole,
     });
 
-    // STEP 1 — Create auth user
+    // STEP 1 — Create auth user with metadata
+    // AuthContext will automatically create the profile when SIGNED_IN event fires
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: formData.email,
       password: formData.password,
@@ -69,88 +73,63 @@ const handleSubmit = async (e) => {
     });
 
     if (authError) {
-      console.error("Auth signup error:", authError);
+      console.error("[Register] Auth signup error:", authError);
       throw authError;
     }
 
     const userId = authData.user?.id;
-    console.log("Auth user created:", userId);
+    console.log("[Register] Auth user created:", userId);
 
     if (!userId) throw new Error("No user returned from signup");
 
-    // STEP 2 — Create user profile in public.users table
-    try {
-      console.log('[Register] Creating user profile...');
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: userId,
-          email: formData.email,
-          username: formData.username,
-          full_name: formData.fullName,
-          role: selectedRole,
-          is_verified: 'no'
-        });
-
-      if (profileError) {
-        console.error('[Register] Profile creation error:', profileError);
-        throw profileError;
-      }
-      console.log('[Register] User profile created');
-      
-      // Wait a moment for the profile to be fully committed
-      await new Promise(resolve => setTimeout(resolve, 500));
-    } catch (profileError) {
-      console.error('[Register] Failed to create profile:', profileError);
-      throw new Error('Failed to create user profile');
-    }
-
-    // STEP 3 — Now create wallet (users row exists, so foreign key will work)
-    try {
-      console.log('[Register] Creating wallet...');
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const response = await fetch(`${supabaseUrl}/functions/v1/create-user-wallet`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-        },
-        body: JSON.stringify({ userId })
-      });
-
-      const walletResult = await response.json();
-      console.log('[Register] Wallet creation result:', walletResult);
-    } catch (walletError) {
-      console.error('[Register] Failed to create wallet:', walletError);
-      // Don't fail registration, just log the error
-    }
-
-    setStatusMessage("Account created successfully!");
-
-    // STEP 3 — Routing
-    if (authData.session) {
-      if (selectedRole === "investor") {
-        navigate("/dashboard", { replace: true });
-      } else {
-        navigate("/profile", { replace: true });
-      }
-    } else {
+    // Check if email confirmation is required
+    if (!authData.session) {
+      console.log("[Register] Email confirmation required");
       navigate("/login", {
         replace: true,
         state: {
-          message:
-            "Please check your email and click the confirmation link to complete your registration.",
+          message: "Please check your email and click the confirmation link to complete your registration.",
         },
       });
+      return;
     }
+
+    // STEP 2 — Wait for AuthContext to create profile and load data
+    console.log("[Register] Waiting for profile to be created by AuthContext...");
+    setStatusMessage("Setting up your account...");
+    
+    // Store the role for the redirect logic
+    registrationRoleRef.current = selectedRole;
+    setWaitingForProfile(true);
+    
+    // Note: The useEffect below will handle navigation once profile is loaded
+
   } catch (err) {
-    console.error("Registration error:", err);
+    console.error("[Register] Registration error:", err);
     setError(err.message || "An error occurred during registration");
     setStatusMessage("");
-  } finally {
     setIsSubmitting(false);
   }
 };
+
+  // Handle navigation after profile is loaded
+  useEffect(() => {
+    if (waitingForProfile && !loading && profile) {
+      console.log("[Register] Profile loaded, navigating...");
+      const role = registrationRoleRef.current;
+      
+      if (role === "creator") {
+        navigate("/kyc", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
+      
+      // Reset states
+      setWaitingForProfile(false);
+      setIsSubmitting(false);
+      registrationRoleRef.current = null;
+    }
+  }, [waitingForProfile, loading, profile, navigate]);
 
   const handleBackToRole = () => {
     setStep('role');

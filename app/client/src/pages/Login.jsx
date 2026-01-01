@@ -6,20 +6,26 @@ import RegisterForm from '../components/auth/RegisterForm';
 
 const Login = () => {
   const [isLoginMode, setIsLoginMode] = useState(true);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, profile, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Get the intended destination, default to dashboard
-  const from = location.state?.from?.pathname || '/dashboard';
-
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate(from, { replace: true });
+    if (!loading && isAuthenticated && profile) {
+      // Check if user has selected a role
+      if (!profile.role) {
+        // No role - redirect to role selection
+        navigate('/role-selection', { replace: true });
+      } else {
+        // Has role - redirect to dashboard or original destination
+        const from = location.state?.from?.pathname || '/dashboard';
+        navigate(from, { replace: true });
+      }
     }
-  }, [isAuthenticated, navigate, from]);
+  }, [isAuthenticated, profile, loading, navigate, location]);
 
   const handleAuthSuccess = () => {
+    const from = location.state?.from?.pathname || '/dashboard';
     navigate(from, { replace: true });
   };
 

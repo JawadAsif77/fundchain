@@ -13,15 +13,15 @@ const RoleSelection = () => {
   const [selectedRole, setSelectedRole] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const { user, roleStatus, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
-  // Security: Redirect if user already has a role
+  // Security: If user already has a role, redirect to dashboard
   React.useEffect(() => {
-    if (roleStatus?.role && ['creator', 'investor', 'admin'].includes(roleStatus.role)) {
+    if (profile?.role) {
       navigate('/dashboard', { replace: true });
     }
-  }, [roleStatus, navigate]);
+  }, [profile, navigate]);
 
   const handleRoleSelect = (role) => {
     setSelectedRole(role);
@@ -56,8 +56,14 @@ const RoleSelection = () => {
       // Refresh user profile to get updated role
       await refreshProfile();
 
-      // Redirect to dashboard
-      navigate('/dashboard', { replace: true });
+      // Redirect based on role
+      if (selectedRole === 'creator') {
+        // Creators must complete KYC first
+        navigate('/kyc', { replace: true });
+      } else {
+        // Investors go to dashboard
+        navigate('/dashboard', { replace: true });
+      }
     } catch (err) {
       console.error('Role selection error:', err);
       setError(err.message || 'Failed to set role. Please try again.');
