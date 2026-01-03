@@ -84,6 +84,39 @@ const Dashboard = () => {
   const location = useLocation();
   const debug = import.meta.env.DEV;
 
+  // Determine user role first
+  const role = roleStatus?.role || 'investor';
+  const isCreator = role === 'creator';
+  const isInvestor = role === 'investor';
+  const kycStatus = roleStatus?.kycStatus;
+  const isVerified =
+    roleStatus?.isKYCVerified || profile?.is_verified === 'yes' || false;
+  
+  // KYC verification data state
+  const [kycVerificationData, setKycVerificationData] = useState(null);
+  
+  // KYC banner states for creators
+  // Show "Submit KYC" banner only if no verification record exists at all
+  const showKYCNotSubmittedBanner = isCreator && !isVerified && !kycVerificationData;
+  // Show "Under Review" banner only if verification status is pending
+  const showKYCPendingBanner = isCreator && !isVerified && kycVerificationData?.verification_status === 'pending';
+
+  // Fetch KYC verification data for banner logic
+  useEffect(() => {
+    if (isCreator && user?.id) {
+      const fetchKYCData = async () => {
+        const { data } = await supabase
+          .from('user_verifications')
+          .select('verification_status, created_at, updated_at')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        setKycVerificationData(data);
+      };
+      fetchKYCData();
+    }
+  }, [isCreator, user?.id, sessionVersion]);
+
   // Campaign submitted banner via navigation state
   useEffect(() => {
     if (location.state?.campaignSubmitted) {
@@ -92,17 +125,6 @@ const Dashboard = () => {
       navigate('.', { replace: true, state: {} });
     }
   }, [location.state, navigate]);
-
-  const role = roleStatus?.role || 'investor';
-  const isCreator = role === 'creator';
-  const isInvestor = role === 'investor';
-  const kycStatus = roleStatus?.kycStatus;
-  const isVerified =
-    roleStatus?.isKYCVerified || profile?.is_verified === 'yes' || false;
-  
-  // KYC banner states for creators
-  const showKYCNotSubmittedBanner = isCreator && !isVerified && (kycStatus === 'not_started' || profile?.is_verified === 'no');
-  const showKYCPendingBanner = isCreator && !isVerified && (kycStatus === 'pending' || profile?.is_verified === 'pending');
 
   // Redirect guard: admin to /admin, unassigned creator/admin roles to /profile,
   // unverified creators to /kyc (but investors always allowed).
@@ -1215,47 +1237,63 @@ const Dashboard = () => {
         )}
 
       {/* KYC pending banner for creators */}
-      {showKYCPendingBanner && (
-        <div
-          style={{
-            marginBottom: '24px',
-            padding: '16px',
-            borderRadius: '12px',
-            backgroundColor: '#E8F5E9',
-            border: '1px solid #66BB6A',
-            color: '#2E7D32',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '12px'
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <span style={{ fontSize: '20px' }}>⏳</span>
-              <strong>Verification Under Review</strong>
-            </div>
-            <p style={{ margin: 0, fontSize: '13px' }}>
-              Your KYC verification is being reviewed by our team. You can access your dashboard but campaign creation is temporarily disabled until verification is complete.
-            </p>
-          </div>
-          <Link
-            to="/kyc"
+      {showKYCPendingBanner && (() => {
+        const submittedAt = kycVerificationData?.updated_at || kycVerificationData?.created_at;
+        const hoursElapsed = submittedAt 
+          ? Math.floor((Date.now() - new Date(submittedAt).getTime()) / (1000 * 60 * 60))
+          : 0;
+        const estimatedHoursLeft = Math.max(0, 24 - hoursElapsed);
+        
+        return (
+          <div
             style={{
-              padding: '8px 16px',
-              backgroundColor: '#66BB6A',
-              color: '#fff',
-              borderRadius: '6px',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: 500,
-              whiteSpace: 'nowrap'
+              marginBottom: '24px',
+              padding: '16px',
+              borderRadius: '12px',
+              backgroundColor: '#E8F5E9',
+              border: '1px solid #66BB6A',
+              color: '#2E7D32',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '12px'
             }}
           >
-            View Status
-          </Link>
-        </div>
-      )}
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <span style={{ fontSize: '20px' }}>⏳</span>
+                <strong>Verification Under Review</strong>
+              </div>
+              <p style={{ margin: '0 0 8px 0', fontSize: '13px' }}>
+                Your KYC verification is being reviewed by our team. You can access your dashboard but campaign creation is temporarily disabled until verification is complete.
+              </p>
+              <div style={{ fontSize: '12px', opacity: 0.8 }}>
+                {submittedAt && (
+                  <>
+                    <div>📅 Submitted: {new Date(submittedAt).toLocaleString()}</div>
+                    <div>⏱️ Estimated review time: {estimatedHoursLeft > 0 ? `~${estimatedHoursLeft} hours remaining` : 'Under final review'}</div>
+                  </>
+                )}
+              </div>
+            </div>
+            <Link
+              to="/kyc"
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#66BB6A',
+                color: '#fff',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                fontSize: '14px',
+                fontWeight: 500,
+                whiteSpace: 'nowrap'
+              }}
+            >
+              View / Update
+            </Link>
+          </div>
+        );
+      })()}
 
       {/* Header */}
       <div

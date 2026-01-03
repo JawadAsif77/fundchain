@@ -278,12 +278,12 @@ const AdminPanel = () => {
       console.log('Total verifications in database:', allVerifications?.length || 0);
       console.log('All verifications:', allVerifications);
       
-      // Get all pending verifications
+      // Get all pending verifications, ordered by most recently updated first
       const { data: verificationsData, error: verificationsError } = await supabase
         .from('user_verifications')
         .select('*')
         .eq('verification_status', 'pending')
-        .order('submitted_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (verificationsError) {
         console.error('Error loading verifications:', verificationsError);
@@ -761,21 +761,103 @@ const AdminPanel = () => {
                         </h3>
                         
                         <div style={{ display: 'grid', gap: '4px', fontSize: '14px', color: '#6b7280' }}>
-                          <div>Email: {verification.users?.email || verification.legal_email}</div>
-                          <div>Phone: {verification.phone}</div>
-                          <div>Submitted: {new Date(verification.submitted_at).toLocaleDateString()}</div>
+                          <div>
+                            <strong>Email:</strong> {verification.users?.email || verification.legal_email}
+                          </div>
+                          <div>
+                            <strong>Phone:</strong> {verification.phone}
+                            {verification.phone_verified && (
+                              <span style={{ marginLeft: '6px', fontSize: '12px', color: '#10b981' }}>✓ Verified</span>
+                            )}
+                          </div>
+                          {verification.nationality && (
+                            <div><strong>Nationality:</strong> {verification.nationality}</div>
+                          )}
+                          {verification.country && (
+                            <div><strong>Country:</strong> {verification.country}</div>
+                          )}
+                          {verification.occupation && (
+                            <div><strong>Occupation:</strong> {verification.occupation}</div>
+                          )}
+                          <div><strong>Submitted:</strong> {new Date(verification.submitted_at).toLocaleDateString()}</div>
+                          {verification.updated_at && verification.updated_at !== verification.submitted_at && (() => {
+                            const updatedDate = new Date(verification.updated_at);
+                            const submittedDate = new Date(verification.submitted_at);
+                            // Consider "updated" if more than 1 minute difference
+                            const isUpdated = (updatedDate - submittedDate) > 60000;
+                            return isUpdated ? (
+                              <div style={{ color: '#f59e0b', fontWeight: '500' }}>
+                                <strong>✏️ Updated:</strong> {updatedDate.toLocaleString()}
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
 
-                        <div style={{ marginTop: '12px' }}>
+                        <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {(() => {
+                            const updatedDate = new Date(verification.updated_at || verification.submitted_at);
+                            const submittedDate = new Date(verification.submitted_at);
+                            const isUpdated = (updatedDate - submittedDate) > 60000;
+                            return isUpdated ? (
+                              <span style={{
+                                fontSize: '12px',
+                                padding: '4px 8px',
+                                backgroundColor: '#fef3c7',
+                                color: '#92400e',
+                                borderRadius: '12px',
+                                fontWeight: '600',
+                                border: '1px solid #fbbf24'
+                              }}>
+                                ✏️ UPDATED
+                              </span>
+                            ) : null;
+                          })()}
                           <span style={{
                             fontSize: '12px',
                             padding: '4px 8px',
                             backgroundColor: '#dbeafe',
                             color: '#1e40af',
-                            borderRadius: '4px'
+                            borderRadius: '12px',
+                            fontWeight: '500'
                           }}>
                             {verification.verification_type}
                           </span>
+                          {verification.pep_status && (
+                            <span style={{
+                              fontSize: '12px',
+                              padding: '4px 8px',
+                              backgroundColor: '#fef3c7',
+                              color: '#92400e',
+                              borderRadius: '12px',
+                              fontWeight: '500'
+                            }}>
+                              ⚠️ PEP
+                            </span>
+                          )}
+                          {verification.risk_level && (
+                            <span style={{
+                              fontSize: '12px',
+                              padding: '4px 8px',
+                              backgroundColor: verification.risk_level === 'high' ? '#fee2e2' : verification.risk_level === 'medium' ? '#fef3c7' : '#d1fae5',
+                              color: verification.risk_level === 'high' ? '#991b1b' : verification.risk_level === 'medium' ? '#92400e' : '#065f46',
+                              borderRadius: '12px',
+                              fontWeight: '500'
+                            }}>
+                              Risk: {verification.risk_level}
+                            </span>
+                          )}
+                          {verification.id_document_url && (
+                            <span style={{
+                              fontSize: '12px',
+                              padding: '4px 8px',
+                              backgroundColor: '#d1fae5',
+                              color: '#065f46',
+                              borderRadius: '12px',
+                              fontWeight: '500'
+                            }}>
+                              📄 Docs Uploaded
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -1853,41 +1935,243 @@ const AdminPanel = () => {
               Review Verification
             </h2>
 
-            <div style={{ marginBottom: '20px' }}>
-              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '500' }}>
-                Personal Information
+            {/* Personal Information */}
+            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                👤 Personal Information
               </h3>
               <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
                 <div><strong>Legal Name:</strong> {selectedVerification.legal_name}</div>
+                {selectedVerification.date_of_birth && (
+                  <div><strong>Date of Birth:</strong> {new Date(selectedVerification.date_of_birth).toLocaleDateString()}</div>
+                )}
+                {selectedVerification.gender && (
+                  <div><strong>Gender:</strong> {selectedVerification.gender}</div>
+                )}
+                {selectedVerification.nationality && (
+                  <div><strong>Nationality:</strong> {selectedVerification.nationality}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Contact Information */}
+            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                📞 Contact Information
+              </h3>
+              <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
                 <div><strong>Email:</strong> {selectedVerification.legal_email}</div>
-                <div><strong>Phone:</strong> {selectedVerification.phone}</div>
                 {selectedVerification.business_email && (
                   <div><strong>Business Email:</strong> {selectedVerification.business_email}</div>
                 )}
+                <div>
+                  <strong>Phone:</strong> +{selectedVerification.phone_country_code || ''} {selectedVerification.phone}
+                  {selectedVerification.phone_verified && (
+                    <span style={{ marginLeft: '8px', padding: '2px 8px', backgroundColor: '#10b981', color: 'white', borderRadius: '12px', fontSize: '12px' }}>
+                      ✓ Verified
+                    </span>
+                  )}
+                  {!selectedVerification.phone_verified && (
+                    <span style={{ marginLeft: '8px', padding: '2px 8px', backgroundColor: '#ef4444', color: 'white', borderRadius: '12px', fontSize: '12px' }}>
+                      Not Verified
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div style={{ marginBottom: '20px' }}>
-              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '500' }}>
-                Address
+            {/* Address */}
+            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                🏠 Address
               </h3>
               <div style={{ fontSize: '14px' }}>
                 {selectedVerification.legal_address?.line1}<br/>
-                {selectedVerification.legal_address?.line2 && (
-                  <>{selectedVerification.legal_address.line2}<br/></>
+                {(selectedVerification.address_line2 || selectedVerification.legal_address?.line2) && (
+                  <>{selectedVerification.address_line2 || selectedVerification.legal_address?.line2}<br/></>
                 )}
-                {selectedVerification.legal_address?.city}, {selectedVerification.legal_address?.state} {selectedVerification.legal_address?.postal_code}<br/>
-                {selectedVerification.legal_address?.country}
+                {selectedVerification.legal_address?.city || selectedVerification.province_state}, {selectedVerification.legal_address?.state || selectedVerification.province_state} {selectedVerification.legal_address?.postal_code}<br/>
+                {selectedVerification.legal_address?.country || selectedVerification.country}
+                {selectedVerification.country_code && (
+                  <span style={{ marginLeft: '8px', color: '#6b7280' }}>({selectedVerification.country_code})</span>
+                )}
               </div>
             </div>
 
-            <div style={{ marginBottom: '20px' }}>
-              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '500' }}>
-                Documents
+            {/* Professional Information */}
+            {(selectedVerification.occupation || selectedVerification.source_of_funds || selectedVerification.purpose_of_platform) && (
+              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                  💼 Professional Information
+                </h3>
+                <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
+                  {selectedVerification.occupation && (
+                    <div><strong>Occupation:</strong> {selectedVerification.occupation}</div>
+                  )}
+                  {selectedVerification.source_of_funds && (
+                    <div><strong>Source of Funds:</strong> {selectedVerification.source_of_funds.replace(/_/g, ' ')}</div>
+                  )}
+                  {selectedVerification.purpose_of_platform && (
+                    <div>
+                      <strong>Purpose:</strong>
+                      <div style={{ marginTop: '4px', padding: '8px', backgroundColor: 'white', borderRadius: '4px', fontStyle: 'italic' }}>
+                        {selectedVerification.purpose_of_platform}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ID Document Information */}
+            {(selectedVerification.id_type || selectedVerification.id_number) && (
+              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                  🪪 ID Document Information
+                </h3>
+                <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
+                  {selectedVerification.id_type && (
+                    <div><strong>ID Type:</strong> {selectedVerification.id_type.replace(/_/g, ' ')}</div>
+                  )}
+                  {selectedVerification.id_number && (
+                    <div><strong>ID Number:</strong> {selectedVerification.id_number}</div>
+                  )}
+                  {selectedVerification.id_issuing_country && (
+                    <div><strong>Issuing Country:</strong> {selectedVerification.id_issuing_country}</div>
+                  )}
+                  {selectedVerification.id_issue_date && (
+                    <div><strong>Issue Date:</strong> {new Date(selectedVerification.id_issue_date).toLocaleDateString()}</div>
+                  )}
+                  {selectedVerification.id_expiry_date && (
+                    <div><strong>Expiry Date:</strong> {new Date(selectedVerification.id_expiry_date).toLocaleDateString()}</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Emergency Contact */}
+            {(selectedVerification.emergency_contact_name || selectedVerification.emergency_contact_phone) && (
+              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                  🚨 Emergency Contact
+                </h3>
+                <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
+                  {selectedVerification.emergency_contact_name && (
+                    <div><strong>Name:</strong> {selectedVerification.emergency_contact_name}</div>
+                  )}
+                  {selectedVerification.emergency_contact_phone && (
+                    <div><strong>Phone:</strong> {selectedVerification.emergency_contact_phone}</div>
+                  )}
+                  {selectedVerification.emergency_contact_relationship && (
+                    <div><strong>Relationship:</strong> {selectedVerification.emergency_contact_relationship}</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Compliance Information */}
+            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                ⚖️ Compliance
               </h3>
-              <div style={{ fontSize: '14px' }}>
-                <div>ID Document: {selectedVerification.id_document_url ? 'Uploaded' : 'Not uploaded'}</div>
-                <div>Selfie: {selectedVerification.selfie_image_url ? 'Uploaded' : 'Not uploaded'}</div>
+              <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
+                <div>
+                  <strong>PEP Status:</strong>
+                  {selectedVerification.pep_status ? (
+                    <span style={{ marginLeft: '8px', padding: '2px 8px', backgroundColor: '#fbbf24', color: '#78350f', borderRadius: '12px', fontSize: '12px', fontWeight: '600' }}>
+                      ⚠️ Yes - Politically Exposed Person
+                    </span>
+                  ) : (
+                    <span style={{ marginLeft: '8px', color: '#10b981' }}>No</span>
+                  )}
+                </div>
+                {selectedVerification.risk_level && (
+                  <div>
+                    <strong>Risk Level:</strong>
+                    <span style={{ 
+                      marginLeft: '8px', 
+                      padding: '2px 8px', 
+                      backgroundColor: selectedVerification.risk_level === 'high' ? '#fee2e2' : selectedVerification.risk_level === 'medium' ? '#fef3c7' : '#d1fae5',
+                      color: selectedVerification.risk_level === 'high' ? '#991b1b' : selectedVerification.risk_level === 'medium' ? '#92400e' : '#065f46',
+                      borderRadius: '12px', 
+                      fontSize: '12px',
+                      fontWeight: '600'
+                    }}>
+                      {selectedVerification.risk_level.toUpperCase()}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Documents */}
+            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                📄 Documents
+              </h3>
+              <div style={{ display: 'grid', gap: '12px', fontSize: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span><strong>ID Document:</strong></span>
+                  {selectedVerification.id_document_url ? (
+                    <a 
+                      href={selectedVerification.id_document_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ padding: '4px 12px', backgroundColor: '#10b981', color: 'white', borderRadius: '6px', textDecoration: 'none', fontSize: '12px' }}
+                    >
+                      View Document
+                    </a>
+                  ) : (
+                    <span style={{ color: '#ef4444' }}>Not uploaded</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span><strong>Selfie with ID:</strong></span>
+                  {selectedVerification.selfie_image_url ? (
+                    <a 
+                      href={selectedVerification.selfie_image_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ padding: '4px 12px', backgroundColor: '#10b981', color: 'white', borderRadius: '6px', textDecoration: 'none', fontSize: '12px' }}
+                    >
+                      View Selfie
+                    </a>
+                  ) : (
+                    <span style={{ color: '#ef4444' }}>Not uploaded</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span><strong>Proof of Address:</strong></span>
+                  {selectedVerification.proof_of_address_url ? (
+                    <a 
+                      href={selectedVerification.proof_of_address_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ padding: '4px 12px', backgroundColor: '#10b981', color: 'white', borderRadius: '6px', textDecoration: 'none', fontSize: '12px' }}
+                    >
+                      View Document
+                    </a>
+                  ) : (
+                    <span style={{ color: '#ef4444' }}>Not uploaded</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Submission Metadata */}
+            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f3f4f6', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                📊 Submission Details
+              </h3>
+              <div style={{ display: 'grid', gap: '8px', fontSize: '13px', color: '#6b7280' }}>
+                <div><strong>Submitted:</strong> {new Date(selectedVerification.submitted_at).toLocaleString()}</div>
+                {selectedVerification.updated_at && selectedVerification.updated_at !== selectedVerification.submitted_at && (
+                  <div><strong>Last Updated:</strong> {new Date(selectedVerification.updated_at).toLocaleString()}</div>
+                )}
+                <div><strong>Verification Type:</strong> {selectedVerification.verification_type}</div>
+                {selectedVerification.user_agent && (
+                  <div><strong>User Agent:</strong> <span style={{ fontSize: '11px' }}>{selectedVerification.user_agent.substring(0, 60)}...</span></div>
+                )}
               </div>
             </div>
 
