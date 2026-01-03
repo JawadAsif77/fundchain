@@ -184,8 +184,8 @@ export function buildCompletePrompt(
   internalContext?: InternalContext,
   explanation?: string,
   externalKnowledge?: ExternalKnowledge[]
-): Array<{ role: string; content: string }> {
-  const messages: Array<{ role: string; content: string }> = [];
+): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
 
   // System message with base instructions
   let systemContent = getSystemPrompt();

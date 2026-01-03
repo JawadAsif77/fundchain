@@ -1,264 +1,28 @@
 {
   "knowledge_base": [
     {
-      "question": "What is cryptocurrency?",
-      "answer": "Cryptocurrency is a digital or virtual currency that uses cryptography for security and operates on a decentralized network, typically blockchain technology. Unlike traditional currencies issued by governments, cryptocurrencies are not controlled by any central authority."
-    },
-    {
       "question": "What is blockchain technology?",
-      "answer": "Blockchain is a distributed ledger technology that records transactions across multiple computers in a way that makes it nearly impossible to alter retroactively. Each block contains a cryptographic hash of the previous block, creating a chain of records that ensures transparency and security."
+      "answer": "Blockchain is a distributed ledger technology that records transactions across multiple computers. It ensures transparency and security through cryptographic hashing, making it nearly impossible to alter records retroactively."
     },
     {
       "question": "What is a smart contract?",
-      "answer": "A smart contract is a self-executing contract with terms directly written into code. It automatically executes and enforces agreements when predetermined conditions are met, eliminating the need for intermediaries and reducing transaction costs."
-    },
-    {
-      "question": "What is an ICO (Initial Coin Offering)?",
-      "answer": "An ICO is a fundraising method where a startup issues its own cryptocurrency tokens in exchange for established cryptocurrencies like Bitcoin or Ethereum. It's similar to an IPO but typically less regulated and more accessible to retail investors."
-    },
-    {
-      "question": "What is the difference between a token and a coin?",
-      "answer": "Coins operate on their own blockchain (like Bitcoin or Ethereum), while tokens are built on existing blockchains using smart contracts. Tokens often represent assets, utilities, or stakes in a project, whereas coins primarily function as digital currency."
-    },
-    {
-      "question": "What is DeFi (Decentralized Finance)?",
-      "answer": "DeFi refers to financial services built on blockchain technology that operate without traditional intermediaries like banks. It includes lending, borrowing, trading, and earning interest on crypto assets through decentralized protocols."
-    },
-    {
-      "question": "What is a crypto wallet?",
-      "answer": "A crypto wallet is a digital tool that stores the private keys needed to access and manage cryptocurrency holdings. Wallets can be hardware devices, software applications, or paper documents, each offering different levels of security and convenience."
-    },
-    {
-      "question": "What is staking in cryptocurrency?",
-      "answer": "Staking involves locking up cryptocurrency holdings to support blockchain network operations in proof-of-stake systems. In return, participants earn rewards similar to interest, helping secure the network while generating passive income."
-    },
-    {
-      "question": "What is gas fee in blockchain transactions?",
-      "answer": "Gas fees are transaction costs paid to blockchain network validators for processing and confirming transactions. The fee amount varies based on network congestion and transaction complexity, compensating miners or validators for computational resources."
+      "answer": "A smart contract is a self-executing contract with terms directly written into code. It automatically executes and enforces agreements when predetermined conditions are met, eliminating the need for intermediaries."
     },
     {
       "question": "What is a seed round in startup funding?",
-      "answer": "A seed round is the initial funding stage where startups raise capital to develop their product, conduct market research, and build their initial team. Investors typically include angel investors, friends and family, or early-stage venture capital firms."
-    },
-    {
-      "question": "What is Series A funding?",
-      "answer": "Series A funding is the first significant round of venture capital financing after seed funding. Companies typically raise Series A when they have a proven business model and need capital to scale operations, with funding usually ranging from $2-15 million."
+      "answer": "A seed round is the initial funding stage where startups raise capital to develop their product and build their initial team. Investors typically include angel investors and early-stage venture capital firms."
     },
     {
       "question": "What is equity crowdfunding?",
-      "answer": "Equity crowdfunding allows startups to raise capital by selling small equity stakes to a large number of investors through online platforms. It democratizes investment opportunities previously available only to accredited investors."
-    },
-    {
-      "question": "What is a convertible note?",
-      "answer": "A convertible note is a short-term debt instrument that converts into equity during a future financing round. It's commonly used in early-stage fundraising, allowing startups to delay valuation until they have more traction."
+      "answer": "Equity crowdfunding allows startups to raise capital by selling small equity stakes to a large number of investors through online platforms like FundChain. It democratizes investment opportunities for retail investors."
     },
     {
       "question": "What is a SAFE (Simple Agreement for Future Equity)?",
-      "answer": "A SAFE is an investment contract that provides investors the right to future equity without determining a specific price per share at the time of investment. It's simpler than convertible notes and doesn't accrue interest or have a maturity date."
+      "answer": "A SAFE is an investment contract that provides investors the right to future equity without determining a specific price per share at the time of investment. It is simpler and faster than traditional convertible notes."
     },
     {
-      "question": "What is pre-money valuation?",
-      "answer": "Pre-money valuation is the estimated value of a company before it receives new investment funding. It's used to determine how much equity investors will receive for their investment and is crucial for negotiating investment terms."
-    },
-    {
-      "question": "What is post-money valuation?",
-      "answer": "Post-money valuation is the company's value immediately after receiving new investment, calculated by adding the investment amount to the pre-money valuation. It represents the total company worth including the new capital injection."
-    },
-    {
-      "question": "What is dilution in startup investing?",
-      "answer": "Dilution occurs when a company issues new shares, reducing existing shareholders' ownership percentage. While dilution decreases ownership stakes, it's often necessary to raise capital and can increase overall value if the company grows successfully."
-    },
-    {
-      "question": "What is a term sheet?",
-      "answer": "A term sheet is a non-binding document outlining the basic terms and conditions of an investment. It includes valuation, investment amount, equity stake, voting rights, and other key provisions that will later be formalized in legal agreements."
-    },
-    {
-      "question": "What is vesting in startup equity?",
-      "answer": "Vesting is the process by which employees or founders gradually earn ownership of stock options or equity over time. Typical vesting schedules span 4 years with a 1-year cliff, ensuring long-term commitment to the company."
-    },
-    {
-      "question": "What is a liquidation preference?",
-      "answer": "Liquidation preference determines the order and amount investors receive if a company is sold or liquidated. It protects investors by ensuring they get their investment back (plus potentially more) before common shareholders receive any proceeds."
-    },
-    {
-      "question": "What is portfolio diversification?",
-      "answer": "Portfolio diversification is an investment strategy that spreads capital across different assets, sectors, or markets to reduce risk. By not putting all eggs in one basket, investors can minimize the impact of any single investment's poor performance."
-    },
-    {
-      "question": "What is dollar-cost averaging?",
-      "answer": "Dollar-cost averaging is an investment strategy where you invest a fixed amount of money at regular intervals regardless of price. This approach reduces the impact of volatility and removes the pressure of trying to time the market."
-    },
-    {
-      "question": "What is due diligence in investing?",
-      "answer": "Due diligence is the comprehensive investigation and evaluation of an investment opportunity before committing capital. It includes analyzing financials, business model, market potential, team, legal issues, and risks to make informed investment decisions."
-    },
-    {
-      "question": "What is a cap table?",
-      "answer": "A capitalization table (cap table) is a spreadsheet showing a company's ownership structure, including all securities, equity holders, percentages owned, and valuations. It tracks how ownership changes through funding rounds and other equity events."
-    },
-    {
-      "question": "What is burn rate?",
-      "answer": "Burn rate is the rate at which a company spends its cash reserves before generating positive cash flow. It's typically measured monthly and helps determine how long a startup can operate before needing additional funding (runway)."
-    },
-    {
-      "question": "What is runway in startup finance?",
-      "answer": "Runway is the amount of time a startup can continue operating with its current cash reserves at the current burn rate. For example, with $500,000 in the bank and a monthly burn of $50,000, the company has a 10-month runway."
-    },
-    {
-      "question": "What is product-market fit?",
-      "answer": "Product-market fit occurs when a product successfully satisfies strong market demand. It's achieved when customers are actively using, paying for, and recommending the product, indicating that the company has found a sustainable business model."
-    },
-    {
-      "question": "What is a minimum viable product (MVP)?",
-      "answer": "An MVP is the simplest version of a product that can be released to test core assumptions and gather user feedback with minimal resources. It helps startups validate their ideas quickly and iterate based on real market response."
-    },
-    {
-      "question": "What is a pitch deck?",
-      "answer": "A pitch deck is a presentation used by startups to provide investors with an overview of their business. It typically includes slides on the problem, solution, market size, business model, traction, team, financials, and funding requirements."
-    },
-    {
-      "question": "What is tokenomics?",
-      "answer": "Tokenomics refers to the economic model and incentive structures of a cryptocurrency or token project. It includes token supply, distribution, utility, burning mechanisms, and governance, all designed to create sustainable value and adoption."
-    },
-    {
-      "question": "What is a whitepaper in crypto?",
-      "answer": "A whitepaper is a detailed technical document that explains a cryptocurrency project's technology, purpose, tokenomics, and roadmap. It serves as the foundational document for attracting investors and building community trust."
-    },
-    {
-      "question": "What is a DAO (Decentralized Autonomous Organization)?",
-      "answer": "A DAO is an organization governed by smart contracts and community voting rather than traditional management structures. Members hold tokens that grant voting rights on proposals, enabling decentralized decision-making and operation."
-    },
-    {
-      "question": "What is yield farming?",
-      "answer": "Yield farming involves lending or staking cryptocurrency to generate returns in the form of additional cryptocurrency. Users provide liquidity to DeFi protocols and earn interest, transaction fees, or token rewards, though often with significant risk."
-    },
-    {
-      "question": "What is an airdrop in crypto?",
-      "answer": "An airdrop is a marketing strategy where cryptocurrency projects distribute free tokens to users' wallets. It's used to build community, reward early adopters, increase token distribution, or create awareness about a new project."
-    },
-    {
-      "question": "What is KYC (Know Your Customer)?",
-      "answer": "KYC is the process of verifying customer identities to comply with regulations and prevent fraud, money laundering, and terrorist financing. It typically requires submitting identification documents and proof of address."
-    },
-    {
-      "question": "What is AML (Anti-Money Laundering)?",
-      "answer": "AML refers to laws, regulations, and procedures designed to prevent criminals from disguising illegally obtained funds as legitimate income. Financial institutions and crypto platforms must implement AML programs to detect and report suspicious activities."
-    },
-    {
-      "question": "What is a security token?",
-      "answer": "A security token is a digital asset that represents ownership in a real-world asset, company equity, or investment contract. Unlike utility tokens, security tokens are subject to securities regulations and provide investment contract rights."
-    },
-    {
-      "question": "What is a utility token?",
-      "answer": "A utility token provides access to a product or service within a blockchain ecosystem. Unlike security tokens, they don't represent investment contracts but serve functional purposes like paying for services, governance, or accessing platform features."
-    },
-    {
-      "question": "What is market capitalization in crypto?",
-      "answer": "Market capitalization (market cap) is calculated by multiplying a cryptocurrency's current price by its circulating supply. It's used to compare the relative size of different cryptocurrencies and indicates overall market value."
-    },
-    {
-      "question": "What is liquidity in crypto markets?",
-      "answer": "Liquidity refers to how easily an asset can be bought or sold without significantly affecting its price. High liquidity means many buyers and sellers, enabling quick transactions at stable prices with minimal price slippage."
-    },
-    {
-      "question": "What is volatility in cryptocurrency?",
-      "answer": "Volatility measures the degree of price variation over time. Cryptocurrencies are known for high volatility, with prices potentially swinging dramatically in short periods due to market sentiment, news, regulations, and trading volumes."
-    },
-    {
-      "question": "What is a bull market?",
-      "answer": "A bull market is a period of rising prices and optimistic investor sentiment. In crypto, bull markets often see rapid price increases, high trading volumes, new project launches, and increased mainstream adoption and media attention."
-    },
-    {
-      "question": "What is a bear market?",
-      "answer": "A bear market is characterized by falling prices and pessimistic sentiment. During crypto bear markets, prices decline significantly, trading volumes drop, projects may fail, and investor confidence wanes, though it can present buying opportunities."
-    },
-    {
-      "question": "What is FOMO (Fear of Missing Out)?",
-      "answer": "FOMO is the anxiety that others are experiencing rewarding opportunities that you're missing. In investing, FOMO can lead to impulsive decisions, buying at peak prices, and increased risk-taking without proper due diligence."
-    },
-    {
-      "question": "What is FUD (Fear, Uncertainty, and Doubt)?",
-      "answer": "FUD refers to spreading negative, often misleading information to influence perception and create panic. In crypto markets, FUD can trigger sell-offs and price drops, sometimes used strategically to manipulate markets."
-    },
-    {
-      "question": "What is HODL?",
-      "answer": "HODL is a misspelling of 'hold' that became crypto slang for holding onto investments long-term despite price volatility. It represents a buy-and-hold strategy, believing in the long-term value appreciation of cryptocurrencies."
-    },
-    {
-      "question": "What is a whale in crypto?",
-      "answer": "A whale is an individual or entity that holds a large amount of cryptocurrency, enough to potentially influence market prices through their trading activities. Whale movements are closely watched by traders and analysts."
-    },
-    {
-      "question": "What is proof of work (PoW)?",
-      "answer": "Proof of Work is a consensus mechanism where miners compete to solve complex mathematical problems to validate transactions and create new blocks. It requires significant computational power and energy, ensuring network security through work investment."
-    },
-    {
-      "question": "What is proof of stake (PoS)?",
-      "answer": "Proof of Stake is a consensus mechanism where validators are chosen to create new blocks based on the amount of cryptocurrency they stake as collateral. It's more energy-efficient than PoW and rewards participants through staking rewards."
-    },
-    {
-      "question": "What is an exchange in cryptocurrency?",
-      "answer": "A cryptocurrency exchange is a platform where users can buy, sell, and trade cryptocurrencies. Exchanges can be centralized (like Coinbase) with a company operating them, or decentralized (DEX) operating through smart contracts without intermediaries."
-    },
-    {
-      "question": "What is slippage in trading?",
-      "answer": "Slippage is the difference between the expected price of a trade and the actual execution price. It commonly occurs in volatile markets or with large orders, especially in markets with low liquidity where orders can't be filled at desired prices."
-    },
-    {
-      "question": "What is a risk assessment in investment?",
-      "answer": "Risk assessment is the systematic evaluation of potential risks associated with an investment, including market risk, credit risk, liquidity risk, and operational risk. It helps investors understand potential losses and make informed decisions aligned with their risk tolerance."
-    },
-    {
-      "question": "What is accredited investor status?",
-      "answer": "An accredited investor is an individual or entity that meets specific financial criteria (such as $200,000+ annual income or $1 million+ net worth) allowing them to invest in certain securities not available to the general public."
-    },
-    {
-      "question": "What is exit strategy in investing?",
-      "answer": "An exit strategy is a plan for how and when an investor will liquidate their position to realize profits or minimize losses. Common exit strategies include IPOs, acquisitions, secondary sales, or predetermined price targets."
-    },
-    {
-      "question": "What is regulatory compliance?",
-      "answer": "Regulatory compliance means adhering to laws, regulations, and guidelines relevant to business operations and financial activities. For crypto and crowdfunding platforms, this includes securities laws, AML/KYC requirements, and consumer protection regulations."
-    },
-    {
-      "question": "What is a cold wallet?",
-      "answer": "A cold wallet is an offline cryptocurrency storage method, such as a hardware device or paper wallet, that's not connected to the internet. It provides maximum security against hacking but requires physical access for transactions."
-    },
-    {
-      "question": "What is a hot wallet?",
-      "answer": "A hot wallet is an online cryptocurrency wallet connected to the internet for easy access and transactions. While more convenient for frequent trading, hot wallets are more vulnerable to hacking and cyber attacks than cold storage."
-    },
-    {
-      "question": "What is two-factor authentication (2FA)?",
-      "answer": "2FA is a security measure requiring two different authentication methods to verify identity, typically something you know (password) and something you have (phone code). It significantly enhances account security by adding an extra verification layer."
-    },
-    {
-      "question": "What is market sentiment?",
-      "answer": "Market sentiment reflects the overall attitude of investors toward a particular market or asset. It's driven by emotions, news, and expectations, influencing buying and selling behavior, and can be measured through various indicators and social media analysis."
-    },
-    {
-      "question": "What is technical analysis?",
-      "answer": "Technical analysis involves studying historical price patterns, trading volumes, and statistical indicators to predict future price movements. It assumes that all information is reflected in price and that patterns tend to repeat over time."
-    },
-    {
-      "question": "What is fundamental analysis?",
-      "answer": "Fundamental analysis evaluates an investment's intrinsic value by examining underlying factors like team quality, technology, market demand, financials, competition, and growth potential. For crypto, it includes analyzing tokenomics, use cases, and adoption rates."
-    },
-    {
-      "question": "What is a private key?",
-      "answer": "A private key is a secret cryptographic code that proves ownership of cryptocurrency and allows you to sign transactions. It must be kept secure as anyone with access to your private key has complete control over your crypto assets."
-    },
-    {
-      "question": "What is a public key?",
-      "answer": "A public key is a cryptographic code derived from a private key that serves as your cryptocurrency address. It can be shared publicly to receive funds, while the private key must remain secret for security."
-    },
-    {
-      "question": "What is decentralization?",
-      "answer": "Decentralization distributes control, decision-making, and data storage across a network rather than concentrating it in a central authority. In blockchain and crypto, it enhances security, transparency, and resistance to censorship or single points of failure."
-    },
-    {
-      "question": "What is network effect?",
-      "answer": "Network effect occurs when a product or service becomes more valuable as more people use it. In crypto and platforms, each new user increases utility for all existing users, creating exponential growth potential and competitive advantages."
+      "question": "What is burn rate and runway?",
+      "answer": "Burn rate is the rate at which a startup spends its cash reserves monthly. Runway is the amount of time the company can continue operating at that burn rate before needing additional funding."
     }
   ]
 }

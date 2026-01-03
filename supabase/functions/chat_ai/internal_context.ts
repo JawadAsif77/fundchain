@@ -23,11 +23,12 @@ interface InternalContext {
     investor_count: number;
     creator_name?: string;
     deadline?: string;
+    days_remaining?: number | null;
   };
   riskAnalysis?: {
     risk_level: string;
     final_risk_score: number;
-    risk_factors: any;
+    risk_factors: Record<string, unknown>;
     analysis_date?: string;
   };
   recommendationReasons?: {
@@ -150,13 +151,13 @@ async function fetchCampaignDetails(params: ContextParams) {
       id: data.id,
       title: data.title,
       description: data.description || data.short_description || '',
-      category: (data.categories as any)?.name || 'Uncategorized',
+      category: (data.categories as { name?: string } | null)?.name || 'Uncategorized',
       location: data.location || 'Not specified',
       status: data.status,
       funding_goal: data.funding_goal || 0,
       current_funding: data.current_funding || 0,
       investor_count: data.investor_count || 0,
-      creator_name: (data.users as any)?.display_name || (data.users as any)?.full_name || 'Unknown',
+      creator_name: (data.users as { display_name?: string; full_name?: string } | null)?.display_name || (data.users as { display_name?: string; full_name?: string } | null)?.full_name || 'Unknown',
       deadline: data.end_date,
       days_remaining: daysRemaining
     };
