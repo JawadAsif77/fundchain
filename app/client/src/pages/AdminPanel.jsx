@@ -413,6 +413,50 @@ const AdminPanel = () => {
     }
   };
 
+  const handleAnalyzeKYC = async (verificationId) => {
+    if (!confirm('Analyze this KYC verification with AI? This will assess risk level based on provided information.')) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        alert('No active session');
+        return;
+      }
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/analyze-kyc`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ verification_id: verificationId })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to analyze KYC');
+      }
+
+      alert(`AI Analysis Complete!\n\nRisk Level: ${result.risk_level.toUpperCase()}\n\nScores:\n- ML Scam Score: ${(result.scores.ml_scam_score * 100).toFixed(1)}%\n- Plagiarism Score: ${(result.scores.plagiarism_score * 100).toFixed(1)}%\n- Account Risk Score: ${(result.scores.wallet_risk_score * 100).toFixed(1)}%\n- Final Risk Score: ${(result.scores.final_risk_score * 100).toFixed(1)}%\n\nAccount Age: ${result.metadata.account_age_days} days\nPast Activity: ${result.metadata.past_activity} actions`);
+
+      // Reload verifications to show updated risk level
+      await loadPendingVerifications();
+      
+    } catch (err) {
+      console.error('Error analyzing KYC:', err);
+      alert('Failed to analyze KYC: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleApprove = async (verificationId) => {
     try {
       setActionLoading(true);
@@ -861,7 +905,26 @@ const AdminPanel = () => {
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                        <button
+                          onClick={() => handleAnalyzeKYC(verification.id)}
+                          style={{
+                            padding: '6px 12px',
+                            backgroundColor: '#8b5cf6',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title="Analyze with AI"
+                        >
+                          🤖 AI Analyze
+                        </button>
                         <button
                           onClick={() => setSelectedVerification(verification)}
                           style={{
