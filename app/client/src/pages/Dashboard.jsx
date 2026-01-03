@@ -99,8 +99,10 @@ const Dashboard = () => {
   const kycStatus = roleStatus?.kycStatus;
   const isVerified =
     roleStatus?.isKYCVerified || profile?.is_verified === 'yes' || false;
-  const showKYCPendingBanner =
-    isCreator && !isVerified && kycStatus === 'pending';
+  
+  // KYC banner states for creators
+  const showKYCNotSubmittedBanner = isCreator && !isVerified && (kycStatus === 'not_started' || profile?.is_verified === 'no');
+  const showKYCPendingBanner = isCreator && !isVerified && (kycStatus === 'pending' || profile?.is_verified === 'pending');
 
   // Redirect guard: admin to /admin, unassigned creator/admin roles to /profile,
   // unverified creators to /kyc (but investors always allowed).
@@ -126,24 +128,31 @@ const Dashboard = () => {
       return;
     }
 
-    // Creators: if not verified at all, send to KYC once
+    // Creators: Only redirect to KYC if this is their first time (hasn't submitted KYC yet)
+    // Once they submit KYC or logout, they can access dashboard with warning banners
     if (role === 'creator') {
       const userVerificationStatus = profile?.is_verified || 'no';
+      const hasSubmittedKYC = kycStatus && kycStatus !== 'not_started';
 
       if (debug) {
         console.log(
-          '[Dashboard] Creator verification status:',
-          userVerificationStatus
+          '[Dashboard] Creator KYC status:',
+          { userVerificationStatus, kycStatus, hasSubmittedKYC }
         );
       }
 
-      if (userVerificationStatus === 'no') {
+      // Only redirect to KYC if they haven't submitted anything yet AND haven't logged out
+      // Check session storage to see if this is their first time after signup
+      const hasSeenKYC = sessionStorage.getItem('kyc_seen');
+      
+      if (userVerificationStatus === 'no' && !hasSubmittedKYC && !hasSeenKYC) {
         if (debug)
-          console.log('[Dashboard] Creator not verified, redirecting to /kyc');
+          console.log('[Dashboard] First-time creator, redirecting to KYC');
+        sessionStorage.setItem('kyc_seen', 'true');
         navigate('/kyc', { replace: true });
         return;
       }
-      // If verification is pending, they can still access dashboard
+      // Otherwise, let them access dashboard with appropriate warnings
     }
   }, [authLoading, user, profile, roleStatus, role, navigate, debug]);
 
@@ -878,12 +887,12 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* KYC banner - only show if KYC not submitted yet (is_verified === 'no') */}
-      {kycStatus === 'not_submitted' && (
+      {/* KYC banner - show if KYC not submitted yet */}
+      {showKYCNotSubmittedBanner && (
         <div
           style={{
-            backgroundColor: 'var(--color-warning-bg)',
-            border: '1px solid var(--color-warning)',
+            backgroundColor: '#FFF4E6',
+            border: '1px solid #FFB84D',
             borderRadius: '8px',
             padding: '16px',
             marginBottom: '24px'
@@ -891,43 +900,42 @@ const Dashboard = () => {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '20px' }}>⚠️</span>
-            <div>
+            <div style={{ flex: 1 }}>
               <h3
                 style={{
                   fontSize: '14px',
                   fontWeight: 600,
-                  color: 'var(--color-warning)'
+                  color: '#B85C00',
+                  marginBottom: '4px'
                 }}
               >
-                Tell us about your business
+                Submit KYC Verification to Start Campaigns
               </h3>
               <p
                 style={{
                   fontSize: '13px',
-                  color: 'var(--color-warning)',
-                  margin: '4px 0'
+                  color: '#B85C00',
+                  margin: 0
                 }}
               >
-                Complete your verification to unlock project creation and
-                fundraising tools.
+                Complete your verification to unlock campaign creation and fundraising tools.
               </p>
-              <Link
-                to="/kyc"
-                style={{
-                  display: 'inline-block',
-                  marginTop: '8px',
-                  padding: '6px 12px',
-                  backgroundColor: 'var(--color-warning)',
-                  color: 'var(--color-white)',
-                  textDecoration: 'none',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  fontWeight: 500
-                }}
-              >
-                Complete KYC
-              </Link>
             </div>
+            <Link
+              to="/kyc"
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#FFB84D',
+                color: '#000',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                fontSize: '14px',
+                fontWeight: 500,
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Submit KYC
+            </Link>
           </div>
         </div>
       )}
@@ -1213,9 +1221,9 @@ const Dashboard = () => {
             marginBottom: '24px',
             padding: '16px',
             borderRadius: '12px',
-            backgroundColor: 'var(--color-warning-bg)',
-            border: '1px solid rgba(250, 204, 21, 0.12)',
-            color: 'var(--color-warning)',
+            backgroundColor: '#E8F5E9',
+            border: '1px solid #66BB6A',
+            color: '#2E7D32',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -1223,23 +1231,28 @@ const Dashboard = () => {
           }}
         >
           <div>
-            <strong>Identity verification is pending.</strong>{' '}
-            Your verification is under review. You can start preparing campaigns
-            while our team finishes the checks.
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span style={{ fontSize: '20px' }}>⏳</span>
+              <strong>Verification Under Review</strong>
+            </div>
+            <p style={{ margin: 0, fontSize: '13px' }}>
+              Your KYC verification is being reviewed by our team. You can access your dashboard but campaign creation is temporarily disabled until verification is complete.
+            </p>
           </div>
           <Link
             to="/kyc"
             style={{
               padding: '8px 16px',
-              backgroundColor: 'var(--color-warning)',
-              color: 'var(--color-white)',
+              backgroundColor: '#66BB6A',
+              color: '#fff',
               borderRadius: '6px',
               textDecoration: 'none',
               fontSize: '14px',
-              fontWeight: 500
+              fontWeight: 500,
+              whiteSpace: 'nowrap'
             }}
           >
-            Update details
+            View Status
           </Link>
         </div>
       )}

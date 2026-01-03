@@ -106,9 +106,10 @@ const ProtectedRoute = ({
     }
   }
 
-  // 4. KYC Check (only for creators) - MUST complete KYC before accessing any protected page
-  if (needsKYCValue && currentPath !== '/kyc') {
-    return <Navigate to="/kyc" replace />;
+  // 4. KYC Check (only for creators) - Only redirect if they're on campaign creation
+  // Dashboard is always accessible with warnings
+  if (needsKYCValue && (currentPath === '/create-project' || currentPath.startsWith('/campaign/'))) {
+    return <Navigate to="/kyc" state={{ message: 'Please complete KYC verification to create campaigns.' }} replace />;
   }
 
   // All checks passed - allow access

@@ -16,6 +16,7 @@ import Register from './pages/Register_simple';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/ProfileDisplay';
 import ProfileEdit from './pages/ProfileEdit';
+import ResetPassword from './pages/ResetPassword';
 import NotFound from './pages/NotFound';
 import KYCForm from './pages/KYCForm';
 import CreateProject from './pages/CreateProject';
@@ -86,6 +87,7 @@ function App() {
                           <Register />
                         </PublicRoute>
                       } />
+                      <Route path="/reset-password" element={<ResetPassword />} />
                       
                       {/* Role Selection - For Google OAuth users without a role */}
                       <Route 

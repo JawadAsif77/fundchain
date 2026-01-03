@@ -6,8 +6,9 @@ import Loader from './Loader';
 import './RoleSelection.css';
 
 /**
- * RoleSelection - Post-Google OAuth role selection for users without a role
- * Only shown to users who signed in with Google and have NULL role
+ * RoleSelection - Role selection for all new users without a role
+ * Shown to users (Google OAuth or email/password) who have NULL role
+ * Forces users to select Investor or Creator before accessing the platform
  */
 const RoleSelection = () => {
   const [selectedRole, setSelectedRole] = useState('');

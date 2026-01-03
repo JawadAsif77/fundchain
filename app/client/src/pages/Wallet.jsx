@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../store/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { getWallet, buyTokens, getTransactions, exchangeUsdToFc } from '../services/walletService';
 import AddFundsPhantomModal from '../components/wallet/AddFundsPhantomModal';
 import SwapSolToFc from '../components/SwapSolToFc';
 
 const Wallet = () => {
-  const { userId, wallet, refreshWallet } = useAuth();
+  const { userId, wallet, refreshWallet, profile, roleStatus } = useAuth();
+  const navigate = useNavigate();
   
   // Use wallet data from Context
   const displayBalance = wallet?.balanceFc?.toLocaleString() || '0';
@@ -14,6 +16,7 @@ const Wallet = () => {
 
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [walletBlocked, setWalletBlocked] = useState(false);
   
   // Buy Form State
   const [buyAmount, setBuyAmount] = useState('');
@@ -23,11 +26,23 @@ const Wallet = () => {
   const [success, setSuccess] = useState('');
   const [showPhantomModal, setShowPhantomModal] = useState(false);
 
+  // Check if creator needs KYC verification
   useEffect(() => {
-    if (userId) {
+    if (profile && roleStatus) {
+      const isCreator = roleStatus?.role === 'creator';
+      const isVerified = roleStatus?.isKYCVerified || profile?.is_verified === 'yes';
+      
+      if (isCreator && !isVerified) {
+        setWalletBlocked(true);
+      }
+    }
+  }, [profile, roleStatus]);
+
+  useEffect(() => {
+    if (userId && !walletBlocked) {
       loadWalletData();
     }
-  }, [userId]);
+  }, [userId, walletBlocked]);
 
   const loadWalletData = async () => {
     setLoading(true);
@@ -110,21 +125,59 @@ const Wallet = () => {
     <div className="container" style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       <h1 className="page-title">My Wallet</h1>
 
-      {/* Balance Card */}
-      <div className="card" style={{ marginBottom: '24px', textAlign: 'center', padding: '40px' }}>
-        <h2 style={{ fontSize: '16px', color: '#666', marginBottom: '8px' }}>Total Balance</h2>
-        <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6366f1', marginBottom: '8px' }}>
-          {displayBalance} <span style={{ fontSize: '24px' }}>FC</span>
+      {/* Wallet Blocked Message for Unverified Creators */}
+      {walletBlocked && (
+        <div style={{
+          backgroundColor: '#FFF4E6',
+          border: '2px solid #FFB84D',
+          borderRadius: '12px',
+          padding: '32px',
+          textAlign: 'center',
+          marginBottom: '24px'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
+          <h2 style={{ fontSize: '24px', marginBottom: '12px', color: '#B85C00' }}>
+            Wallet Access Restricted
+          </h2>
+          <p style={{ fontSize: '16px', color: '#B85C00', marginBottom: '24px', lineHeight: '1.6' }}>
+            Complete KYC verification to unlock your wallet and access all financial features including buying FC tokens and managing funds.
+          </p>
+          <button
+            onClick={() => navigate('/kyc')}
+            style={{
+              padding: '12px 32px',
+              backgroundColor: '#FFB84D',
+              color: '#000',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '16px',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Complete KYC Verification
+          </button>
         </div>
-        <div style={{ fontSize: '14px', color: '#999' }}>
-          ≈ ${displayBalance} USD (Exchange Rate: 1 FC = 1 USD)
-        </div>
-        {lockedBalance > 0 && (
-           <div style={{ marginTop: '10px', fontSize: '13px', color: '#f59e0b' }}>
-             🔒 {lockedBalance.toLocaleString()} FC Locked in Escrow
-           </div>
-        )}
-      </div>
+      )}
+
+      {/* Show wallet content only if not blocked */}
+      {!walletBlocked && (
+        <>
+          {/* Balance Card */}
+          <div className="card" style={{ marginBottom: '24px', textAlign: 'center', padding: '40px' }}>
+            <h2 style={{ fontSize: '16px', color: '#666', marginBottom: '8px' }}>Total Balance</h2>
+            <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6366f1', marginBottom: '8px' }}>
+              {displayBalance} <span style={{ fontSize: '24px' }}>FC</span>
+            </div>
+            <div style={{ fontSize: '14px', color: '#999' }}>
+              ≈ ${displayBalance} USD (Exchange Rate: 1 FC = 1 USD)
+            </div>
+            {lockedBalance > 0 && (
+               <div style={{ marginTop: '10px', fontSize: '13px', color: '#f59e0b' }}>
+                 🔒 {lockedBalance.toLocaleString()} FC Locked in Escrow
+               </div>
+            )}
+          </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
         {/* LEFT: Dummy / Test Buy (USD) */}
@@ -246,7 +299,7 @@ const Wallet = () => {
           </div>
         )}
       </div>
-
+      
       <AddFundsPhantomModal 
         isOpen={showPhantomModal} 
         onClose={() => setShowPhantomModal(false)}
@@ -254,6 +307,8 @@ const Wallet = () => {
           await loadWalletData();
         }}
       />
+      </>
+      )}
     </div>
   );
 };

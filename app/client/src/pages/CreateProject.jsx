@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createProjectWithMilestones, generateSlug, validateMilestones } from '../lib/api.js';
 import { useAuth } from '../store/AuthContext.jsx';
@@ -10,7 +10,20 @@ const CreateProject = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [validationErrors, setValidationErrors] = useState({});
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile, roleStatus } = useAuth();
+
+  // Check KYC verification - redirect unverified creators
+  useEffect(() => {
+    if (profile && roleStatus) {
+      const isVerified = roleStatus?.isKYCVerified || profile?.is_verified === 'yes';
+      if (!isVerified) {
+        navigate('/kyc', { 
+          replace: true, 
+          state: { message: 'Please complete KYC verification to create campaigns.' } 
+        });
+      }
+    }
+  }, [profile, roleStatus, navigate]);
 
   // Project form data
   const [projectData, setProjectData] = useState({

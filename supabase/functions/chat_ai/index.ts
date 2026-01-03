@@ -1,91 +1,75 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { prepareEmbeddings, findRelevantKnowledge } from './external_model.ts';
-import { detectIntent } from './intent.ts';
-import { buildInternalContext } from './internal_context.ts';
-import { generateExplanation } from './explain.ts';
-import { buildCompletePrompt, getDisclaimerText } from './prompts.ts';
-import { callLLM } from './llm.ts';
+import { serve } from "https://deno.land/std@0.192.0/http/server.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
-// Global cache to prevent re-training on every click
-let cachedEmbeddings: Array<{ question: string; answer: string; embedding: number[] }> | null = null;
-
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-
+serve(async (req) => {
   try {
-    const _geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || "";
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || "";
+    const { message } = await req.json();
 
-    const authHeader = req.headers.get('Authorization');
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader || "" } }
-    });
-
-    const { data: { user } } = await supabase.auth.getUser(authHeader?.replace('Bearer ', '') || "");
-    if (!user) throw new Error('Unauthorized');
-
-    const { message, campaignId, history: chatHistory } = await req.json();
-    const intent = detectIntent(message);
-
-    let knowledgeMatches: Array<{ question: string; answer: string; embedding: number[]; similarity?: number }> = [];
-    let internalContext = {};
-    let explanation = "";
-
-    // OPTIMIZATION: Only run RAG if it's not a simple greeting
-    const isGreeting = ["hello", "hi", "hey", "greetings"].includes(message.toLowerCase().trim());
-
-    if (!isGreeting) {
-      // 1. RAG: External Knowledge (Only if needed or not a greeting)
-      if (!cachedEmbeddings) {
-        console.log("Cold start: Training knowledge base...");
-        cachedEmbeddings = await prepareEmbeddings();
-      }
-      knowledgeMatches = await findRelevantKnowledge(message, cachedEmbeddings);
-
-      // 2. Internal Context (Campaign data)
-      internalContext = await buildInternalContext({ supabase, userId: user.id, campaignId });
-      if (Object.keys(internalContext).length > 0) {
-        explanation = generateExplanation(internalContext).fullExplanation;
-      }
+    if (!message) {
+      return new Response(
+        JSON.stringify({ error: "Message is required" }),
+        { status: 400 }
+      );
     }
 
-    // 3. Assemble Prompt
-    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = buildCompletePrompt(message, intent, internalContext, explanation, knowledgeMatches);
+    const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+    const model = Deno.env.get("OPENROUTER_MODEL");
 
-    // 4. History Integration
-    if (chatHistory?.length > 0) {
-      const historyItems: Array<{ role: 'user' | 'assistant'; content: string }> = chatHistory.slice(-3).map((h: { role: string; message?: string; response?: string }) => ({
-        role: (h.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-        content: h.message || h.response || ""
-      }));
-      messages.splice(1, 0, ...historyItems);
+    if (!apiKey || !model) {
+      throw new Error("Missing environment variables");
     }
 
-    // 5. Call Chatbot
-    const answer = await callLLM(messages);
-    const finalResponse = answer + getDisclaimerText(intent);
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "http://localhost",
+          "X-Title": "FC AI Chatbot"
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "system",
+              content: `You are FC AI, an intelligent investment assistant for FundChain, a blockchain-based business crowdfunding platform. Your role is to help users understand investment opportunities, campaign details, and platform features.
 
-    // 6. Save to DB
-    await supabase.from('chat_messages').insert({
-      user_id: user.id, message, response: finalResponse, intent
-    });
+Guidelines:
+- Explain investment concepts and blockchain terminology in clear, accessible language
+- Provide neutral, educational information without offering financial advice
+- When discussing campaigns, reference available data like risk scores, funding progress, and recommendations
+- Never guarantee profits or promise investment returns
+- Acknowledge investment risks and encourage users to do their own research
+- Be concise, professional, and helpful
+- If asked about specific campaigns, use available context to provide relevant insights
+- Direct users to consult financial advisors for personalized investment advice
 
-    return new Response(JSON.stringify({ answer: finalResponse, intent }), {
-      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+Remember: You inform and educate, but users make their own investment decisions.`
+            },
+            { role: "user", content: message }
+          ]
+        })
+      }
+    );
 
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error('Edge Function Error:', err.message);
-    return new Response(JSON.stringify({ error: err.message }), { 
-      status: 500, headers: corsHeaders 
-    });
+    const data = await response.json();
+
+    return new Response(
+      JSON.stringify({
+        reply: data.choices?.[0]?.message?.content ?? "No response"
+      }),
+      { headers: { "Content-Type": "application/json" } }
+    );
+
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    return new Response(
+      JSON.stringify({
+        error: "Internal server error",
+        details: errorMessage
+      }),
+      { status: 500 }
+    );
   }
 });

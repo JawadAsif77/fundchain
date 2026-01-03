@@ -13,6 +13,7 @@ const LoginForm = ({ onSwitchToRegister, onClose }) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [fieldTouched, setFieldTouched] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
   const [googleError, setGoogleError] = useState('');
   
   // Forgot Password states
@@ -162,13 +163,27 @@ const LoginForm = ({ onSwitchToRegister, onClose }) => {
     setResetError('');
     
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      console.log('[Reset Password] Sending reset email to:', resetEmail);
+      
+      // Add timeout to prevent hanging
+      const resetPromise = supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
       
-      if (error) throw error;
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout - please check your internet connection')), 15000)
+      );
       
+      const { error } = await Promise.race([resetPromise, timeoutPromise]);
+      
+      if (error) {
+        console.error('[Reset Password] Error:', error);
+        throw error;
+      }
+      
+      console.log('[Reset Password] Email sent successfully');
       setResetSuccess(true);
+      
       // Auto-close modal after 3 seconds
       setTimeout(() => {
         handleCloseForgotPassword();
@@ -252,18 +267,43 @@ const LoginForm = ({ onSwitchToRegister, onClose }) => {
         
         <div className="form-group">
           <label htmlFor="password">Password *</label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            value={formData.password}
-            onChange={handleInputChange}
-            onBlur={handleBlur}
-            className={validationErrors.password ? 'error' : ''}
-            placeholder="Enter your password"
-            autoComplete="current-password"
-            disabled={isSubmitting}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              id="password"
+              name="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              onBlur={handleBlur}
+              className={validationErrors.password ? 'error' : ''}
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              disabled={isSubmitting}
+              style={{ paddingRight: '2.5rem' }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: 'absolute',
+                right: '0.75rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '0.25rem',
+                color: '#718096',
+                fontSize: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? '👁️' : '👁️‍🗨️'}
+            </button>
+          </div>
           {validationErrors.password && (
             <span className="field-error">{validationErrors.password}</span>
           )}

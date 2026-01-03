@@ -21,6 +21,8 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [fieldTouched, setFieldTouched] = useState({});
   const [passwordStrength, setPasswordStrength] = useState({ strength: 'weak', score: 0, feedback: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const { register, error, clearError } = useAuth();
 
@@ -162,9 +164,11 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
     setIsSubmitting(true);
     
     try {
+      // Register user with role=null - they'll select role after email confirmation
       await register(formData.email, formData.password, {
         fullName: formData.fullName,
         displayName: formData.fullName
+        // No role specified - will be NULL in database
       });
       
       // Show success message
@@ -194,6 +198,9 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
           </p>
           <p>
             Please check your email and click the confirmation link to activate your account.
+          </p>
+          <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#666' }}>
+            After confirming your email, you'll choose your role (Investor or Creator) to get started.
           </p>
           <button 
             type="button"
@@ -261,18 +268,43 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
         
         <div className="form-group">
           <label htmlFor="password">Password *</label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            value={formData.password}
-            onChange={handleInputChange}
-            onBlur={handleBlur}
-            className={validationErrors.password ? 'error' : ''}
-            placeholder="Create a strong password"
-            autoComplete="new-password"
-            disabled={isSubmitting}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              id="password"
+              name="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              onBlur={handleBlur}
+              className={validationErrors.password ? 'error' : ''}
+              placeholder="Create a strong password"
+              autoComplete="new-password"
+              disabled={isSubmitting}
+              style={{ paddingRight: '2.5rem' }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: 'absolute',
+                right: '0.75rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '0.25rem',
+                color: '#718096',
+                fontSize: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? '👁️' : '👁️‍🗨️'}
+            </button>
+          </div>
           {validationErrors.password && (
             <span className="field-error">{validationErrors.password}</span>
           )}
@@ -289,18 +321,43 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
         
         <div className="form-group">
           <label htmlFor="confirmPassword">Confirm Password *</label>
-          <input
-            type="password"
-            id="confirmPassword"
-            name="confirmPassword"
-            value={formData.confirmPassword}
-            onChange={handleInputChange}
-            onBlur={handleBlur}
-            className={validationErrors.confirmPassword ? 'error' : ''}
-            placeholder="Confirm your password"
-            autoComplete="new-password"
-            disabled={isSubmitting}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showConfirmPassword ? "text" : "password"}
+              id="confirmPassword"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleInputChange}
+              onBlur={handleBlur}
+              className={validationErrors.confirmPassword ? 'error' : ''}
+              placeholder="Confirm your password"
+              autoComplete="new-password"
+              disabled={isSubmitting}
+              style={{ paddingRight: '2.5rem' }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              style={{
+                position: 'absolute',
+                right: '0.75rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '0.25rem',
+                color: '#718096',
+                fontSize: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+            >
+              {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+            </button>
+          </div>
           {validationErrors.confirmPassword && (
             <span className="field-error">{validationErrors.confirmPassword}</span>
           )}
