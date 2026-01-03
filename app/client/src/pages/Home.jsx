@@ -27,7 +27,10 @@ const Home = () => {
           deadlineISO: c.end_date,
           status: c.status,
           region: c.location || '—',
-          image_url: c.image_url,
+          image_url: c.campaign_image_url || c.image_url || null,  // Check both fields
+          risk_level: c.risk_level,
+          final_risk_score: c.final_risk_score,
+          manual_risk_level: c.manual_risk_level,
           created_at: c.created_at,
         }));
         const top3 = mapped

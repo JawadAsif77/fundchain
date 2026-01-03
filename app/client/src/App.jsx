@@ -19,7 +19,7 @@ import ProfileEdit from './pages/ProfileEdit';
 import ResetPassword from './pages/ResetPassword';
 import NotFound from './pages/NotFound';
 import KYCForm from './pages/KYCForm';
-import CreateProject from './pages/CreateProject';
+import CreateProject from './pages/CreateProject_Enhanced';
 import AdminPanel from './pages/AdminPanel';
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -138,6 +138,14 @@ function App() {
                       />
                       <Route 
                         path="/create-project" 
+                        element={
+                          <ProtectedRoute requireRole="creator" requireKYC>
+                            <CreateProject />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/edit-campaign/:campaignId" 
                         element={
                           <ProtectedRoute requireRole="creator" requireKYC>
                             <CreateProject />

@@ -57,7 +57,10 @@ const Explore = () => {
           status: c.status,
           riskScore: c.risk_level ? Math.min(100, Math.max(0, Number(c.risk_level) * 20)) : 50,
           region: c.location || '—',
-          image_url: c.image_url,
+          image_url: c.campaign_image_url || c.image_url || null,  // Check both fields
+          risk_level: c.risk_level,
+          final_risk_score: c.final_risk_score,
+          manual_risk_level: c.manual_risk_level,
           created_at: c.created_at,
         }));
         

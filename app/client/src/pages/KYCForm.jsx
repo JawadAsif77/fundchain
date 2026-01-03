@@ -449,43 +449,152 @@ const KYCForm = () => {
     
     switch (currentStep) {
       case 1: // Personal Information
-        if (!formData.legal_name) errors.legal_name = 'Full name is required';
-        if (!formData.date_of_birth) errors.date_of_birth = 'Date of birth is required';
-        if (!formData.nationality) errors.nationality = 'Nationality is required';
-        if (!formData.gender) errors.gender = 'Gender is required';
+        if (!formData.legal_name || formData.legal_name.trim().length < 2) {
+          errors.legal_name = 'Full name is required (minimum 2 characters)';
+        } else if (!/^[a-zA-Z\s'-]+$/.test(formData.legal_name)) {
+          errors.legal_name = 'Name should only contain letters, spaces, hyphens, and apostrophes';
+        }
+        
+        if (!formData.date_of_birth) {
+          errors.date_of_birth = 'Date of birth is required';
+        } else {
+          const dob = new Date(formData.date_of_birth);
+          const today = new Date();
+          const age = today.getFullYear() - dob.getFullYear();
+          if (age < 18) {
+            errors.date_of_birth = 'You must be at least 18 years old';
+          } else if (age > 120) {
+            errors.date_of_birth = 'Please enter a valid date of birth';
+          }
+        }
+        
+        if (!formData.nationality || formData.nationality.trim().length < 2) {
+          errors.nationality = 'Nationality is required';
+        }
+        
+        if (!formData.gender) {
+          errors.gender = 'Gender is required';
+        }
         break;
         
       case 2: // Contact & Verification
-        if (!formData.phone) errors.phone = 'Phone number is required';
+        if (!formData.phone || formData.phone.length < 10) {
+          errors.phone = 'Valid phone number is required (minimum 10 digits)';
+        } else if (!/^\+?[\d\s()-]+$/.test(formData.phone)) {
+          errors.phone = 'Phone number contains invalid characters';
+        }
+        
         if (phoneVerificationStep !== 'verified') {
           errors.phone_verification = 'Please verify your phone number';
         }
-        if (!formData.legal_email) errors.legal_email = 'Email is required';
+        
+        if (!formData.legal_email) {
+          errors.legal_email = 'Email is required';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.legal_email)) {
+          errors.legal_email = 'Please enter a valid email address';
+        }
+        
+        if (formData.business_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.business_email)) {
+          errors.business_email = 'Please enter a valid business email address';
+        }
         break;
         
       case 3: // Address
-        if (!formData.address_line1) errors.address_line1 = 'Address is required';
-        if (!formData.city) errors.city = 'City is required';
-        if (!formData.province_state) errors.province_state = 'State/Province is required';
-        if (!formData.postal_code) errors.postal_code = 'Postal code is required';
-        if (!formData.country) errors.country = 'Country is required';
+        if (!formData.address_line1 || formData.address_line1.trim().length < 5) {
+          errors.address_line1 = 'Address is required (minimum 5 characters)';
+        }
+        
+        if (!formData.city || formData.city.trim().length < 2) {
+          errors.city = 'City is required';
+        } else if (!/^[a-zA-Z\s'-]+$/.test(formData.city)) {
+          errors.city = 'City name should only contain letters and spaces';
+        }
+        
+        if (!formData.province_state || formData.province_state.trim().length < 2) {
+          errors.province_state = 'State/Province is required';
+        }
+        
+        if (!formData.postal_code || formData.postal_code.trim().length < 3) {
+          errors.postal_code = 'Postal code is required';
+        } else if (!/^[A-Za-z0-9\s-]+$/.test(formData.postal_code)) {
+          errors.postal_code = 'Postal code contains invalid characters';
+        }
+        
+        if (!formData.country || formData.country.trim().length < 2) {
+          errors.country = 'Country is required';
+        }
+        
+        if (!formData.country_code) {
+          errors.country_code = 'Please select a country from the dropdown';
+        }
         break;
         
       case 4: // Professional
-        if (!formData.occupation) errors.occupation = 'Occupation is required';
-        if (!formData.source_of_funds) errors.source_of_funds = 'Source of funds is required';
-        if (!formData.purpose_of_platform) errors.purpose_of_platform = 'Purpose is required';
+        if (!formData.occupation || formData.occupation.trim().length < 2) {
+          errors.occupation = 'Occupation is required';
+        }
+        
+        if (!formData.source_of_funds || formData.source_of_funds.trim().length < 3) {
+          errors.source_of_funds = 'Source of funds is required';
+        }
+        
+        if (!formData.purpose_of_platform || formData.purpose_of_platform.trim().length < 10) {
+          errors.purpose_of_platform = 'Purpose is required (minimum 10 characters)';
+        } else if (formData.purpose_of_platform.length > 500) {
+          errors.purpose_of_platform = 'Purpose must be less than 500 characters';
+        }
         break;
         
       case 5: // ID Document
-        if (!formData.id_type) errors.id_type = 'ID type is required';
-        if (!formData.id_number) errors.id_number = 'ID number is required';
-        if (!formData.id_issuing_country) errors.id_issuing_country = 'Issuing country is required';
-        if (!formData.id_expiry_date) errors.id_expiry_date = 'Expiry date is required';
+        if (!formData.id_type) {
+          errors.id_type = 'ID type is required';
+        }
+        
+        if (!formData.id_number || formData.id_number.trim().length < 5) {
+          errors.id_number = 'ID number is required (minimum 5 characters)';
+        } else if (!/^[A-Za-z0-9-]+$/.test(formData.id_number)) {
+          errors.id_number = 'ID number should only contain letters, numbers, and hyphens';
+        }
+        
+        if (!formData.id_issuing_country || formData.id_issuing_country.trim().length < 2) {
+          errors.id_issuing_country = 'Issuing country is required';
+        }
+        
+        if (!formData.id_issue_date) {
+          errors.id_issue_date = 'Issue date is required';
+        } else {
+          const issueDate = new Date(formData.id_issue_date);
+          const today = new Date();
+          if (issueDate > today) {
+            errors.id_issue_date = 'Issue date cannot be in the future';
+          }
+        }
+        
+        if (!formData.id_expiry_date) {
+          errors.id_expiry_date = 'Expiry date is required';
+        } else {
+          const expiryDate = new Date(formData.id_expiry_date);
+          const today = new Date();
+          const issueDate = new Date(formData.id_issue_date);
+          
+          if (expiryDate < today) {
+            errors.id_expiry_date = 'ID document has expired';
+          } else if (issueDate && expiryDate < issueDate) {
+            errors.id_expiry_date = 'Expiry date must be after issue date';
+          }
+        }
         break;
         
       case 6: // Document Upload
-        // Optional - no validation required
+        if (!formData.id_document_url) {
+          errors.id_document = 'Please upload your ID document';
+        }
+        if (!formData.selfie_image_url) {
+          errors.selfie = 'Please upload a selfie image';
+        }
+        if (!formData.proof_of_address_url) {
+          errors.proof_of_address = 'Please upload proof of address';
+        }
         break;
     }
     

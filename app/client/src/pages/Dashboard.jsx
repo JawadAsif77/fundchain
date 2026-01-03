@@ -374,7 +374,7 @@ const Dashboard = () => {
         c.deadline ||
         c.end_date ||
         new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      imageUrl: c.image_url || null,
+      imageUrl: c.campaign_image_url || c.image_url || null,  // Check both fields
       creatorId: c.creator_id,
       fundingProgress: c.funding_progress || 0,
       riskScore: c.risk_level
@@ -1033,16 +1033,58 @@ const Dashboard = () => {
                         >
                           {project.title}
                         </h3>
-                        <span style={{
-                          padding: '4px 12px',
-                          backgroundColor: project.status === 'active' ? '#dcfce7' : '#fef3c7',
-                          color: project.status === 'active' ? '#166534' : '#854d0e',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          fontWeight: '500'
-                        }}>
-                          {project.status}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{
+                            padding: '4px 12px',
+                            backgroundColor: project.status === 'active' ? '#dcfce7' : '#fef3c7',
+                            color: project.status === 'active' ? '#166534' : '#854d0e',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: '500'
+                          }}>
+                            {project.status}
+                          </span>
+                          {project.update_count > 0 && (
+                            <span style={{
+                              padding: '4px 12px',
+                              backgroundColor: '#fef3c7',
+                              color: '#92400e',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}>
+                              UPDATED ({project.update_count}x)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {project.status === 'pending_review' && project.is_updatable && (
+                          <button
+                            onClick={() => navigate(`/edit-campaign/${project.id}`)}
+                            style={{
+                              background: '#667eea',
+                              color: 'white',
+                              border: 'none',
+                              padding: '8px 16px',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontWeight: '600',
+                              fontSize: '14px',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.background = '#5568d3';
+                              e.target.style.transform = 'translateY(-2px)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.background = '#667eea';
+                              e.target.style.transform = 'translateY(0)';
+                            }}
+                          >
+                            ✏️ Edit Campaign
+                          </button>
+                        )}
                       </div>
                     </div>
 

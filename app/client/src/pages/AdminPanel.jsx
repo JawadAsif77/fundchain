@@ -980,30 +980,354 @@ const AdminPanel = () => {
               <div style={{ display: 'grid', gap: '16px' }}>
                 {pendingCampaigns.map((c) => (
                   <div key={c.id} style={{ padding: '20px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px' }}>
-                      <div>
-                        <h3 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: 600, color: '#111827' }}>{c.title}</h3>
-                        <div style={{ display: 'grid', gap: '4px', fontSize: '14px', color: '#6b7280' }}>
-                          <div>Creator: {c.creator_user?.full_name || c.creator_user?.email || c.creator_id}</div>
-                          <div>Goal: {Number(c.funding_goal || 0).toLocaleString()} FC</div>
-                          <div>Min investment: {Number(c.min_investment || 0).toLocaleString()} FC</div>
-                          <div>Submitted: {new Date(c.created_at).toLocaleDateString()}</div>
+                    {/* Update Notice */}
+                    {c.update_count > 0 && (
+                      <div style={{
+                        background: '#fef3c7',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        marginBottom: '16px',
+                        border: '1px solid #fbbf24'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '20px' }}>⚠️</span>
+                          <div>
+                            <strong style={{ color: '#92400e', fontSize: '14px' }}>
+                              Campaign Updated {c.update_count} time{c.update_count > 1 ? 's' : ''}
+                            </strong>
+                            {c.last_updated_at && (
+                              <div style={{ fontSize: '13px', color: '#92400e', marginTop: '2px' }}>
+                                Last updated: {new Date(c.last_updated_at).toLocaleString()}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'start' }}>
+                    )}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px' }}>
+                      <div>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: 600, color: '#111827' }}>{c.title}</h3>
+                        
+                        {/* Campaign Image Preview */}
+                        {c.campaign_image_url && (
+                          <div style={{ marginBottom: '12px' }}>
+                            <img 
+                              src={c.campaign_image_url} 
+                              alt={c.title}
+                              style={{
+                                width: '100%',
+                                maxHeight: '200px',
+                                objectFit: 'cover',
+                                borderRadius: '8px',
+                                border: '1px solid #e5e7eb'
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        <div style={{ display: 'grid', gap: '6px', fontSize: '14px', color: '#6b7280' }}>
+                          <div><strong>Creator:</strong> {c.creator_user?.full_name || c.creator_user?.email || c.creator_id}</div>
+                          <div><strong>Goal:</strong> {Number(c.funding_goal || 0).toLocaleString()} FC</div>
+                          <div><strong>Min Investment:</strong> {Number(c.min_investment || 0).toLocaleString()} FC</div>
+                          
+                          {c.project_stage && (
+                            <div>
+                              <strong>Stage:</strong>{' '}
+                              <span style={{
+                                padding: '2px 8px',
+                                background: '#f0fdf4',
+                                color: '#166534',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                textTransform: 'capitalize'
+                              }}>
+                                {c.project_stage}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {c.team_size && (
+                            <div><strong>Team Size:</strong> {c.team_size} members</div>
+                          )}
+                          
+                          {c.legal_structure && (
+                            <div><strong>Legal Structure:</strong> {c.legal_structure}</div>
+                          )}
+                          
+                          {c.expected_roi && (
+                            <div><strong>Expected ROI:</strong> {c.expected_roi}</div>
+                          )}
+                          
+                          {c.target_audience && (
+                            <div><strong>Target Audience:</strong> {c.target_audience}</div>
+                          )}
+                          
+                          {c.business_model && (
+                            <div style={{ marginTop: '8px' }}>
+                              <strong>Business Model:</strong>
+                              <div style={{ fontSize: '13px', color: '#374151', marginTop: '4px' }}>
+                                {c.business_model.length > 150 ? c.business_model.substring(0, 150) + '...' : c.business_model}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {c.previous_funding_amount && (
+                            <div style={{ marginTop: '4px' }}>
+                              <strong>Previous Funding:</strong> {Number(c.previous_funding_amount).toLocaleString()} FC
+                              {c.previous_funding_source && ` from ${c.previous_funding_source}`}
+                            </div>
+                          )}
+                          
+                          <div><strong>Submitted:</strong> {new Date(c.created_at).toLocaleDateString()}</div>
+                          
+                          {/* Links Section */}
+                          {(c.video_pitch_url || c.pitch_deck_url || c.whitepaper_url || c.website_url || c.github_repository) && (
+                            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
+                              <strong style={{ display: 'block', marginBottom: '6px' }}>Resources:</strong>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                {c.video_pitch_url && (
+                                  <a 
+                                    href={c.video_pitch_url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      padding: '4px 10px',
+                                      background: '#667eea',
+                                      color: 'white',
+                                      textDecoration: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    🎥 Video
+                                  </a>
+                                )}
+                                {c.pitch_deck_url && (
+                                  <a 
+                                    href={c.pitch_deck_url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      padding: '4px 10px',
+                                      background: '#10b981',
+                                      color: 'white',
+                                      textDecoration: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    📊 Pitch Deck
+                                  </a>
+                                )}
+                                {c.whitepaper_url && (
+                                  <a 
+                                    href={c.whitepaper_url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      padding: '4px 10px',
+                                      background: '#8b5cf6',
+                                      color: 'white',
+                                      textDecoration: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    📄 Whitepaper
+                                  </a>
+                                )}
+                                {c.website_url && (
+                                  <a 
+                                    href={c.website_url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      padding: '4px 10px',
+                                      background: '#3b82f6',
+                                      color: 'white',
+                                      textDecoration: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    🌐 Website
+                                  </a>
+                                )}
+                                {c.github_repository && (
+                                  <a 
+                                    href={c.github_repository} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      padding: '4px 10px',
+                                      background: '#1f2937',
+                                      color: 'white',
+                                      textDecoration: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    💻 GitHub
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Social Media Links */}
+                          {c.social_media_links && Object.values(c.social_media_links).some(v => v) && (
+                            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
+                              <strong style={{ display: 'block', marginBottom: '6px' }}>Social Media:</strong>
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                {c.social_media_links.twitter && (
+                                  <a 
+                                    href={c.social_media_links.twitter} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      padding: '3px 8px',
+                                      background: '#1da1f2',
+                                      color: 'white',
+                                      textDecoration: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '11px',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    Twitter
+                                  </a>
+                                )}
+                                {c.social_media_links.linkedin && (
+                                  <a 
+                                    href={c.social_media_links.linkedin} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      padding: '3px 8px',
+                                      background: '#0077b5',
+                                      color: 'white',
+                                      textDecoration: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '11px',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    LinkedIn
+                                  </a>
+                                )}
+                                {c.social_media_links.facebook && (
+                                  <a 
+                                    href={c.social_media_links.facebook} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      padding: '3px 8px',
+                                      background: '#1877f2',
+                                      color: 'white',
+                                      textDecoration: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '11px',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    Facebook
+                                  </a>
+                                )}
+                                {c.social_media_links.instagram && (
+                                  <a 
+                                    href={c.social_media_links.instagram} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      padding: '3px 8px',
+                                      background: 'linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%)',
+                                      color: 'white',
+                                      textDecoration: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '11px',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    Instagram
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Use of Funds Summary */}
+                          {c.use_of_funds && c.use_of_funds.length > 0 && (
+                            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
+                              <strong style={{ display: 'block', marginBottom: '6px' }}>Use of Funds:</strong>
+                              <div style={{ fontSize: '13px' }}>
+                                {c.use_of_funds.map((item, idx) => (
+                                  <div key={idx} style={{ marginBottom: '4px' }}>
+                                    • {item.category}: <strong>{item.amount}%</strong>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+                        <button
+                          onClick={() => window.open(`/campaign/${c.slug}`, '_blank')}
+                          style={{
+                            padding: '8px 12px',
+                            backgroundColor: '#667eea',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          👁️ View Full
+                        </button>
                         <button
                           onClick={() => handleApproveCampaign(c.id)}
                           disabled={actionLoading}
-                          style={{ padding: '8px 12px', backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }}
+                          style={{
+                            padding: '8px 12px',
+                            backgroundColor: '#10B981',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            cursor: actionLoading ? 'not-allowed' : 'pointer',
+                            fontWeight: '600',
+                            whiteSpace: 'nowrap'
+                          }}
                         >
-                          Approve
+                          ✓ Approve
                         </button>
                         <button
                           onClick={() => handleRejectCampaign(c.id)}
                           disabled={actionLoading}
-                          style={{ padding: '8px 12px', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }}
+                          style={{
+                            padding: '8px 12px',
+                            backgroundColor: '#EF4444',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            cursor: actionLoading ? 'not-allowed' : 'pointer',
+                            fontWeight: '600',
+                            whiteSpace: 'nowrap'
+                          }}
                         >
-                          Reject
+                          ✕ Reject
                         </button>
                       </div>
                     </div>

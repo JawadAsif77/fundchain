@@ -22,10 +22,12 @@ CREATE TYPE kyc_verification_status AS ENUM ('pending', 'approved', 'rejected');
 
 CREATE TYPE campaign_status AS ENUM (
   'draft',
+  'pending_review',
   'active',
   'completed',
   'failed',
-  'cancelled'
+  'cancelled',
+  'rejected'
 );
 
 CREATE TYPE campaign_type AS ENUM ('donation', 'equity', 'loan');

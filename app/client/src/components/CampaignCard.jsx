@@ -120,13 +120,36 @@ const CampaignCard = ({ campaign }) => {
         backgroundColor: 'var(--color-bg-elev)',
         borderRadius: 'var(--radius-lg)',
         marginBottom: 'var(--space-3)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: 'var(--color-muted)',
-        fontSize: 'var(--text-sm)'
+        overflow: 'hidden',
+        position: 'relative'
       }}>
-        Project Image
+        {campaign.image_url ? (
+          <img 
+            src={campaign.image_url} 
+            alt={campaign.title}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover'
+            }}
+            onError={(e) => {
+              // Fallback to placeholder if image fails to load
+              e.target.style.display = 'none';
+              e.target.parentElement.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--color-muted); font-size: var(--text-sm);">No Image</div>';
+            }}
+          />
+        ) : (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            color: 'var(--color-muted)',
+            fontSize: 'var(--text-sm)'
+          }}>
+            No Image
+          </div>
+        )}
       </div>
 
       {/* Campaign Meta */}
