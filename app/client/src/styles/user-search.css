@@ -1,0 +1,245 @@
+/* User Search Styles */
+
+.user-search-container {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.user-search-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 2px solid #f3f4f6;
+  background: #fafafa;
+}
+
+.search-icon {
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  margin-right: 12px;
+}
+
+.user-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  color: #1f2937;
+  outline: none;
+}
+
+.user-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.clear-search-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  border: none;
+  color: #6b7280;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-search-btn:hover {
+  background: #d1d5db;
+  color: #1f2937;
+}
+
+.user-search-results {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.search-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: #6b7280;
+  font-size: 15px;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #29c7ac;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.search-empty,
+.search-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: #9ca3af;
+}
+
+.search-empty svg,
+.search-placeholder svg {
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.search-empty p,
+.search-placeholder p {
+  font-size: 18px;
+  font-weight: 600;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+}
+
+.search-empty span,
+.search-placeholder span {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.search-results-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.search-user-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.search-user-card:hover {
+  background: #f9fafb;
+}
+
+.search-user-card:last-child {
+  border-bottom: none;
+}
+
+.search-user-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.search-user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.search-user-avatar .avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1e40af;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.search-user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-user-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 2px;
+}
+
+.verified-icon {
+  flex-shrink: 0;
+}
+
+.search-user-username {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.search-user-bio {
+  font-size: 13px;
+  color: #9ca3af;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 4px;
+}
+
+.search-user-badge {
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  flex-shrink: 0;
+}
+
+.search-hint {
+  padding: 12px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #9ca3af;
+  background: #fafafa;
+  border-top: 1px solid #f3f4f6;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .user-search-container {
+    max-width: 100%;
+    border-radius: 0;
+  }
+
+  .search-user-card {
+    padding: 12px 16px;
+  }
+
+  .search-user-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .search-user-name {
+    font-size: 15px;
+  }
+
+  .search-user-bio {
+    display: none;
+  }
+}

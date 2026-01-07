@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../store/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { profileStatsApi } from '../lib/api';
 import Loader from '../components/Loader';
 import '../styles/profile-display.css';
 
@@ -8,6 +9,8 @@ const ProfileDisplay = () => {
   const { user, profile, loading: authLoading, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   // Memoize profile data to prevent unnecessary re-renders
   const userProfile = useMemo(() => {
@@ -26,11 +29,39 @@ const ProfileDisplay = () => {
     if (userProfile && !authLoading) {
       console.log('✅ ProfileDisplay: Profile data available, setting loading to false');
       setLoading(false);
+      // Load real-time stats
+      loadStats();
     } else if (!authLoading) {
       console.log('⚠️ ProfileDisplay: No profile data available');
       setLoading(false);
     }
   }, [userProfile, authLoading]);
+
+  const loadStats = async () => {
+    if (!userProfile?.id || !userProfile?.role) {
+      console.log('⚠️ Cannot load stats - missing user ID or role');
+      setStatsLoading(false);
+      return;
+    }
+
+    try {
+      setStatsLoading(true);
+      console.log('📊 Loading stats for user:', userProfile.id, 'Role:', userProfile.role);
+      if (userProfile.role === 'creator') {
+        const creatorStats = await profileStatsApi.getCreatorStats(userProfile.id);
+        console.log('✅ Creator stats loaded:', creatorStats);
+        setStats(creatorStats);
+      } else if (userProfile.role === 'investor') {
+        const investorStats = await profileStatsApi.getInvestorStats(userProfile.id);
+        console.log('✅ Investor stats loaded:', investorStats);
+        setStats(investorStats);
+      }
+    } catch (error) {
+      console.error('❌ Error loading profile stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
 
   // Derive stable display fields
   const displayName = useMemo(() => {
@@ -185,32 +216,59 @@ const ProfileDisplay = () => {
         {/* Stats Section for Investors/Creators */}
         <div className="profile-section">
           <h2>Statistics</h2>
-          <div className="stats-grid">
-            <div className="stat-item">
-              <span className="stat-number">{userProfile.followers_count || 0}</span>
-              <span className="stat-label">Followers</span>
+          {statsLoading ? (
+            <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>
+              Loading statistics...
             </div>
-            <div className="stat-item">
-              <span className="stat-number">{userProfile.following_count || 0}</span>
-              <span className="stat-label">Following</span>
-            </div>
-            {userProfile.role === 'investor' && (
-              <>
-                <div className="stat-item">
-                  <span className="stat-number">{userProfile.total_campaigns_backed || 0}</span>
-                  <span className="stat-label">Campaigns Backed</span>
+          ) : (
+            <div className="stats-grid">
+              {userProfile.role === 'creator' && stats && (
+                <>
+                  <div className="stat-item">
+                    <span className="stat-number">{stats.totalCampaigns || 0}</span>
+                    <span className="stat-label">Total Campaigns</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-number">{stats.activeCampaigns || 0}</span>
+                    <span className="stat-label">Active Campaigns</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-number">${stats.totalRaised?.toLocaleString() || 0}</span>
+                    <span className="stat-label">Total Raised</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-number">{stats.uniqueInvestors || 0}</span>
+                    <span className="stat-label">Unique Investors</span>
+                  </div>
+                </>
+              )}
+              {userProfile.role === 'investor' && stats && (
+                <>
+                  <div className="stat-item">
+                    <span className="stat-number">${stats.totalInvested?.toLocaleString() || 0}</span>
+                    <span className="stat-label">Total Invested</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-number">{stats.campaignsBacked || 0}</span>
+                    <span className="stat-label">Campaigns Backed</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-number">{stats.creatorsSupported || 0}</span>
+                    <span className="stat-label">Creators Supported</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-number">{stats.avgRisk || 0}/10</span>
+                    <span className="stat-label">Average Risk</span>
+                  </div>
+                </>
+              )}
+              {!stats && (
+                <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#9ca3af' }}>
+                  No statistics available yet
                 </div>
-                <div className="stat-item">
-                  <span className="stat-number">${userProfile.total_invested || 0}</span>
-                  <span className="stat-label">Total Invested</span>
-                </div>
-              </>
-            )}
-            <div className="stat-item">
-              <span className="stat-number">{userProfile.trust_score || 0}/5</span>
-              <span className="stat-label">Trust Score</span>
+              )}
             </div>
-          </div>
+          )}
         </div>
 
         {/* Account Information */}

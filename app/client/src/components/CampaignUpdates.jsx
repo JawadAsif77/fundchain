@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { milestoneUpdateApi } from '../lib/api';
+import '../styles/milestone-updates.css';
 
 const CampaignUpdates = ({ campaignId, isCreator, isAdmin }) => {
   const [updates, setUpdates] = useState([]);
@@ -60,75 +61,93 @@ const CampaignUpdates = ({ campaignId, isCreator, isAdmin }) => {
   }
 
   return (
-    <div className="space-y-lg">
+    <div className="campaign-updates-list">
       {updates.map((update) => (
-        <div key={update.id} className="card">
+        <div key={update.id} className="campaign-update-card">
           {/* Header */}
-          <div className="flex items-start justify-between mb-md">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center text-lg font-bold">
-                {update.author?.username?.[0]?.toUpperCase() || 'C'}
+          <div className="campaign-update-header">
+            <div className="campaign-update-author">
+              <div className="campaign-update-avatar">
+                {update.author?.avatar_url ? (
+                  <img src={update.author.avatar_url} alt="" />
+                ) : (
+                  <span>{update.author?.username?.[0]?.toUpperCase() || 'C'}</span>
+                )}
               </div>
-              <div>
-                <div className="font-semibold text-gray-900">
+              <div className="campaign-update-author-info">
+                <div className="campaign-update-author-name">
                   {update.author?.full_name || update.author?.username || 'Campaign Creator'}
                 </div>
-                <div className="text-sm text-gray-500">
+                <div className="campaign-update-date">
                   {formatDate(update.created_at)}
                 </div>
               </div>
             </div>
             {!update.is_public && (isCreator || isAdmin) && (
-              <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-full">
+              <span className="campaign-update-badge draft">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
                 DRAFT
               </span>
             )}
           </div>
 
           {/* Title */}
-          <h3 className="text-xl font-bold text-gray-900 mb-md">
-            {update.title}
-          </h3>
+          {update.title && (
+            <h3 className="campaign-update-title">
+              {update.title}
+            </h3>
+          )}
 
           {/* Content */}
-          <div className="text-gray-700 mb-md whitespace-pre-wrap leading-relaxed">
+          <div className="campaign-update-content">
             {update.content}
           </div>
 
-          {/* Media */}
+          {/* Media Gallery */}
           {update.media_urls && update.media_urls.length > 0 && (
-            <div className="mt-md space-y-md">
+            <div className={`campaign-update-media-grid ${
+              update.media_urls.length === 1 ? 'single' :
+              update.media_urls.length === 2 ? 'double' :
+              'multiple'
+            }`}>
               {update.media_urls.map((url, idx) => (
-                <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div key={idx} className="campaign-update-media-item">
                   {isImage(url) && (
                     <img
                       src={url}
                       alt={`Update media ${idx + 1}`}
-                      className="w-full h-auto"
-                      style={{ maxHeight: '500px', objectFit: 'contain', backgroundColor: '#f3f4f6' }}
+                      className="campaign-update-image"
+                      loading="lazy"
                     />
                   )}
                   {isVideo(url) && (
-                    <video
-                      controls
-                      className="w-full"
-                      style={{ maxHeight: '500px', backgroundColor: '#000' }}
-                    >
-                      <source src={url} />
-                      Your browser does not support video playback.
-                    </video>
+                    <div className="campaign-update-video-wrapper">
+                      <video
+                        controls
+                        className="campaign-update-video"
+                        preload="metadata"
+                      >
+                        <source src={url} />
+                        Your browser does not support video playback.
+                      </video>
+                    </div>
                   )}
                   {!isImage(url) && !isVideo(url) && (
-                    <div className="p-4 bg-gray-50 text-center">
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        📎 View Attachment
-                      </a>
-                    </div>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="campaign-update-attachment"
+                    >
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                      </svg>
+                      View Attachment
+                    </a>
                   )}
                 </div>
               ))}

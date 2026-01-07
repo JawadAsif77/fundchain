@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { qaApi } from '../lib/api';
 import { useAuth } from '../store/AuthContext';
+import '../styles/campaign-qa.css';
 
 const CampaignQA = ({ campaignId, creatorId }) => {
   const { userId } = useAuth();
@@ -15,6 +16,35 @@ const CampaignQA = ({ campaignId, creatorId }) => {
   const [reportSubmitting, setReportSubmitting] = useState(false);
 
   const isCreator = userId === creatorId;
+
+  // Helper function to format relative time
+  const formatRelativeTime = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffHours < 1) {
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      return diffMins < 1 ? 'just now' : `${diffMins}m ago`;
+    }
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  // Helper to get user initials
+  const getUserInitial = (user) => {
+    if (user?.full_name) return user.full_name[0].toUpperCase();
+    if (user?.username) return user.username[0].toUpperCase();
+    return 'U';
+  };
 
   useEffect(() => {
     loadQuestions();
@@ -94,32 +124,41 @@ const CampaignQA = ({ campaignId, creatorId }) => {
 
   if (loading) {
     return (
-      <div className="card">
-        <div className="text-center py-8 text-gray-500">Loading questions...</div>
+      <div className="qa-container">
+        <div className="qa-loading">Loading questions...</div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-lg">
+    <div className="qa-container">
       {/* Ask Question Form */}
       {userId && (
-        <div className="card">
-          <h3 className="card-title">Ask a Question</h3>
+        <div className="qa-ask-form">
+          <div className="qa-form-header">
+            <div className="qa-form-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <h3 className="qa-form-title">Ask a Question</h3>
+          </div>
           <form onSubmit={handlePostQuestion}>
             <textarea
               value={newQuestion}
               onChange={(e) => setNewQuestion(e.target.value)}
               placeholder="What would you like to know about this campaign?"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+              className="qa-textarea"
               rows="3"
               disabled={submitting}
               required
             />
-            <div className="flex justify-end mt-3">
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 type="submit"
-                className="btn btn-primary"
+                className="qa-submit-btn"
                 disabled={submitting || !newQuestion.trim()}
               >
                 {submitting ? 'Posting...' : 'Post Question'}
@@ -130,166 +169,151 @@ const CampaignQA = ({ campaignId, creatorId }) => {
       )}
 
       {!userId && (
-        <div className="card">
-          <div className="text-center py-4 text-gray-600">
-            Please <a href="/login" className="text-primary hover:underline">log in</a> to ask questions
-          </div>
+        <div className="qa-login-prompt">
+          <p>Please <a href="/login">log in</a> to ask questions</p>
         </div>
       )}
 
       {/* Questions List */}
-      <div className="card">
-        <h3 className="card-title">Questions & Answers ({questions.length})</h3>
-        
-        {questions.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <p>No questions yet. Be the first to ask!</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {questions.map((question) => (
-              <div key={question.id} className="border-b pb-6 last:border-b-0 last:pb-0">
-                {/* Question */}
-                <div className="mb-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold">
-                        {question.users?.username?.[0]?.toUpperCase() || 'U'}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-sm">
-                          {question.users?.full_name || question.users?.username || 'Anonymous'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(question.created_at).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                    {userId && (
-                      <button
-                        onClick={() => setReportModal({ type: 'question', id: question.id })}
-                        className="text-xs text-gray-400 hover:text-red-600"
-                        title="Report this question"
-                      >
-                        🚩 Report
-                      </button>
-                    )}
+      <div className="qa-list-header">
+        <h3 className="qa-list-title">Questions & Answers ({questions.length})</h3>
+      </div>
+      
+      {questions.length === 0 ? (
+        <div className="qa-empty-state">
+          <p>No questions yet. Be the first to ask!</p>
+        </div>
+      ) : (
+        <div className="qa-list">
+          {questions.map((question) => (
+            <div key={question.id} className="qa-question-card">
+              {/* Question */}
+              <div className="qa-question-header">
+                <div className="qa-user-info">
+                  <div className="qa-avatar">
+                    {getUserInitial(question.users)}
                   </div>
-                  <p className="text-gray-700 ml-10">{question.question}</p>
-                  {question.is_answered && (
-                    <span className="inline-block ml-10 mt-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
-                      ✓ Answered
-                    </span>
-                  )}
+                  <div className="qa-user-details">
+                    <div className="qa-username">
+                      {question.users?.full_name || question.users?.username || 'Anonymous'}
+                    </div>
+                    <div className="qa-timestamp">
+                      {formatRelativeTime(question.created_at)}
+                    </div>
+                  </div>
                 </div>
-
-                {/* Answers */}
-                {answers[question.id]?.length > 0 && (
-                  <div className="ml-10 space-y-3">
-                    {answers[question.id].map((answer) => (
-                      <div key={answer.id} className="bg-gray-50 p-4 rounded-lg">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center text-xs font-bold">
-                              {answer.users?.username?.[0]?.toUpperCase() || 'C'}
-                            </div>
-                            <div>
-                              <div className="font-semibold text-sm">
-                                {answer.users?.full_name || answer.users?.username || 'Creator'}
-                                <span className="ml-2 px-2 py-0.5 bg-green-600 text-white text-xs rounded">
-                                  Creator
-                                </span>
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {new Date(answer.created_at).toLocaleDateString('en-US', {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric'
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                          {userId && (
-                            <button
-                              onClick={() => setReportModal({ type: 'answer', id: answer.id })}
-                              className="text-xs text-gray-400 hover:text-red-600"
-                              title="Report this answer"
-                            >
-                              🚩 Report
-                            </button>
-                          )}
-                        </div>
-                        <p className="text-gray-700 text-sm">{answer.answer}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Answer Form (Creator Only) */}
-                {isCreator && !question.is_answered && (
-                  <div className="ml-10 mt-3">
-                    <textarea
-                      value={answerText[question.id] || ''}
-                      onChange={(e) => setAnswerText({ ...answerText, [question.id]: e.target.value })}
-                      placeholder="Write your answer..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm resize-none"
-                      rows="2"
-                      disabled={submitting}
-                    />
-                    <div className="flex justify-end mt-2">
-                      <button
-                        onClick={() => handlePostAnswer(question.id)}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm disabled:opacity-50"
-                        disabled={submitting || !answerText[question.id]?.trim()}
-                      >
-                        {submitting ? 'Posting...' : 'Post Answer'}
-                      </button>
-                    </div>
-                  </div>
+                {userId && (
+                  <button
+                    onClick={() => setReportModal({ type: 'question', id: question.id })}
+                    className="qa-report-btn"
+                    title="Report this question"
+                  >
+                    🚩 Report
+                  </button>
                 )}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              <p className="qa-question-text">{question.question}</p>
+              {question.is_answered && (
+                <span className="qa-answered-badge">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  Answered
+                </span>
+              )}
+
+              {/* Answers */}
+              {answers[question.id]?.length > 0 && (
+                <div className="qa-answers-section">
+                  {answers[question.id].map((answer) => (
+                    <div key={answer.id} className="qa-answer-card">
+                      <div className="qa-answer-header">
+                        <div className="qa-answer-user">
+                          <div className="qa-answer-avatar qa-avatar creator">
+                            {getUserInitial(answer.users)}
+                          </div>
+                          <div className="qa-answer-details">
+                            <div className="qa-answer-username">
+                              {answer.users?.full_name || answer.users?.username || 'Creator'}
+                              <span className="qa-creator-badge">Creator</span>
+                            </div>
+                            <div className="qa-answer-time">
+                              {formatRelativeTime(answer.created_at)}
+                            </div>
+                          </div>
+                        </div>
+                        {userId && (
+                          <button
+                            onClick={() => setReportModal({ type: 'answer', id: answer.id })}
+                            className="qa-report-btn"
+                            title="Report this answer"
+                          >
+                            🚩
+                          </button>
+                        )}
+                      </div>
+                      <p className="qa-answer-text">{answer.answer}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Answer Form (Creator Only) */}
+              {isCreator && !question.is_answered && (
+                <div className="qa-answer-form">
+                  <textarea
+                    value={answerText[question.id] || ''}
+                    onChange={(e) => setAnswerText({ ...answerText, [question.id]: e.target.value })}
+                    placeholder="Write your answer..."
+                    className="qa-answer-textarea"
+                    rows="2"
+                    disabled={submitting}
+                  />
+                  <button
+                    onClick={() => handlePostAnswer(question.id)}
+                    className="qa-answer-submit"
+                    disabled={submitting || !answerText[question.id]?.trim()}
+                  >
+                    {submitting ? 'Posting...' : 'Post Answer'}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Report Modal */}
       {reportModal && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          className="qa-report-modal-overlay"
           onClick={() => setReportModal(null)}
         >
           <div 
-            className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
+            className="qa-report-modal"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-xl font-bold mb-4">Report Content</h3>
-            <p className="text-sm text-gray-600 mb-4">
+            <h3 className="qa-report-title">Report Content</h3>
+            <p className="qa-report-description">
               Please explain why you're reporting this {reportModal.type}:
             </p>
             <textarea
               value={reportReason}
               onChange={(e) => setReportReason(e.target.value)}
               placeholder="Reason for reporting..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+              className="qa-report-textarea"
               rows="4"
               disabled={reportSubmitting}
             />
-            <div className="flex gap-3 mt-4">
+            <div className="qa-report-actions">
               <button
                 onClick={() => setReportModal(null)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 disabled={reportSubmitting}
               >
                 Cancel
               </button>
               <button
                 onClick={handleReport}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                 disabled={reportSubmitting || !reportReason.trim()}
               >
                 {reportSubmitting ? 'Reporting...' : 'Submit Report'}

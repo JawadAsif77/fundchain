@@ -1054,3 +1054,275 @@ export const adminApi = {
     return data;
   }
 };
+
+// =============================================================================
+// PROFILE & USER STATS API
+// =============================================================================
+export const profileStatsApi = {
+  /**
+   * Get user profile with stats (public view)
+   */
+  async getUserProfile(usernameOrId) {
+    // Try to find by username first
+    let query = supabase
+      .from('users')
+      .select('id, username, full_name, bio, avatar_url, role, is_verified, location, created_at, trust_score, linkedin_url, twitter_url, instagram_url');
+    
+    // Check if it's a UUID (id) or username
+    if (usernameOrId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      query = query.eq('id', usernameOrId);
+    } else {
+      query = query.eq('username', usernameOrId);
+    }
+    
+    const { data: user, error } = await query.maybeSingle();
+    
+    if (error || !user) return null;
+    
+    // Get additional stats based on role
+    if (user.role === 'creator') {
+      const stats = await this.getCreatorStats(user.id);
+      return { ...user, stats };
+    } else {
+      const stats = await this.getInvestorStats(user.id);
+      return { ...user, stats };
+    }
+  },
+
+  /**
+   * Get creator statistics
+   */
+  async getCreatorStats(userId) {
+    console.log('📊 Fetching creator stats for:', userId);
+    
+    // Get campaigns count and total raised
+    const { data: campaigns, error: campaignsError } = await supabase
+      .from('campaigns')
+      .select('id, current_funding, funding_goal, status')
+      .eq('creator_id', userId);
+    
+    if (campaignsError) {
+      console.error('❌ Error fetching campaigns:', campaignsError);
+    }
+    
+    console.log('📊 Campaigns found:', campaigns?.length || 0, campaigns);
+    
+    const totalCampaigns = campaigns?.length || 0;
+    const activeCampaigns = campaigns?.filter(c => c.status === 'active').length || 0;
+    const totalRaised = campaigns?.reduce((sum, c) => sum + (c.current_funding || 0), 0) || 0;
+    const totalGoal = campaigns?.reduce((sum, c) => sum + (c.funding_goal || 0), 0) || 0;
+    
+    // Get total investors (unique backers across all campaigns)
+    const { data: investments, error: investmentsError } = await supabase
+      .from('investments')
+      .select('investor_id, campaigns!inner(creator_id)')
+      .eq('status', 'confirmed')
+      .eq('campaigns.creator_id', userId);
+    
+    if (investmentsError) {
+      console.error('❌ Error fetching investments:', investmentsError);
+    }
+    
+    console.log('💰 Investments found:', investments?.length || 0);
+    
+    const uniqueInvestors = [...new Set(investments?.map(i => i.investor_id) || [])].length;
+    
+    const stats = {
+      totalCampaigns,
+      activeCampaigns,
+      totalRaised,
+      totalGoal,
+      uniqueInvestors,
+      avgFundingRate: totalGoal > 0 ? ((totalRaised / totalGoal) * 100).toFixed(1) : 0
+    };
+    
+    console.log('✅ Creator stats calculated:', stats);
+    return stats;
+  },
+
+  /**
+   * Get investor statistics
+   */
+  async getInvestorStats(userId) {
+    // Get investments
+    const { data: investments } = await supabase
+      .from('investments')
+      .select('amount, status, campaigns!inner(id, title, creator_id, final_risk_score)')
+      .eq('investor_id', userId)
+      .eq('status', 'confirmed');
+    
+    const totalInvested = investments?.reduce((sum, inv) => sum + (inv.amount || 0), 0) || 0;
+    const campaignsBacked = [...new Set(investments?.map(i => i.campaigns.id) || [])].length;
+    const creatorsSupported = [...new Set(investments?.map(i => i.campaigns.creator_id) || [])].length;
+    
+    // Calculate average risk
+    const avgRisk = investments?.length > 0
+      ? (investments.reduce((sum, inv) => sum + (inv.campaigns.final_risk_score || 0), 0) / investments.length).toFixed(2)
+      : 0;
+    
+    return {
+      totalInvested,
+      campaignsBacked,
+      creatorsSupported,
+      avgRisk,
+      totalInvestments: investments?.length || 0
+    };
+  },
+
+  /**
+   * Get creator's campaigns (for public profile)
+   */
+  async getCreatorCampaigns(userId) {
+    console.log('📊 Fetching campaigns for creator:', userId);
+    
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('id, slug, title, description, funding_goal, current_funding, status, final_risk_score, created_at, image_url')
+      .eq('creator_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('❌ Error fetching creator campaigns:', error);
+      console.error('❌ Error details:', error.message, error.code, error.details);
+      return [];
+    }
+    
+    console.log('📊 API: Fetched campaigns for creator:', userId, 'Count:', data?.length || 0);
+    console.log('📊 First campaign:', data?.[0]);
+    return data || [];
+  },
+
+  /**
+   * Get investor's backed campaigns
+   */
+  async getInvestorCampaigns(userId) {
+    console.log('💰 Fetching backed campaigns for investor:', userId);
+    
+    const { data, error } = await supabase
+      .from('investments')
+      .select(`
+        amount,
+        created_at,
+        campaigns!inner(
+          id,
+          slug,
+          title,
+          description,
+          funding_goal,
+          current_funding,
+          status,
+          final_risk_score,
+          image_url,
+          creator_id,
+          users!campaigns_creator_id_fkey(username, full_name, avatar_url)
+        )
+      `)
+      .eq('investor_id', userId)
+      .eq('status', 'confirmed')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('❌ Error fetching investor campaigns:', error);
+      console.error('❌ Error details:', error.message, error.code, error.details);
+      return [];
+    }
+    
+    console.log('💰 API: Fetched backed campaigns:', data?.length || 0);
+    
+    return data?.map(inv => ({
+      ...inv.campaigns,
+      invested_amount: inv.amount,
+      invested_at: inv.created_at
+    })) || [];
+  },
+
+  /**
+   * Get creator's investors/backers
+   */
+  async getCreatorInvestors(userId) {
+    const { data, error } = await supabase
+      .from('investments')
+      .select(`
+        amount,
+        created_at,
+        investor_id,
+        users!investments_investor_id_fkey(id, username, full_name, avatar_url, trust_score),
+        campaigns!inner(creator_id, title)
+      `)
+      .eq('campaigns.creator_id', userId)
+      .eq('status', 'confirmed')
+      .order('created_at', { ascending: false });
+    
+    // Group by investor
+    const investorsMap = new Map();
+    data?.forEach(inv => {
+      const investorId = inv.investor_id;
+      if (!investorsMap.has(investorId)) {
+        investorsMap.set(investorId, {
+          ...inv.users,
+          totalInvested: 0,
+          campaignCount: new Set(),
+          firstInvestment: inv.created_at
+        });
+      }
+      const investor = investorsMap.get(investorId);
+      investor.totalInvested += inv.amount;
+      investor.campaignCount.add(inv.campaigns.title);
+    });
+    
+    return Array.from(investorsMap.values()).map(inv => ({
+      ...inv,
+      campaignCount: inv.campaignCount.size
+    }));
+  },
+
+  /**
+   * Search users by username or name
+   */
+  async searchUsers(query, limit = 10) {
+    console.log('🔍 Searching for:', query);
+    
+    try {
+      // Fetch users - may need to adjust RLS policies if this returns too few
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, username, full_name, avatar_url, role, bio, trust_score, is_verified')
+        .not('username', 'is', null) // Filter out null usernames
+        .limit(200); // Increase limit to get more users
+      
+      if (error) {
+        console.error('❌ Error fetching users:', error);
+        return [];
+      }
+      
+      console.log('📊 Total users fetched:', data?.length || 0);
+      
+      if (!data || data.length === 0) {
+        console.log('⚠️ No users returned - check RLS policies on users table');
+        return [];
+      }
+      
+      // Client-side filtering (case-insensitive)
+      const searchLower = query.toLowerCase().trim();
+      const filtered = data.filter(user => {
+        const username = (user.username || '').toLowerCase();
+        const fullName = (user.full_name || '').toLowerCase();
+        const match = username.includes(searchLower) || fullName.includes(searchLower);
+        if (match) {
+          console.log('✅ Match found:', user.username, user.full_name);
+        }
+        return match;
+      });
+      
+      console.log('🔍 Search results for', query, ':', filtered.length, 'users');
+      if (filtered.length > 0) {
+        console.log('📋 First result:', filtered[0]);
+      }
+      
+      return filtered.slice(0, limit);
+    } catch (err) {
+      console.error('❌ Unexpected error in searchUsers:', err);
+      return [];
+    }
+  }
+};

@@ -16,6 +16,8 @@ import Register from './pages/Register_simple';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/ProfileDisplay';
 import ProfileEdit from './pages/ProfileEdit';
+import PublicProfile from './pages/PublicProfile';
+import SearchUsers from './pages/SearchUsers';
 import ResetPassword from './pages/ResetPassword';
 import NotFound from './pages/NotFound';
 import KYCForm from './pages/KYCForm';
@@ -73,6 +75,7 @@ function App() {
                       {/* Public routes */}
                       <Route path="/" element={<Home />} />
                       <Route path="/explore" element={<Explore />} />
+                      <Route path="/search" element={<SearchUsers />} />
                       <Route path="/how-it-works" element={<HowItWorks />} />
                       <Route path="/governance" element={<Governance />} />
                       <Route path="/analytics" element={<Analytics />} />
@@ -116,6 +119,8 @@ function App() {
                           </ProtectedRoute>
                         } 
                       />
+                      {/* Public profile view */}
+                      <Route path="/profile/:username" element={<PublicProfile />} />
                       
                       {/* Onboarding routes */}
                       <Route 

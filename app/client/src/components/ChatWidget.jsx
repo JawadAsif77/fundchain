@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   sendChatMessage, 
   fetchChatHistory,
@@ -31,6 +33,7 @@ export default function ChatWidget() {
   const [error, setError] = useState(null);
   const [campaignContext, setCampaignContext] = useState(null);
   const [showQuickActions, setShowQuickActions] = useState(true);
+  const [copySuccess, setCopySuccess] = useState(null);
   
   // Refs
   const messagesEndRef = useRef(null);
@@ -200,6 +203,17 @@ export default function ChatWidget() {
     }
   };
 
+  // Copy text to clipboard
+  const handleCopyCode = async (code) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopySuccess(code);
+      setTimeout(() => setCopySuccess(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
   // Don't render if user is not authenticated
   if (!user) {
     return null;
@@ -256,33 +270,98 @@ export default function ChatWidget() {
                     key={index}
                     className={`chat-message ${message.role}`}
                   >
-                    <div className="chat-message-bubble">
-                      {message.content}
-                    </div>
-                    <div className="chat-message-meta">
-                      {message.role === 'assistant' && message.intent && (
-                        <span className={`chat-intent-badge ${message.intent}`}>
-                          {message.intent.replace(/_/g, ' ')}
+                    {message.role === 'assistant' && (
+                      <div className="chat-avatar assistant-avatar">
+                        <span>🤖</span>
+                      </div>
+                    )}
+                    <div className="chat-message-content">
+                      <div className="chat-message-bubble">
+                        {message.role === 'assistant' ? (
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code({ node, inline, className, children, ...props }) {
+                                const match = /language-(\w+)/.exec(className || '');
+                                const codeString = String(children).replace(/\n$/, '');
+                                return !inline ? (
+                                  <div className="code-block-wrapper">
+                                    <div className="code-block-header">
+                                      <span className="code-language">{match ? match[1] : 'code'}</span>
+                                      <button
+                                        className="code-copy-btn"
+                                        onClick={() => handleCopyCode(codeString)}
+                                        title="Copy code"
+                                      >
+                                        {copySuccess === codeString ? '✓ Copied' : '📋 Copy'}
+                                      </button>
+                                    </div>
+                                    <pre className={className}>
+                                      <code {...props}>{children}</code>
+                                    </pre>
+                                  </div>
+                                ) : (
+                                  <code className="inline-code" {...props}>{children}</code>
+                                );
+                              },
+                              p({ children }) {
+                                return <p className="markdown-paragraph">{children}</p>;
+                              },
+                              strong({ children }) {
+                                return <strong className="markdown-bold">{children}</strong>;
+                              },
+                              ul({ children }) {
+                                return <ul className="markdown-list">{children}</ul>;
+                              },
+                              ol({ children }) {
+                                return <ol className="markdown-list markdown-ordered">{children}</ol>;
+                              },
+                              li({ children }) {
+                                return <li className="markdown-list-item">{children}</li>;
+                              },
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        ) : (
+                          message.content
+                        )}
+                      </div>
+                      <div className="chat-message-meta">
+                        {message.role === 'assistant' && message.intent && (
+                          <span className={`chat-intent-badge ${message.intent}`}>
+                            {message.intent.replace(/_/g, ' ')}
+                          </span>
+                        )}
+                        <span className="chat-message-time">
+                          {new Date(message.timestamp).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
                         </span>
-                      )}
-                      <span>
-                        {new Date(message.timestamp).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
+                      </div>
                     </div>
+                    {message.role === 'user' && (
+                      <div className="chat-avatar user-avatar">
+                        <span>{profile?.full_name?.[0] || user?.email?.[0] || '👤'}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
                 
                 {/* Typing Indicator */}
                 {isLoading && (
                   <div className="chat-message assistant">
-                    <div className="chat-typing">
-                      <div className="chat-typing-dots">
-                        <div className="chat-typing-dot"></div>
-                        <div className="chat-typing-dot"></div>
-                        <div className="chat-typing-dot"></div>
+                    <div className="chat-avatar assistant-avatar">
+                      <span>🤖</span>
+                    </div>
+                    <div className="chat-message-content">
+                      <div className="chat-typing">
+                        <div className="chat-typing-dots">
+                          <div className="chat-typing-dot"></div>
+                          <div className="chat-typing-dot"></div>
+                          <div className="chat-typing-dot"></div>
+                        </div>
                       </div>
                     </div>
                   </div>
