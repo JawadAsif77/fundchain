@@ -5,7 +5,8 @@
   "description": "Scripts for FundChain maintenance and utilities",
   "scripts": {
     "index-docs": "node index_docs.js",
-    "index-docs:clear": "node index_docs.js --clear"
+    "index-docs:clear": "node index_docs.js --clear",
+    "generate-dataset": "node generate_dataset.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.3",

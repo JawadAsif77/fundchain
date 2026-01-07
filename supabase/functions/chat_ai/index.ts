@@ -8,24 +8,22 @@ interface Message {
 
 interface Document {
   content: string;
-  metadata?: {
-    document?: string;
-    chunk_index?: number;
-  };
-  similarity: number;
+  metadata?: Record<string, unknown>;
 }
 
-interface Campaign {
-  title: string;
-  funding_goal: number;
-  categories?: {
-    name: string;
-  } | null;
+interface Investment {
+  amount: number;
+  status: string;
+  campaign_id: string;
+  campaigns: {
+    title: string;
+    final_risk_score: number | null;
+  };
 }
 
 serve(async (req) => {
   try {
-    // Handle CORS preflight
+    // 1. HANDLE CORS PREFLIGHT
     if (req.method === "OPTIONS") {
       return new Response(null, {
         headers: {
@@ -36,21 +34,17 @@ serve(async (req) => {
       });
     }
 
-    const { messages } = await req.json();
+    // 2. PARSE REQUEST
+    const { messages, campaignId } = await req.json();
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "Messages array is required" }),
-        { 
-          status: 400,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Messages array is required" }), { 
+        status: 400, 
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+      });
     }
 
+    // 3. ENVIRONMENT VARIABLES
     const apiKey = Deno.env.get("OPENROUTER_API_KEY");
     const model = Deno.env.get("OPENROUTER_MODEL");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -60,192 +54,189 @@ serve(async (req) => {
       throw new Error("Missing environment variables");
     }
 
-    // Initialize Supabase admin client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get the last user message for embedding
-    const lastUserMessage = messages
-      .filter((m) => m.role === "user")
-      .pop()?.content || "";
+    // ============================================================
+    // 4. PERSONAL ASSISTANT LOGIC (Auth & Dossier)
+    // ============================================================
+    const authHeader = req.headers.get("Authorization");
+    let userDossier = "";
+    
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "");
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        
+        if (!authError && user) {
+          // Fetch from your actual schema: public.users, public.wallets, public.investments
+          const { data: profile } = await supabase.from("users").select("full_name, role, trust_score").eq("id", user.id).single();
+          const { data: wallet } = await supabase.from("wallets").select("balance_fc, locked_fc").eq("user_id", user.id).single();
+          const { data: investments } = await supabase
+            .from("investments")
+            .select("amount, status, campaign_id, campaigns!inner(title, final_risk_score)")
+            .eq("investor_id", user.id) as { data: Investment[] | null };
 
-    // Generate embedding for the user's query using OpenRouter
+          const available = wallet?.balance_fc || 0;
+          const locked = wallet?.locked_fc || 0;
+          
+          let portfolioSummary = "No active investments found.";
+          if (investments && investments.length > 0) {
+            portfolioSummary = investments.map((inv: Investment) => {
+              const campaign = inv.campaigns;
+              const risk = campaign?.final_risk_score;
+              const riskLabel = risk ? (risk < 0.3 ? "Low ✅" : risk < 0.6 ? "Medium ⚠️" : "High 🚨") : "Unscored";
+              return `• **${campaign?.title}**: ${inv.amount} FC (${riskLabel})`;
+            }).join("\n");
+          }
+
+          userDossier = `
+### USER DOSSIER
+👤 **Name:** ${profile?.full_name || 'User'}
+🎭 **Role:** ${profile?.role || 'Investor'}
+💎 **Trust Score:** ${profile?.trust_score || 0}/100
+💰 **Wallet:** ${available.toFixed(2)} FC Available | ${locked.toFixed(2)} FC Locked
+💼 **Portfolio:**
+${portfolioSummary}
+`;
+        }
+      } catch (e) { console.log("User Context Error:", e); }
+    }
+
+    // ============================================================
+    // 5. CAMPAIGN DEEP DIVE (Current Page Knowledge)
+    // ============================================================
+    let deepDiveContext = "";
+    if (campaignId) {
+      try {
+        const { data: campaign } = await supabase.from("campaigns").select("*").eq("id", campaignId).single();
+        const { data: milestones } = await supabase.from("milestones").select("*").eq("campaign_id", campaignId).order("order_index");
+
+        if (campaign) {
+          const milestoneList = milestones?.map((m, i) => 
+            `${i+1}. **${m.title}**: ${m.description} [Status: ${m.is_completed ? '✅ Done' : '⏳ Pending'}]`
+          ).join("\n");
+
+          deepDiveContext = `
+### CURRENT PROJECT CONTEXT (User is viewing this)
+Project: **${campaign.title}**
+Goal: ${campaign.funding_goal} FC | Raised: ${campaign.current_funding} FC
+Risk Assessment: ${campaign.final_risk_score || 'Pending'}
+Description: ${campaign.description}
+Roadmap:
+${milestoneList}
+`;
+        }
+      } catch (e) { console.log("Deep Dive Error:", e); }
+    }
+
+    // ============================================================
+    // 6. ACTIVE CAMPAIGNS (Real-Time Platform Data)
+    // ============================================================
+    let activeCampaignsInfo = "";
+    try {
+      const { data: activeCampaigns } = await supabase
+        .from("campaigns")
+        .select("id, title, description, final_risk_score, funding_goal, current_funding, status")
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (activeCampaigns && activeCampaigns.length > 0) {
+        activeCampaignsInfo = activeCampaigns.map((c, i) => 
+          `${i+1}. **${c.title}** (ID: ${c.id})\n   Goal: ${c.funding_goal} FC | Raised: ${c.current_funding} FC | Risk: ${c.final_risk_score || 'N/A'}`
+        ).join("\n");
+      } else {
+        activeCampaignsInfo = "No active campaigns currently available.";
+      }
+    } catch (e) {
+      console.log("Active Campaigns Fetch Error:", e);
+      activeCampaignsInfo = "Unable to fetch active campaigns.";
+    }
+
+    // ============================================================
+    // 7. RAG (Knowledge Retrieval)
+    // ============================================================
+    const lastUserMsg = messages.filter((m: Message) => m.role === "user").pop()?.content || "";
     let retrievedContext = "";
     
-    if (lastUserMessage) {
-      try {
-        // Call OpenRouter embedding API (text-embedding-3-small for consistent embeddings)
-        const embeddingResponse = await fetch(
-          "https://openrouter.ai/api/v1/embeddings",
-          {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${apiKey}`,
-              "Content-Type": "application/json",
-              "HTTP-Referer": "https://fundchain.app",
-              "X-Title": "FundChain RAG System",
-            },
-            body: JSON.stringify({
-              model: "openai/text-embedding-3-small",
-              input: lastUserMessage,
-            }),
-          }
-        );
+    if (lastUserMsg) {
+      const embResp = await fetch("https://openrouter.ai/api/v1/embeddings", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "openai/text-embedding-3-small", input: lastUserMsg })
+      });
+      const embData = await embResp.json();
+      const embedding = embData.data?.[0]?.embedding;
 
-        const embeddingData = await embeddingResponse.json();
-        const embedding = embeddingData.data?.[0]?.embedding;
-
-        if (embedding) {
-          // Perform vector search using Supabase RPC
-          const { data: documents, error: vectorError } = await supabase.rpc(
-            "match_documents",
-            {
-              query_embedding: embedding,
-              match_threshold: 0.3,
-              match_count: 3,
-            }
-          );
-
-          if (!vectorError && documents && documents.length > 0) {
-            // Format retrieved context with source citations
-            retrievedContext = (documents as Document[])
-              .map((doc: Document) => {
-                const source = doc.metadata?.document || 'Unknown Source';
-                return `[Source: ${source}]\n${doc.content}`;
-              })
-              .join("\n\n---\n\n");
-          }
-        }
-      } catch (vectorErr) {
-        console.error("Vector search failed:", vectorErr);
-        // Continue without RAG if vector search fails
+      if (embedding) {
+        const { data: docs } = await supabase.rpc("match_documents", { 
+          query_embedding: embedding, 
+          match_threshold: 0.3, 
+          match_count: 3 
+        });
+        retrievedContext = docs?.map((d: Document) => d.content).join("\n\n---\n\n") || "";
       }
     }
 
-    // Fetch active campaigns data
-    const { data: campaigns, error: dbError } = await supabase
-      .from("campaigns")
-      .select("title, funding_goal, status, categories(name)")
-      .eq("status", "active")
-      .limit(10);
+    // ============================================================
+    // 8. SYSTEM PROMPT & LLM CALL
+    // ============================================================
+    const systemPrompt = `You are FC AI, a Personal Financial Assistant for FundChain. 
 
-    let activeCampaignsInfo = "No active campaigns at the moment.";
-    
-    if (!dbError && campaigns && campaigns.length > 0) {
-      const campaignList = campaigns
-        .map((c) => {
-          const cats = c.categories as unknown;
-          let categoryName = "Uncategorized";
-          
-          // Handle both array and object cases
-          if (Array.isArray(cats) && cats.length > 0) {
-            categoryName = cats[0].name || "Uncategorized";
-          } else if (cats && typeof cats === 'object' && 'name' in cats) {
-            categoryName = (cats as { name: string }).name || "Uncategorized";
-          }
-          
-          return `${c.title} (${categoryName}, Goal: ${c.funding_goal} FC)`;
-        })
-        .join(", ");
-      activeCampaignsInfo = `Active Campaigns: ${campaignList}`;
-    }
+${userDossier}
+${deepDiveContext}
 
-    // Create payload with enhanced system message
-    const payload = [
-      {
-        role: "system",
-        content: `You are FC AI, an intelligent investment assistant for FundChain, a blockchain-based business crowdfunding platform. Your role is to help users understand investment opportunities, campaign details, and platform features.
-
-**FundChain Platform Rules & Features:**
-
-🪙 **Tokenomics:**
-- 1 SOL = 100 FC (FundChain Tokens)
-- FC tokens are used for all investments on the platform
-- Users can exchange SOL to FC and vice versa
-
-🔒 **Security - Milestone-Based Escrow:**
-- All investments are held in secure escrow smart contracts
-- Funds are ONLY released to creators when milestones are verified and approved
-- Investors can vote on milestone completion
-- This protects investors from scams and ensures accountability
-
-🎯 **AI Risk Detection:**
-- Every campaign is analyzed by our AI scam-detection system
-- Risk scores (Low, Medium, High) are assigned based on:
-  - Content plagiarism detection
-  - Creator wallet history analysis
-  - ML-based scam pattern recognition
-- Admin can manually override risk levels if needed
-
-📊 **Real-Time Platform Data:**
+📊 REAL-TIME PLATFORM DATA (Active Campaigns):
 ${activeCampaignsInfo}
 
-${retrievedContext ? `\n📚 **TECHNICAL CONTEXT:**\nThe following technical documentation provides specific details about the platform's architecture, limitations, and scope:\n\n${retrievedContext}\n\nUse this Technical Context to answer questions about the platform's architecture, limitations, specific features, and any scope details mentioned in the documents.\n` : ''}
+📚 KNOWLEDGE BASE:
+${retrievedContext}
 
-**Guidelines:**
-- Explain investment concepts and blockchain terminology in clear, accessible language
-- Reference the actual active campaigns listed above when users ask about opportunities
-- Always mention the tokenomics (1 SOL = 100 FC) when discussing investments
-- Emphasize the security of milestone-based escrow when discussing safety
-- Highlight the AI risk scoring system when discussing due diligence
-- When technical questions arise, use the Technical Context provided above
-- Provide neutral, educational information without offering financial advice
-- Never guarantee profits or promise investment returns
-- Acknowledge investment risks and encourage users to do their own research
-- Be concise, professional, and helpful
-- Direct users to consult financial advisors for personalized investment advice
+**CORE PERSONA:**
+- You are a helpful, protective investment guide.
+- **Tone:** Use simple analogies like "Digital Safe" for escrow and "Safety Check" for risk detection. Avoid tech jargon (RPC, HNSW, Smart Contracts).
+- **Briefness:** Start with a 2-line summary. Use detail only if asked.
+- **Rules:** 1 SOL = 100 FC. Reference the user's specific investments and balance from the Dossier.
+- **Formatting:** Use **Bold** for all numbers and key terms. Use bullet points for lists.
+- **Safety:** Always mention Milestone-Based Escrow and AI Risk scores when security is discussed.
+- **Call to Action:** Every response MUST end with a short "Next Step" question.
 
-Remember: You inform and educate, but users make their own investment decisions.`
+🚨 CRITICAL: NO HALLUCINATIONS
+- **NEVER** invent project names, campaigns, or data that doesn't appear in the sections above.
+- **DATA SOURCE:** Only suggest or discuss campaigns that appear in "REAL-TIME PLATFORM DATA" or "CURRENT PROJECT CONTEXT".
+- **FAILSAFE:** If activeCampaignsInfo says "No active campaigns" or is empty, tell the user: "I don't see any live campaigns in the database right now. Would you like to know how to create one?"
+- **VALIDATION:** If a user asks about "Campaign 1" or any specific project, check if it exists in the provided data. If NOT found, explain: "I can only see the campaigns currently live on FundChain. Here's what's available: [list from REAL-TIME PLATFORM DATA]."
+- **HONESTY:** If you don't have information, say "I don't have that information right now" instead of guessing.
+
+Remember: You inform and educate, but users make their own decisions.`;
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost",
+        "X-Title": "FC AI Assistant"
       },
-      ...messages  // Append the full conversation history
-    ];
-
-    const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "http://localhost",
-          "X-Title": "FC AI Chatbot"
-        },
-        body: JSON.stringify({
-          model,
-          messages: payload
-        })
-      }
-    );
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: systemPrompt }, ...messages]
+      })
+    });
 
     const data = await response.json();
-
-    return new Response(
-      JSON.stringify({
-        answer: data.choices?.[0]?.message?.content ?? "No response",
-        intent: "GENERAL",
-        timestamp: new Date().toISOString()
-      }),
-      { 
-        headers: { 
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        } 
-      }
-    );
+    return new Response(JSON.stringify({ 
+      answer: data.choices?.[0]?.message?.content ?? "No response",
+      timestamp: new Date().toISOString()
+    }), {
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+    });
 
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    return new Response(
-      JSON.stringify({
-        error: "Internal server error",
-        details: errorMessage
-      }),
-      { 
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      }
-    );
+    const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+    return new Response(JSON.stringify({ error: errorMessage }), { 
+      status: 500, 
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+    });
   }
 });

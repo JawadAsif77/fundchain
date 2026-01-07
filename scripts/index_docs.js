@@ -111,7 +111,7 @@ async function readDocxFile(filePath) {
 /**
  * Read and process a file (supports .md, .txt, .docx)
  */
-async function processFile(filePath, documentName) {
+async function processFile(filePath, documentName, priority = 'normal') {
   console.log(`\n📄 Processing: ${documentName}`);
   
   try {
@@ -148,6 +148,7 @@ async function processFile(filePath, documentName) {
             embedding: embedding,
             metadata: {
               document: documentName,
+              priority: priority,
               chunk_index: i,
               total_chunks: chunks.length,
               indexed_at: new Date().toISOString(),
@@ -211,19 +212,26 @@ async function main() {
   // Define documents to index
   const documents = [
     {
+      path: path.join(__dirname, '../Golden_Knowledge.md'),
+      name: 'Golden Knowledge Base',
+      priority: 'high',
+    },
+    {
       path: path.join(__dirname, '../README.md'),
       name: 'README',
+      priority: 'normal',
     },
     {
       path: path.join(__dirname, '../Scope Document.docx'),
       name: 'Scope Document',
+      priority: 'normal',
     },
   ];
   
   // Process each document
   for (const doc of documents) {
     if (fs.existsSync(doc.path)) {
-      await processFile(doc.path, doc.name);
+      await processFile(doc.path, doc.name, doc.priority || 'normal');
     } else {
       console.log(`⚠️  File not found: ${doc.path}`);
     }
