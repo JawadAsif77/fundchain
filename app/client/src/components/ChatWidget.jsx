@@ -127,17 +127,23 @@ export default function ChatWidget() {
     setIsLoading(true);
 
     try {
-      // Prepare chat history (last 5 messages for context)
-      const history = messages.slice(-5).map(msg => ({
-        role: msg.role,
-        content: msg.content,
-      }));
+      // Prepare full conversation history (last 10 messages for context)
+      // Include all previous messages plus the new user message
+      const conversationHistory = [
+        ...messages.slice(-10).map(msg => ({
+          role: msg.role,
+          content: msg.content,
+        })),
+        {
+          role: 'user',
+          content: textToSend,
+        }
+      ];
 
-      // Send message to API
+      // Send full message array to API
       const response = await sendChatMessage(
-        textToSend,
-        campaignContext?.identifier || null,
-        history
+        conversationHistory,
+        campaignContext?.identifier || null
       );
 
       // Add AI response to chat

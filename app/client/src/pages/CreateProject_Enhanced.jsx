@@ -142,7 +142,6 @@ const CreateProject = () => {
         .select('*')
         .eq('id', id)
         .eq('creator_id', user.id)
-        .eq('status', 'pending_review')
         .single();
 
       console.log('[Campaign Edit] Fetched campaign data:', campaign);
@@ -154,14 +153,21 @@ const CreateProject = () => {
         return;
       }
 
-      if (!campaign.is_updatable) {
-        setError('This campaign can no longer be updated');
+      // Only allow editing if status is pending_review or draft
+      if (!['pending_review', 'draft'].includes(campaign.status)) {
+        setError('This campaign can no longer be updated. Current status: ' + campaign.status);
+        navigate('/dashboard');
+        return;
+      }
+
+      if (campaign.is_updatable === false) {
+        setError('This campaign has been locked by admin and can no longer be updated');
         navigate('/dashboard');
         return;
       }
 
       // Load campaign data - mapping database fields correctly
-      setProjectData({
+      const loadedData = {
         title: campaign.title || '',
         slug: campaign.slug || '',
         summary: campaign.short_description || '',
@@ -215,7 +221,11 @@ const CreateProject = () => {
         legal_structure: campaign.legal_structure || '',
         registration_number: campaign.registration_number || '',
         tax_id: campaign.tax_id || ''
-      });
+      };
+
+      console.log('[Campaign Edit] Processed data to load:', loadedData);
+      
+      setProjectData(loadedData);
 
       // Load milestones - check both possible field names
       const { data: milestonesData } = await supabase
@@ -224,24 +234,31 @@ const CreateProject = () => {
         .eq('campaign_id', id)
         .order('order_index', { ascending: true });
 
+      console.log('[Campaign Edit] Raw milestones from DB:', milestonesData);
+
       if (milestonesData && milestonesData.length > 0) {
-        setMilestones(milestonesData.map(m => ({
+        const processedMilestones = milestonesData.map(m => ({
           name: m.title || m.name || '',  // DB field might be 'title'
           description: m.description || '',
           payoutPercentage: m.payout_percentage?.toString() || 
                            (m.target_amount && campaign.funding_goal 
                              ? ((m.target_amount / campaign.funding_goal) * 100).toFixed(2)
                              : '')
-        })));
+        }));
+        
+        console.log('[Campaign Edit] Processed milestones:', processedMilestones);
+        setMilestones(processedMilestones);
       }
-
-      console.log('[Campaign Edit] Milestones loaded:', milestonesData);
-      console.log('[Campaign Edit] Processed milestones:', milestones);
 
       setIsUpdating(true);
       setExistingCampaignId(id);
       
-      console.log('[Campaign Edit] Final projectData state:', projectData);
+      // Log after a brief delay to see the actual state
+      setTimeout(() => {
+        console.log('[Campaign Edit] State should be updated now');
+        console.log('[Campaign Edit] projectData after setState:', projectData);
+        console.log('[Campaign Edit] milestones after setState:', milestones);
+      }, 500);
       
     } catch (err) {
       console.error('[Campaign Edit] Error loading campaign:', err);
@@ -531,6 +548,12 @@ const CreateProject = () => {
     setError('');
 
     try {
+      console.log('[Campaign Submit] Starting submission...');
+      console.log('[Campaign Submit] isUpdating:', isUpdating);
+      console.log('[Campaign Submit] existingCampaignId:', existingCampaignId);
+      console.log('[Campaign Submit] Current projectData:', JSON.stringify(projectData, null, 2));
+      console.log('[Campaign Submit] Current milestones:', JSON.stringify(milestones, null, 2));
+
       const campaignData = {
         // Core required fields
         title: projectData.title,
@@ -584,6 +607,8 @@ const CreateProject = () => {
         tax_id: projectData.tax_id || null
       };
 
+      console.log('[Campaign Submit] Prepared campaignData:', JSON.stringify(campaignData, null, 2));
+
       if (isUpdating && existingCampaignId) {
         // Update existing campaign - include ALL fields from database schema
         const updateData = {
@@ -636,8 +661,11 @@ const CreateProject = () => {
           tax_id: projectData.tax_id || null,
           
           // Metadata
-          last_updated_at: new Date().toISOString()
+          last_updated_at: new Date().toISOString(),
+          update_count: supabase.rpc('increment', { x: 1 })  // Increment update counter
         };
+
+        console.log('[Campaign Update] Prepared updateData:', JSON.stringify(updateData, null, 2));
 
         const { error: updateError } = await supabase
           .from('campaigns')
@@ -645,11 +673,15 @@ const CreateProject = () => {
           .eq('id', existingCampaignId);
 
         if (updateError) {
-          console.error('Update error:', updateError);
+          console.error('[Campaign Update] Update error:', updateError);
           throw updateError;
         }
 
+        console.log('[Campaign Update] Campaign updated successfully');
+
         // Delete existing milestones and insert new ones
+        console.log('[Campaign Update] Deleting old milestones...');
+        
         await supabase
           .from('milestones')
           .delete()
@@ -660,24 +692,32 @@ const CreateProject = () => {
           title: m.name,
           description: m.description,
           target_amount: (parseFloat(projectData.goalAmount) * (parseFloat(m.payoutPercentage) / 100)),
+          payout_percentage: parseFloat(m.payoutPercentage),
           order_index: index,
           is_completed: false
         }));
+
+        console.log('[Campaign Update] Inserting new milestones:', JSON.stringify(milestonesData, null, 2));
 
         const { error: milestonesError } = await supabase
           .from('milestones')
           .insert(milestonesData);
 
         if (milestonesError) {
-          console.error('Milestones error:', milestonesError);
+          console.error('[Campaign Update] Milestones error:', milestonesError);
           throw milestonesError;
         }
 
+        console.log('[Campaign Update] All updates complete!');
         alert('Campaign updated successfully! Our team will review your changes.');
         navigate('/dashboard');
       } else {
         // Create new campaign
+        console.log('[Campaign Create] Creating new campaign...');
+        
         const result = await createProjectWithMilestones(campaignData, milestones);
+
+        console.log('[Campaign Create] Result:', result);
 
         if (result.success) {
           navigate('/dashboard', { state: { campaignSubmitted: true } });
@@ -686,8 +726,8 @@ const CreateProject = () => {
         }
       }
     } catch (err) {
-      console.error('Campaign submission error:', err);
-      setError('An unexpected error occurred');
+      console.error('[Campaign Submit] Error:', err);
+      setError('An unexpected error occurred: ' + (err.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }

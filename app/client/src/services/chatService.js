@@ -3,15 +3,14 @@ import { supabase } from '../lib/supabase.js';
 /**
  * Send a message to the AI chatbot
  * 
- * @param {string} message - The user's message
+ * @param {Array} messages - Array of message objects with role and content
  * @param {string|null} campaignId - Optional campaign ID for context
- * @param {Array} history - Optional chat history for context (last 5 messages)
  * @returns {Promise<Object>} Response object with answer, explanation, and intent
  * @throws {Error} If the request fails or user is not authenticated
  */
-export async function sendChatMessage(message, campaignId = null, history = []) {
+export async function sendChatMessage(messages, campaignId = null) {
   try {
-    console.log('💬 Sending chat message:', { message, campaignId, historyLength: history.length });
+    console.log('💬 Sending chat messages:', { messageCount: messages.length, campaignId });
 
     // Get current session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -20,19 +19,14 @@ export async function sendChatMessage(message, campaignId = null, history = []) 
       throw new Error('You must be logged in to use the chatbot');
     }
 
-    // Prepare request body
+    // Prepare request body with messages array
     const requestBody = {
-      message,
+      messages,  // Send full conversation history
     };
 
     // Add campaign context if provided
     if (campaignId) {
       requestBody.campaignId = campaignId;
-    }
-
-    // Add chat history if provided (last 5 messages only)
-    if (history && history.length > 0) {
-      requestBody.history = history.slice(-5);
     }
 
     // Call the chat_ai Edge Function
