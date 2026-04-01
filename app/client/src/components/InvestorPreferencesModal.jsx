@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../store/AuthContext';
 import { saveUserPreferences } from '../services/preferencesService';
-import { supabase as supabaseLib } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 const InvestorPreferencesModal = ({ onClose, onComplete }) => {
   const { user } = useAuth();
@@ -17,7 +17,11 @@ const InvestorPreferencesModal = ({ onClose, onComplete }) => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const { data, error } = await supabaseLib.categories.getAll();
+        const { data, error } = await supabase
+          .from('categories')
+          .select('*')
+          .order('name');
+        
         if (error) throw error;
         setCategories(data || []);
       } catch (err) {
