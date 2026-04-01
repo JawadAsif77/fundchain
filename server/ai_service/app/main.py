@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from typing import List
 import joblib
 import os
+import re
 from difflib import SequenceMatcher
 
 # ============================================================================
@@ -30,7 +31,7 @@ except Exception as e:
 app = FastAPI(
     title="FundChain AI Service",
     description="ML-powered scam detection, plagiarism checking, and risk analysis for investment projects",
-    version="1.0.0",
+    version="1.1.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -102,6 +103,67 @@ def compute_plagiarism_score(description: str, existing_descriptions: List[str])
     
     return round(max_similarity, 4)
 
+
+def compute_text_risk_signal(description: str) -> float:
+    """
+    Compute a heuristic text-risk signal from scam-like language patterns.
+
+    Signal components include:
+    - unrealistic return promises
+    - urgency language
+    - excessive hype formatting
+    - external contact pressure
+    """
+    text = (description or "").strip()
+    if not text:
+        return 0.0
+
+    normalized = text.lower()
+    signal = 0.0
+
+    high_risk_patterns = [
+        r"guaranteed\s+(profits?|returns?)",
+        r"\b(100|200|300|500|1000)%\b",
+        r"\bdouble\s+your\s+money\b",
+        r"\brisk[-\s]?free\b",
+        r"\bno\s+risk\b",
+    ]
+    medium_risk_patterns = [
+        r"\b(act now|limited time|urgent|last chance)\b",
+        r"\bsecret\s+strategy\b",
+        r"\binsider\s+tips?\b",
+        r"\bguaranteed\b",
+        r"\bmoon\b",
+        r"\bget rich quick\b",
+    ]
+
+    for pattern in high_risk_patterns:
+        if re.search(pattern, normalized):
+            signal += 0.14
+
+    for pattern in medium_risk_patterns:
+        if re.search(pattern, normalized):
+            signal += 0.07
+
+    uppercase_chars = sum(1 for char in text if char.isupper())
+    alpha_chars = sum(1 for char in text if char.isalpha())
+    caps_ratio = (uppercase_chars / alpha_chars) if alpha_chars > 0 else 0
+    if caps_ratio > 0.35:
+        signal += 0.08
+    elif caps_ratio > 0.22:
+        signal += 0.04
+
+    exclamation_count = text.count("!")
+    if exclamation_count >= 5:
+        signal += 0.07
+    elif exclamation_count >= 2:
+        signal += 0.03
+
+    if any(token in normalized for token in ["dm me", "telegram", "whatsapp", "signal me"]):
+        signal += 0.07
+
+    return round(min(signal, 1.0), 4)
+
 # ============================================================================
 # 5. Implement wallet risk scoring function
 # ============================================================================
@@ -143,7 +205,7 @@ async def root():
     return {
         "status": "online",
         "service": "FundChain AI Service",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "model_loaded": model is not None
     }
 
@@ -174,11 +236,12 @@ async def analyze_project(request: ProjectAnalysisRequest):
         )
     
     try:
-        # Step 1: Compute ML scam score using predict_proba
+        # Step 1: Compute model probability + heuristic text-risk signal
         # predict_proba returns probabilities for [legitimate, scam]
         # We take the scam probability (index 1)
-        ml_scam_prob = model.predict_proba([request.description])[0][1]
-        ml_scam_score = round(float(ml_scam_prob), 4)
+        ml_scam_prob = float(model.predict_proba([request.description])[0][1])
+        text_risk_signal = compute_text_risk_signal(request.description)
+        ml_scam_score = round(min((0.8 * ml_scam_prob) + (0.2 * text_risk_signal), 1.0), 4)
         
         # Step 2: Compute plagiarism score
         plagiarism_score = compute_plagiarism_score(

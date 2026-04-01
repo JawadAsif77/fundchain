@@ -8,6 +8,7 @@ import {
   scoreCategory,
   scoreRegion,
   scorePopularity,
+  scoreCollaborative,
   type RiskLevel,
 } from './scoring.ts'
 import { buildRecommendationExplanation } from './explain.ts'
@@ -185,6 +186,7 @@ Deno.serve(async (req) => {
       const campaigns = inv.campaigns as { category_id: string; location: string } | undefined
       return campaigns?.location
     }).filter(Boolean) || []
+    const userInvestedCampaignIds = (investments?.map(inv => inv.campaign_id).filter(Boolean) || []) as string[]
 
     // Combine with user preferences
     const preferredCategoryIds = [
@@ -197,6 +199,57 @@ Deno.serve(async (req) => {
     ]
 
     console.log(`User interests - Categories: ${preferredCategoryIds.length}, Regions: ${preferredRegions.length}`)
+
+    // ============================================================================
+    // 5.25. Collaborative filtering signal from similar investors
+    // ============================================================================
+    const peerCampaignSupport: Record<string, number> = {}
+    let maxPeerSupport = 0
+
+    if (userInvestedCampaignIds.length > 0) {
+      const { data: coInvestorRows, error: coInvestorError } = await supabase
+        .from('investments')
+        .select('investor_id, campaign_id')
+        .eq('status', 'confirmed')
+        .in('campaign_id', userInvestedCampaignIds)
+        .limit(500)
+
+      if (coInvestorError) {
+        console.error('Error fetching co-investors:', coInvestorError)
+      }
+
+      const peerInvestorIds = [...new Set(
+        (coInvestorRows || [])
+          .map(row => row.investor_id)
+          .filter((id): id is string => Boolean(id) && id !== user.id)
+      )]
+
+      if (peerInvestorIds.length > 0) {
+        const { data: peerInvestments, error: peerInvestmentsError } = await supabase
+          .from('investments')
+          .select('campaign_id')
+          .eq('status', 'confirmed')
+          .in('investor_id', peerInvestorIds)
+          .limit(1500)
+
+        if (peerInvestmentsError) {
+          console.error('Error fetching peer investments:', peerInvestmentsError)
+        }
+
+        const alreadyInvested = new Set(userInvestedCampaignIds)
+        for (const investment of peerInvestments || []) {
+          const campaignId = investment.campaign_id as string | null
+          if (!campaignId || alreadyInvested.has(campaignId)) continue
+          const nextCount = (peerCampaignSupport[campaignId] || 0) + 1
+          peerCampaignSupport[campaignId] = nextCount
+          if (nextCount > maxPeerSupport) {
+            maxPeerSupport = nextCount
+          }
+        }
+      }
+    }
+
+    console.log(`Collaborative signal - Campaigns: ${Object.keys(peerCampaignSupport).length}, Max support: ${maxPeerSupport}`)
 
     // ============================================================================
     // 5.5. Analyze user's interaction history (recommendation_events)
@@ -355,6 +408,8 @@ Deno.serve(async (req) => {
         const categoryScore = scoreCategory(campaign.category_id, mergedCategoryIds)
         const regionScore = scoreRegion(campaign.location, mergedRegions)
         const popularityScore = scorePopularity(campaign.investor_count || 0, fundingRatio)
+        const peerSupportCount = peerCampaignSupport[campaign.id] || 0
+        const collaborativeScore = scoreCollaborative(peerSupportCount, maxPeerSupport)
         
         // Apply behavioral boosts based on user's interaction history
         let boostedRiskScore = riskScore
@@ -381,7 +436,8 @@ Deno.serve(async (req) => {
           (boostedRiskScore * RECOMMENDATION_WEIGHTS.risk) +
           (boostedCategoryScore * RECOMMENDATION_WEIGHTS.category) +
           (boostedRegionScore * RECOMMENDATION_WEIGHTS.region) +
-          (popularityScore * RECOMMENDATION_WEIGHTS.popularity)
+          (popularityScore * RECOMMENDATION_WEIGHTS.popularity) +
+          (collaborativeScore * RECOMMENDATION_WEIGHTS.collaborative)
         ) * 100
         
         const { reasons, reason_tags } = buildRecommendationExplanation({
@@ -389,6 +445,7 @@ Deno.serve(async (req) => {
           regionScore,
           riskScore,
           popularityScore,
+          collaborativeScore,
           fundingRatio,
           campaignCategoryName: Array.isArray(campaign.categories)
             ? campaign.categories[0]?.name
@@ -396,6 +453,7 @@ Deno.serve(async (req) => {
           campaignLocation: campaign.location,
           campaignRiskLevel: campaign.risk_level,
           investorCount: campaign.investor_count || 0,
+          peerSupportCount,
         })
 
         return {
