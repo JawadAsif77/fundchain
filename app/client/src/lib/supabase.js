@@ -17,7 +17,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // Storage key for session
     storageKey: 'fundchain-auth',
     // Storage method
-    storage: window.localStorage,
+    storage: window.sessionStorage,
     // Flow type for OAuth
     flowType: 'pkce',
     // Refresh tokens 5 minutes before expiry
@@ -25,8 +25,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // Retry failed refresh attempts
     refreshTokenRetries: 3
   },
-  // Enable debug mode to see auth events
-  debug: import.meta.env.DEV
+  debug: false
 });
 
 // Export URL and key for edge function calls

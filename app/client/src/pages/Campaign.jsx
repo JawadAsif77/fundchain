@@ -28,6 +28,7 @@ const Campaign = () => {
   const [investmentLoading, setInvestmentLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [updatesKey, setUpdatesKey] = useState(0);
+  const [reanalysisLoading, setReanalysisLoading] = useState(false);
 
   const isCreator = userId === campaign?.creatorId;
   const isAdmin = profile?.role === 'admin';
@@ -65,6 +66,7 @@ const Campaign = () => {
           ml_scam_score: data.ml_scam_score,
           plagiarism_score: data.plagiarism_score,
           wallet_risk_score: data.wallet_risk_score,
+          onchain_risk_details: data.onchain_risk_details,
           creatorId: data.creator_id,
           // Enhanced fields
           campaign_image_url: data.campaign_image_url,
@@ -257,6 +259,22 @@ const Campaign = () => {
 
   const displayedRiskScore =
   campaign.manual_risk_level ? null : campaign.final_risk_score;
+
+  const handleReanalyze = async (analysisMode) => {
+    if (!campaign?.id) return;
+    const modeLabel = analysisMode === 'onchain_only' ? 'On-Chain Analysis' : 'Full Risk Analysis';
+    if (!confirm(`Run ${modeLabel} again for this campaign?`)) return;
+
+    try {
+      setReanalysisLoading(true);
+      await analyzeCampaignRisk(campaign.id, analysisMode);
+      alert(`✅ ${modeLabel} updated successfully.`);
+      window.location.reload();
+    } catch (err) {
+      alert(`❌ ${modeLabel} failed: ${err.message}`);
+      setReanalysisLoading(false);
+    }
+  };
 
   return (
     <div className="main">
@@ -919,6 +937,45 @@ const Campaign = () => {
                 AI Risk Analysis
               </h4>
 
+              {userId && (
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => handleReanalyze('full')}
+                    disabled={reanalysisLoading}
+                    style={{
+                      padding: '8px 12px',
+                      background: '#2563eb',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: reanalysisLoading ? 'not-allowed' : 'pointer',
+                      opacity: reanalysisLoading ? 0.7 : 1
+                    }}
+                  >
+                    {reanalysisLoading ? 'Analyzing...' : '🔁 Re-Run Full Analysis'}
+                  </button>
+                  <button
+                    onClick={() => handleReanalyze('onchain_only')}
+                    disabled={reanalysisLoading}
+                    style={{
+                      padding: '8px 12px',
+                      background: '#0f766e',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: reanalysisLoading ? 'not-allowed' : 'pointer',
+                      opacity: reanalysisLoading ? 0.7 : 1
+                    }}
+                  >
+                    {reanalysisLoading ? 'Analyzing...' : '⛓️ Re-Run On-Chain Only'}
+                  </button>
+                </div>
+              )}
+
               {campaign.analyzed_at ? (
                 <>
                   {/* Risk Level Badge */}
@@ -1004,6 +1061,74 @@ const Campaign = () => {
                             {(campaign.final_risk_score * 100).toFixed(1)}%
                           </span>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {campaign.onchain_risk_details && (
+                    <div style={{
+                      background: 'white',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      marginBottom: '12px',
+                      border: '1px solid #dbeafe'
+                    }}>
+                      <div style={{ fontSize: '13px', color: '#1e40af', marginBottom: '8px', fontWeight: '700' }}>
+                        On-Chain Due Diligence:
+                      </div>
+                      <div style={{ display: 'grid', gap: '8px', fontSize: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ color: '#6b7280' }}>On-Chain Risk Score:</span>
+                          <span style={{
+                            fontWeight: '700',
+                            color: (campaign.onchain_risk_details.riskScore || 0) > 66
+                              ? '#dc2626'
+                              : (campaign.onchain_risk_details.riskScore || 0) > 33
+                                ? '#f59e0b'
+                                : '#10b981'
+                          }}>
+                            {Number(campaign.onchain_risk_details.riskScore || 0).toFixed(0)}%
+                          </span>
+                        </div>
+
+                        {campaign.onchain_risk_details?.details?.walletAgeDays !== undefined && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#6b7280' }}>Wallet Age:</span>
+                            <span style={{ fontWeight: '600', color: '#111827' }}>
+                              {campaign.onchain_risk_details.details.walletAgeDays} days
+                            </span>
+                          </div>
+                        )}
+
+                        {campaign.onchain_risk_details?.details?.totalTransactions !== undefined && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#6b7280' }}>Total Transactions:</span>
+                            <span style={{ fontWeight: '600', color: '#111827' }}>
+                              {campaign.onchain_risk_details.details.totalTransactions}
+                            </span>
+                          </div>
+                        )}
+
+                        {campaign.onchain_risk_details?.details?.reputableInteractionsCount !== undefined && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#6b7280' }}>Reputable dApp Interactions:</span>
+                            <span style={{ fontWeight: '600', color: '#111827' }}>
+                              {campaign.onchain_risk_details.details.reputableInteractionsCount}
+                            </span>
+                          </div>
+                        )}
+
+                        {campaign.onchain_risk_details.explanation && (
+                          <div style={{
+                            marginTop: '4px',
+                            paddingTop: '8px',
+                            borderTop: '1px solid #e5e7eb',
+                            color: '#374151',
+                            lineHeight: 1.4
+                          }}>
+                            {campaign.onchain_risk_details.explanation}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

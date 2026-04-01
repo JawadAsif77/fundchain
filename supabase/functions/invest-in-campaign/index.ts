@@ -20,8 +20,17 @@ Deno.serve(async (req: Request) => {
       )
     }
 
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error('Missing Supabase env vars')
@@ -31,18 +40,24 @@ Deno.serve(async (req: Request) => {
       )
     }
 
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    })
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await authClient.auth.getUser(token)
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid authentication' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Parse and validate request body
     const body = await req.json()
-    const { userId, campaignId, amount } = body
-
-    if (!userId || typeof userId !== 'string') {
-      return new Response(
-        JSON.stringify({ success: false, error: 'userId is required and must be a string' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    const { campaignId, amount, amountFc } = body
+    const userId = user.id
 
     if (!campaignId || typeof campaignId !== 'string') {
       return new Response(
@@ -51,7 +66,7 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    const amountNum = Number(amount)
+    const amountNum = Number(amount ?? amountFc)
     if (!amountNum || amountNum <= 0) {
       return new Response(
         JSON.stringify({ success: false, error: 'amount must be a positive number' }),

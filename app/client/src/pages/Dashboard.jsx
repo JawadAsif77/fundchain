@@ -5,9 +5,11 @@ import CampaignCard from '../components/CampaignCard';
 import EmptyState from '../components/EmptyState';
 import RecommendedProjects from '../components/RecommendedProjects';
 import RecommendedProjectCard from '../components/RecommendedProjectCard';
+import InvestorPreferencesModal from '../components/InvestorPreferencesModal';
 import { campaignApi, investmentApi, withTimeout } from '../lib/api.js';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { supabase } from '../lib/supabase';
+import { getUserPreferences } from '../services/preferencesService';
 import TransactionHistory from '../components/TransactionHistory';
 
 // Connected Wallet Display Component
@@ -78,6 +80,8 @@ const Dashboard = () => {
   const [showApprovalBanner, setShowApprovalBanner] = useState(false);
   const [campaignWallets, setCampaignWallets] = useState({});
   const [campaignMilestones, setCampaignMilestones] = useState({});
+  const [showPreferencesModal, setShowPreferencesModal] = useState(false);
+  const [hasUserPreferences, setHasUserPreferences] = useState(true);
   const loadedRef = useRef(false);
 
   const navigate = useNavigate();
@@ -177,6 +181,29 @@ const Dashboard = () => {
       // Otherwise, let them access dashboard with appropriate warnings
     }
   }, [authLoading, user, profile, roleStatus, role, navigate, debug]);
+
+  // Check if investor has set their preferences
+  useEffect(() => {
+    if (!user?.id || !isInvestor || authLoading) return;
+
+    const checkPreferences = async () => {
+      try {
+        const prefs = await getUserPreferences(user.id);
+        if (!prefs) {
+          setHasUserPreferences(false);
+          setShowPreferencesModal(true);
+        } else {
+          setHasUserPreferences(true);
+          setShowPreferencesModal(false);
+        }
+      } catch (err) {
+        console.error('Error checking preferences:', err);
+        // Continue anyway
+      }
+    };
+
+    checkPreferences();
+  }, [user?.id, isInvestor, authLoading]);
 
   // Data loader for projects / investments
   useEffect(() => {
@@ -1258,6 +1285,17 @@ const Dashboard = () => {
             Dismiss
           </button>
         </div>
+      )}
+
+      {/* Investor Preferences Onboarding Modal */}
+      {showPreferencesModal && (
+        <InvestorPreferencesModal
+          onClose={() => setShowPreferencesModal(false)}
+          onComplete={() => {
+            setShowPreferencesModal(false);
+            setHasUserPreferences(true);
+          }}
+        />
       )}
 
       {/* Banner if any campaign is pending review */}

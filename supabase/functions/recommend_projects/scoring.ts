@@ -1,10 +1,11 @@
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH'
 
 export const RECOMMENDATION_WEIGHTS = {
-	risk: 0.4,
-	category: 0.25,
-	region: 0.15,
-	popularity: 0.2
+	risk: 0.32,
+	category: 0.22,
+	region: 0.12,
+	popularity: 0.14,
+	collaborative: 0.2
 }
 
 // Helper: Get risk level numeric value for comparisons.
@@ -89,4 +90,13 @@ export function scorePopularity(investorCount: number, fundingRatio: number): nu
 
 	// Combine both metrics (weighted average).
 	return (investorScore * 0.4) + (fundingScore * 0.6)
+}
+
+/**
+ * Score based on collaborative filtering signal (0-1).
+ * Uses peer support intensity for a campaign among similar investors.
+ */
+export function scoreCollaborative(peerSignal: number, maxPeerSignal: number): number {
+	if (maxPeerSignal <= 0) return 0.5 // Neutral in cold-start conditions
+	return Math.min(peerSignal / maxPeerSignal, 1.0)
 }

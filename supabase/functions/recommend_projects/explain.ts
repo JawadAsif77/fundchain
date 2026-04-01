@@ -5,11 +5,13 @@ export interface ExplainInputs {
 	regionScore: number
 	riskScore: number
 	popularityScore: number
+	collaborativeScore: number
 	fundingRatio: number
 	campaignCategoryName?: string
 	campaignLocation: string | null
 	campaignRiskLevel: RiskLevel | null
 	investorCount: number
+	peerSupportCount: number
 }
 
 const REASON_TAGS = {
@@ -17,7 +19,8 @@ const REASON_TAGS = {
 	mediumRisk: 'Medium risk profile',
 	regionMatch: 'Located in your preferred region',
 	categoryMatch: 'Matches your investment interests',
-	popularProject: 'Popular among investors'
+	popularProject: 'Popular among investors',
+	similarInvestors: 'Backed by similar investors'
 }
 
 export function buildRecommendationExplanation(inputs: ExplainInputs): {
@@ -29,15 +32,20 @@ export function buildRecommendationExplanation(inputs: ExplainInputs): {
 		regionScore,
 		riskScore,
 		popularityScore,
+		collaborativeScore,
 		fundingRatio,
 		campaignCategoryName,
 		campaignLocation,
 		campaignRiskLevel,
 		investorCount,
+		peerSupportCount,
 	} = inputs
 
 	// Generate human-readable reasons.
 	const reasons: string[] = []
+	if (collaborativeScore >= 0.7 && peerSupportCount > 0) {
+		reasons.push(`Investors with similar behavior backed this project (${peerSupportCount})`)
+	}
 	if (categoryScore === 1.0) {
 		reasons.push(`Matches your interest in ${campaignCategoryName || 'this category'}`)
 	}
@@ -57,10 +65,14 @@ export function buildRecommendationExplanation(inputs: ExplainInputs): {
 	// Generate reason tags (limit to 3).
 	const reason_tags: string[] = []
 
+	if (collaborativeScore >= 0.7 && reason_tags.length < 3) {
+		reason_tags.push(REASON_TAGS.similarInvestors)
+	}
+
 	// Add risk tag.
-	if (campaignRiskLevel === 'LOW') {
+	if (campaignRiskLevel === 'LOW' && reason_tags.length < 3) {
 		reason_tags.push(REASON_TAGS.lowRisk)
-	} else if (campaignRiskLevel === 'MEDIUM') {
+	} else if (campaignRiskLevel === 'MEDIUM' && reason_tags.length < 3) {
 		reason_tags.push(REASON_TAGS.mediumRisk)
 	}
 

@@ -28,10 +28,15 @@ const defaultRoleStatus = {
   kycStatus: 'not_started'
 };
 
+const isDev = process.env.NODE_ENV === 'development';
+const debugLog = (...args) => {
+  if (isDev) console.log(...args);
+};
+
 // HELPER: Safe cleanup that doesn't break the browser
 const clearAllAuthData = () => {
   if (typeof window === 'undefined') return;
-  console.log('🧹 Clearing auth data...');
+  debugLog('🧹 Clearing auth data...');
 
   try {
     // 1. Clear Supabase and App specific LocalStorage keys
@@ -52,7 +57,7 @@ const clearAllAuthData = () => {
       }
     });
   } catch (e) {
-    console.warn('[Auth] clearAllAuthData error:', e);
+    if (isDev) console.warn('[Auth] clearAllAuthData error:', e);
   }
 };
 
@@ -78,7 +83,7 @@ export const AuthProvider = ({ children }) => {
     
     // Check if this user already failed creation - prevent infinite retries
     if (failedUserCreationsRef.current.has(userId) && !sessionUser) {
-      console.log('[Auth] Skipping retry for user with failed creation:', userId);
+      debugLog('[Auth] Skipping retry for user with failed creation:', userId);
       setLoading(false);
       return;
     }
@@ -86,18 +91,18 @@ export const AuthProvider = ({ children }) => {
     fetchingUserDataRef.current = userId;
 
     try {
-      console.log('[Auth] Loading user data for:', userId);
+      debugLog('[Auth] Loading user data for:', userId);
       
       // Try to get existing profile from database
       const { data: existingProfile, error } = await userApi.getProfile(userId);
       
-      console.log('[Auth] Profile fetch result:', { existingProfile, error });
+      debugLog('[Auth] Profile fetch result:', { hasProfile: !!existingProfile, hasError: !!error });
       
       let userProfile = existingProfile;
       
       // If user doesn't exist in database, create them
       if (!existingProfile && sessionUser) {
-        console.log('[Auth] New user, creating profile...');
+        debugLog('[Auth] New user, creating profile...');
         
         // Generate base username
         let baseUsername = sessionUser.user_metadata?.username || 
@@ -115,27 +120,27 @@ export const AuthProvider = ({ children }) => {
           is_verified: 'no'
         };
         
-        console.log('[Auth] Creating user with username:', newUser.username);
+        debugLog('[Auth] Creating user with username:', newUser.username);
         
         let { data: createdUser, error: createError } = await userApi.createUser(newUser);
         
         // Handle username conflict - generate unique username
         if (createError?.code === '23505' && createError?.message?.includes('users_username_key')) {
-          console.log('[Auth] Username conflict detected, generating unique username...');
+          debugLog('[Auth] Username conflict detected, generating unique username...');
           
           // Try up to 5 times with random suffixes
           for (let attempt = 1; attempt <= 5; attempt++) {
             const randomSuffix = Math.floor(1000 + Math.random() * 9000);
             newUser.username = `${baseUsername}${randomSuffix}`;
             
-            console.log(`[Auth] Retry ${attempt}/5 with username:`, newUser.username);
+            debugLog(`[Auth] Retry ${attempt}/5 with username:`, newUser.username);
             
             const retry = await userApi.createUser(newUser);
             createdUser = retry.data;
             createError = retry.error;
             
             if (!createError) {
-              console.log('[Auth] Successfully created user with unique username:', newUser.username);
+              debugLog('[Auth] Successfully created user with unique username:', newUser.username);
               break;
             }
             
@@ -157,14 +162,13 @@ export const AuthProvider = ({ children }) => {
         }
         
         userProfile = createdUser;
-        console.log('[Auth] User created successfully:', userProfile);
+        debugLog('[Auth] User created successfully');
         
         // Clear from failed set if it was there
         failedUserCreationsRef.current.delete(userId);
       }
       
-      console.log('[Auth] Setting profile:', userProfile);
-      console.log('[Auth] Profile is_verified value:', userProfile?.is_verified, 'Type:', typeof userProfile?.is_verified);
+      debugLog('[Auth] Setting profile state');
       
       // Set profile state
       setProfile(userProfile);
@@ -172,7 +176,7 @@ export const AuthProvider = ({ children }) => {
       // Set role status
       if (userProfile) {
         const isVerified = userProfile.is_verified === 'verified';
-        console.log('[Auth] KYC Check - is_verified:', userProfile.is_verified, '- isVerified:', isVerified);
+        debugLog('[Auth] KYC check complete');
         const roleStatusValue = {
           ...defaultRoleStatus,
           hasRole: !!userProfile.role,
@@ -180,7 +184,7 @@ export const AuthProvider = ({ children }) => {
           isKYCVerified: isVerified,
           kycStatus: isVerified ? 'approved' : 'not_started'
         };
-        console.log('[Auth] Setting roleStatus:', roleStatusValue);
+        debugLog('[Auth] Setting roleStatus');
         setRoleStatus(roleStatusValue);
       }
       
@@ -190,14 +194,14 @@ export const AuthProvider = ({ children }) => {
           if (w.status === 'success') {
             setWallet({ balanceFc: w.balanceFc, lockedFc: w.lockedFc });
           }
-        }).catch(e => console.warn('Wallet load warning:', e));
+        }).catch(e => { if (isDev) console.warn('Wallet load warning:', e); });
       }
 
     } catch (e) {
       console.error('[Auth] loadUserData error:', e);
     } finally {
       fetchingUserDataRef.current = null;
-      console.log('[Auth] Setting loading to false');
+      debugLog('[Auth] Setting loading to false');
       setLoading(false);
     }
   }, []);
@@ -237,7 +241,7 @@ export const AuthProvider = ({ children }) => {
     // --- 3. AUTH LISTENER ---
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-      console.log(`[Auth] Auth Event: ${event}`);
+      debugLog(`[Auth] Auth Event: ${event}`);
 
       if (event === 'SIGNED_OUT' || !session) {
         setUser(null);
@@ -256,10 +260,10 @@ export const AuthProvider = ({ children }) => {
         // Only load user data on meaningful events, NOT on token refresh
         // TOKEN_REFRESHED happens every few seconds and doesn't mean user data changed
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-          console.log(`[Auth] Loading user data for event: ${event}`);
+          debugLog(`[Auth] Loading user data for event: ${event}`);
           loadUserData(session.user.id, session.user);
         } else {
-          console.log(`[Auth] Skipping data load for ${event} event - user data unchanged`);
+          debugLog(`[Auth] Skipping data load for ${event} event - user data unchanged`);
         }
       }
     });
@@ -298,7 +302,7 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback(async () => {
     try {
       await supabase.auth.signOut();
-    } catch (e) { console.warn('SignOut warning', e); }
+    } catch (e) { if (isDev) console.warn('SignOut warning', e); }
     
     clearAllAuthData();
     clearRequestCache();

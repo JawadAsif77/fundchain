@@ -126,7 +126,6 @@ export const userApi = {
   },
 
   async createUser(userData) {
-    console.log('[API] Creating user in public.users:', userData);
     const { data, error } = await supabase
       .from('users')
       .insert(userData)
@@ -135,7 +134,7 @@ export const userApi = {
     
     if (!error && data) {
       try {
-        supabase.functions.invoke('create-user-wallet', { body: { userId: data.id } });
+        supabase.functions.invoke('create-user-wallet');
       } catch(e) { console.warn('Wallet creation trigger failed', e); }
     }
     return { data, error };

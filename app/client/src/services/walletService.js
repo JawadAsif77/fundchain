@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase';
 const handleResponse = (data, error) => {
   if (error) {
     const msg = error.context?.message || error.message || 'Unknown error';
-    console.error('Wallet Service Error:', msg);
     return { success: false, error: msg };
   }
   return { success: true, data };
@@ -22,7 +21,6 @@ export async function getWallet(userId) {
     }
 
     const { data, error } = await supabase.functions.invoke('get-wallet', {
-      body: { userId },
       headers: {
         Authorization: `Bearer ${session.access_token}`
       }
@@ -45,7 +43,6 @@ export async function buyTokens(userId, usdAmount) {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError || !session) {
-      console.error('Session error:', sessionError);
       return { success: false, error: 'Please login again. Your session has expired.' };
     }
 
@@ -57,11 +54,8 @@ export async function buyTokens(userId, usdAmount) {
       return { success: false, error: 'Authentication failed. Please logout and login again.' };
     }
 
-    console.log('Making request with userId:', userId, 'amount:', usdAmount);
-
     const { data, error } = await supabase.functions.invoke('exchange-usd-to-fc', {
       body: { 
-        userId: userId,
         amountUsd: Number(usdAmount) 
       },
       headers: {
@@ -70,8 +64,6 @@ export async function buyTokens(userId, usdAmount) {
     });
 
     if (error) {
-      console.error('Edge Function error:', error);
-      
       // Handle 401 specifically
       if (error.status === 401 || error.message?.includes('401')) {
         return { success: false, error: 'Session expired. Please refresh the page and try again.' };
@@ -85,7 +77,6 @@ export async function buyTokens(userId, usdAmount) {
     
     return { success: true, ...data };
   } catch (err) {
-    console.error('buyTokens catch error:', err);
     return { success: false, error: err.message || 'An unexpected error occurred' };
   }
 }
@@ -116,7 +107,6 @@ export async function getTransactions(userId) {
     }
 
     const { data, error } = await supabase.functions.invoke('get-transactions', {
-      body: { userId },
       headers: {
         Authorization: `Bearer ${session.access_token}`
       }
@@ -128,7 +118,6 @@ export async function getTransactions(userId) {
     const txArray = data?.transactions || data?.data || (Array.isArray(data) ? data : []);
     return { success: true, data: txArray };
   } catch (err) {
-    console.error('Service tx error:', err);
     return { success: false, data: [], error: err.message };
   }
 }
