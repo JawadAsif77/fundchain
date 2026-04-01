@@ -91,8 +91,13 @@ const AdminPanel = () => {
         risk_level: c.risk_level,
         final_risk_score: c.final_risk_score,
         manual_risk_level: c.manual_risk_level,
+        manual_risk_reason: c.manual_risk_reason,
         analyzed_at: c.analyzed_at,
         created_at: c.created_at,
+        ml_scam_score: c.ml_scam_score,
+        plagiarism_score: c.plagiarism_score,
+        wallet_risk_score: c.wallet_risk_score,
+        onchain_risk_details: c.onchain_risk_details,
       }));
       setRiskCampaigns(mapped);
     } catch (err) {
@@ -100,6 +105,13 @@ const AdminPanel = () => {
     } finally {
       setRiskLoading(false);
     }
+  };
+
+  const getScoreColor = (score, isPercentage = false) => {
+    const normalized = isPercentage ? score / 100 : score;
+    if (normalized > 0.66) return '#dc2626';
+    if (normalized > 0.33) return '#f59e0b';
+    return '#10b981';
   };
 
   const handleHideQuestion = async (questionId, reportId) => {
@@ -1664,6 +1676,139 @@ const AdminPanel = () => {
                           </div>
                         ) : (
                           <p style={{ color: '#718096', fontSize: '14px' }}>Not analyzed yet</p>
+                        )}
+
+                        {campaign.manual_risk_level && campaign.manual_risk_reason && (
+                          <div style={{
+                            marginTop: '12px',
+                            padding: '10px 12px',
+                            borderRadius: '6px',
+                            border: '1px solid #fbbf24',
+                            background: '#fef3c7',
+                            color: '#92400e',
+                            fontSize: '12px'
+                          }}>
+                            <strong>Override reason:</strong> {campaign.manual_risk_reason}
+                          </div>
+                        )}
+
+                        {!campaign.manual_risk_level && campaign.analyzed_at && (
+                          <div style={{
+                            marginTop: '12px',
+                            background: 'white',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            border: '1px solid #e5e7eb'
+                          }}>
+                            <div style={{ fontSize: '13px', color: '#374151', marginBottom: '8px', fontWeight: '700' }}>
+                              AI Risk Components
+                            </div>
+                            <div style={{ display: 'grid', gap: '8px', fontSize: '12px' }}>
+                              {campaign.ml_scam_score !== null && campaign.ml_scam_score !== undefined && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ color: '#6b7280' }}>ML Scam Detection</span>
+                                  <span style={{ fontWeight: '700', color: getScoreColor(campaign.ml_scam_score) }}>
+                                    {(campaign.ml_scam_score * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                              )}
+                              {campaign.plagiarism_score !== null && campaign.plagiarism_score !== undefined && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ color: '#6b7280' }}>Content Plagiarism</span>
+                                  <span style={{ fontWeight: '700', color: getScoreColor(campaign.plagiarism_score) }}>
+                                    {(campaign.plagiarism_score * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                              )}
+                              {campaign.wallet_risk_score !== null && campaign.wallet_risk_score !== undefined && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ color: '#6b7280' }}>Legacy Wallet Risk</span>
+                                  <span style={{ fontWeight: '700', color: getScoreColor(campaign.wallet_risk_score) }}>
+                                    {(campaign.wallet_risk_score * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                              )}
+                              {campaign.final_risk_score !== null && campaign.final_risk_score !== undefined && (
+                                <div style={{
+                                  marginTop: '2px',
+                                  paddingTop: '8px',
+                                  borderTop: '1px solid #e5e7eb',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center'
+                                }}>
+                                  <span style={{ color: '#111827', fontWeight: '700' }}>Final Blended Risk</span>
+                                  <span style={{ fontWeight: '700', color: getScoreColor(campaign.final_risk_score) }}>
+                                    {(campaign.final_risk_score * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {!campaign.manual_risk_level && campaign.onchain_risk_details && (
+                          <div style={{
+                            marginTop: '12px',
+                            background: 'white',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            border: '1px solid #dbeafe'
+                          }}>
+                            <div style={{ fontSize: '13px', color: '#1e40af', marginBottom: '8px', fontWeight: '700' }}>
+                              On-Chain Due Diligence
+                            </div>
+                            <div style={{ display: 'grid', gap: '8px', fontSize: '12px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ color: '#6b7280' }}>On-Chain Risk Score</span>
+                                <span style={{
+                                  fontWeight: '700',
+                                  color: getScoreColor(Number(campaign.onchain_risk_details.riskScore || 0), true)
+                                }}>
+                                  {Number(campaign.onchain_risk_details.riskScore || 0).toFixed(0)}%
+                                </span>
+                              </div>
+
+                              {campaign.onchain_risk_details?.details?.walletAgeDays !== undefined && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ color: '#6b7280' }}>Wallet Age</span>
+                                  <span style={{ fontWeight: '600', color: '#111827' }}>
+                                    {campaign.onchain_risk_details.details.walletAgeDays} days
+                                  </span>
+                                </div>
+                              )}
+
+                              {campaign.onchain_risk_details?.details?.totalTransactions !== undefined && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ color: '#6b7280' }}>Total Transactions</span>
+                                  <span style={{ fontWeight: '600', color: '#111827' }}>
+                                    {campaign.onchain_risk_details.details.totalTransactions}
+                                  </span>
+                                </div>
+                              )}
+
+                              {campaign.onchain_risk_details?.details?.reputableInteractionsCount !== undefined && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ color: '#6b7280' }}>Reputable dApp Interactions</span>
+                                  <span style={{ fontWeight: '600', color: '#111827' }}>
+                                    {campaign.onchain_risk_details.details.reputableInteractionsCount}
+                                  </span>
+                                </div>
+                              )}
+
+                              {campaign.onchain_risk_details.explanation && (
+                                <div style={{
+                                  marginTop: '4px',
+                                  paddingTop: '8px',
+                                  borderTop: '1px solid #e5e7eb',
+                                  color: '#374151',
+                                  lineHeight: 1.4
+                                }}>
+                                  {campaign.onchain_risk_details.explanation}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
 
