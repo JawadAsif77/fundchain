@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import CampaignCard from '../components/CampaignCard';
 import { campaignApi } from '../lib/api';
 
 const Home = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [showChatbot, setShowChatbot] = useState(false);
   const [featuredCampaigns, setFeaturedCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    navigate('/tutorial', { replace: true });
+  }, [navigate]);
   
   // Fetch real campaigns from database
   useEffect(() => {

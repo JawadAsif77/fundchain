@@ -27,6 +27,7 @@ import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import RoleSelection from './components/RoleSelection';
+import TutorialPopup from './components/TutorialPopup';
 import Wallet from './pages/Wallet';
 import Portfolio from './pages/Portfolio';
 import HowItWorks from './pages/HowItWorks';
@@ -63,6 +64,9 @@ function App() {
                 </ProtectedRoute>
               } 
             />
+
+            {/* Dedicated full-screen tutorial route */}
+            <Route path="/tutorial" element={<TutorialPopup />} />
             
             {/* All other routes use the normal layout */}
             <Route 
