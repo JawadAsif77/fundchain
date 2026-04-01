@@ -1,15 +1,16 @@
 // @deno-types="https://esm.sh/v135/@supabase/supabase-js@2.38.4/dist/module/index.d.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
-
-// ============================================================================
-// Recommendation Weights
-// ============================================================================
-const RECOMMENDATION_WEIGHTS = {
-  risk: 0.4,
-  category: 0.25,
-  region: 0.15,
-  popularity: 0.2
-}
+import {
+  RECOMMENDATION_WEIGHTS,
+  getRiskValue,
+  passesRiskFilter,
+  scoreRisk,
+  scoreCategory,
+  scoreRegion,
+  scorePopularity,
+  type RiskLevel,
+} from './scoring.ts'
+import { buildRecommendationExplanation } from './explain.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,7 +20,6 @@ const corsHeaders = {
 // ============================================================================
 // Types
 // ============================================================================
-type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH'
 type FundingStage = 'early' | 'mid' | 'late'
 
 interface Filters {
@@ -63,182 +63,6 @@ function getFundingStage(currentFunding: number, fundingGoal: number): FundingSt
   if (progress < 0.33) return 'early'
   if (progress < 0.66) return 'mid'
   return 'late'
-}
-
-// ============================================================================
-// Helper: Get risk level numeric value for comparisons
-// ============================================================================
-function getRiskValue(level: RiskLevel | null): number {
-  if (!level) return 1 // Default to MEDIUM
-  if (level === 'LOW') return 0
-  if (level === 'MEDIUM') return 1
-  return 2 // HIGH
-}
-
-// ============================================================================
-// Helper: Check if campaign passes risk filter
-// ============================================================================
-function passesRiskFilter(
-  campaignRisk: RiskLevel | null,
-  userTolerance: RiskLevel,
-  maxRiskFilter?: RiskLevel
-): boolean {
-  // Apply user-specified max risk filter if provided
-  const effectiveMaxRisk = maxRiskFilter || userTolerance
-  
-  // If no risk level, allow it (will get penalty in scoring)
-  if (!campaignRisk) return true
-  
-  const campaignValue = getRiskValue(campaignRisk)
-  const maxValue = getRiskValue(effectiveMaxRisk)
-  
-  return campaignValue <= maxValue
-}
-
-// ============================================================================
-// Helper: Compute recommendation score and reasons
-// ============================================================================
-function computeRecommendation(
-  campaign: Campaign,
-  userPreferences: UserPreferences | null,
-  userCategoryIds: string[],
-  userRegions: string[],
-  filters?: Filters
-): { score: number; reasons: string[] } {
-  let score = 0
-  const reasons: string[] = []
-  
-  // Base score
-  score += 10
-  
-  // Category match (30 points)
-  if (userCategoryIds.includes(campaign.category_id)) {
-    score += 30
-    reasons.push(`Matches your interest in ${campaign.categories?.name || 'this category'}`)
-  }
-  
-  // Region match (20 points)
-  if (campaign.location && userRegions.includes(campaign.location)) {
-    score += 20
-    reasons.push(`Located in your preferred region: ${campaign.location}`)
-  }
-  
-  // Funding stage match (15 points)
-  if (filters?.funding_stage) {
-    const campaignStage = getFundingStage(campaign.current_funding, campaign.funding_goal)
-    if (campaignStage === filters.funding_stage) {
-      score += 15
-      reasons.push(`In ${campaignStage} funding stage as you prefer`)
-    }
-  }
-  
-  // Risk alignment (25 points max, penalty for higher risk)
-  const userRiskTolerance = userPreferences?.risk_tolerance || 'MEDIUM'
-  const campaignRiskValue = getRiskValue(campaign.risk_level)
-  const userRiskValue = getRiskValue(userRiskTolerance)
-  
-  if (campaign.risk_level) {
-    if (campaignRiskValue === userRiskValue) {
-      score += 25
-      reasons.push(`Risk level (${campaign.risk_level}) matches your tolerance`)
-    } else if (campaignRiskValue < userRiskValue) {
-      score += 15
-      reasons.push(`Lower risk (${campaign.risk_level}) than your tolerance`)
-    } else {
-      // Higher risk than tolerance - penalty
-      const penalty = (campaignRiskValue - userRiskValue) * 10
-      score -= penalty
-      reasons.push(`Higher risk level: ${campaign.risk_level}`)
-    }
-  } else {
-    reasons.push('Risk analysis pending')
-  }
-  
-  // Funding progress bonus (0-10 points) - campaigns with some traction
-  const progress = campaign.funding_goal > 0 
-    ? Math.min(campaign.current_funding / campaign.funding_goal, 1) 
-    : 0
-  
-  if (progress > 0.1 && progress < 0.8) {
-    const progressBonus = Math.floor(progress * 10)
-    score += progressBonus
-    reasons.push(`${Math.floor(progress * 100)}% funded - gaining traction`)
-  }
-  
-  return { score: Math.max(0, score), reasons }
-}
-
-// ============================================================================
-// Scoring Helper Functions
-// ============================================================================
-
-/**
- * Score based on risk alignment (0-1)
- * Returns 1 if project risk <= max risk, decreases for higher risk
- */
-function scoreRisk(projectRisk: RiskLevel | null, maxRisk: RiskLevel): number {
-  if (!projectRisk) return 0.5 // Neutral score for unanalyzed projects
-  
-  const projectValue = getRiskValue(projectRisk)
-  const maxValue = getRiskValue(maxRisk)
-  
-  if (projectValue <= maxValue) return 1.0
-  if (projectValue === maxValue + 1) return 0.3
-  return 0.0
-}
-
-/**
- * Score based on category match (0-1)
- * Returns 1 if category matches user preferences, 0 otherwise
- */
-function scoreCategory(projectCategory: string, preferredCategories: string[]): number {
-  if (preferredCategories.length === 0) return 0.5 // Neutral if no preferences
-  return preferredCategories.includes(projectCategory) ? 1.0 : 0.0
-}
-
-/**
- * Score based on region match (0-1)
- * Returns 1 if region matches, 0.5 if no region specified, 0 otherwise
- */
-function scoreRegion(projectRegion: string | null, userRegion: string[]): number {
-  if (!projectRegion) return 0.5 // Neutral if no region specified
-  if (userRegion.length === 0) return 0.5 // Neutral if user has no region preference
-  return userRegion.includes(projectRegion) ? 1.0 : 0.0
-}
-
-/**
- * Score based on popularity metrics (0-1)
- * Combines investor count and funding ratio
- */
-function scorePopularity(investorCount: number, fundingRatio: number): number {
-  // Normalize investor count (assume 50+ investors is max popularity)
-  const investorScore = Math.min(investorCount / 50, 1.0)
-  
-  // Funding ratio score (prefer 20-80% funded)
-  let fundingScore = 0
-  if (fundingRatio >= 0.2 && fundingRatio <= 0.8) {
-    fundingScore = 1.0
-  } else if (fundingRatio > 0.8) {
-    fundingScore = 0.5 // Nearly funded
-  } else if (fundingRatio > 0.1) {
-    fundingScore = 0.7 // Some traction
-  } else {
-    fundingScore = 0.3 // Very early
-  }
-  
-  // Combine both metrics (weighted average)
-  return (investorScore * 0.4) + (fundingScore * 0.6)
-}
-
-// ============================================================================
-// Reason Tags
-// ============================================================================
-const REASON_TAGS = {
-  lowRisk: 'Low risk profile',
-  mediumRisk: 'Medium risk profile',
-  regionMatch: 'Located in your preferred region',
-  categoryMatch: 'Matches your investment interests',
-  popularProject: 'Popular among investors'
 }
 
 Deno.serve(async (req) => {
@@ -513,14 +337,14 @@ Deno.serve(async (req) => {
     // ============================================================================
     // 8. Filter by risk level and compute scores
     // ============================================================================
-    const scoredCampaigns = campaigns
-      .filter(campaign => 
-        passesRiskFilter(
-          campaign.risk_level,
-          userRiskTolerance,
-          filters.max_risk_level
-        )
+    const riskFilteredCampaigns = campaigns.filter(campaign => 
+      passesRiskFilter(
+        campaign.risk_level,
+        userRiskTolerance,
+        filters.max_risk_level
       )
+    )
+    const scoredCampaigns = riskFilteredCampaigns
       .map(campaign => {
         // Compute weighted recommendation score using new scoring functions
         const fundingRatio = campaign.funding_goal > 0 
@@ -560,48 +384,19 @@ Deno.serve(async (req) => {
           (popularityScore * RECOMMENDATION_WEIGHTS.popularity)
         ) * 100
         
-        // Generate human-readable reasons
-        const reasons: string[] = []
-        if (categoryScore === 1.0) {
-          reasons.push(`Matches your interest in ${campaign.categories?.name || 'this category'}`)
-        }
-        if (regionScore === 1.0) {
-          reasons.push(`Located in your preferred region: ${campaign.location}`)
-        }
-        if (riskScore === 1.0) {
-          reasons.push(`Risk level (${campaign.risk_level}) matches your tolerance`)
-        }
-        if (fundingRatio > 0.2 && fundingRatio < 0.8) {
-          reasons.push(`${Math.floor(fundingRatio * 100)}% funded - gaining traction`)
-        }
-        if ((campaign.investor_count || 0) > 10) {
-          reasons.push(`Popular with ${campaign.investor_count} investors`)
-        }
-
-        // Generate reason tags (limit to 3)
-        const reason_tags: string[] = []
-        
-        // Add risk tag
-        if (campaign.risk_level === 'LOW') {
-          reason_tags.push(REASON_TAGS.lowRisk)
-        } else if (campaign.risk_level === 'MEDIUM') {
-          reason_tags.push(REASON_TAGS.mediumRisk)
-        }
-        
-        // Add category match tag
-        if (categoryScore === 1.0 && reason_tags.length < 3) {
-          reason_tags.push(REASON_TAGS.categoryMatch)
-        }
-        
-        // Add region match tag
-        if (regionScore === 1.0 && reason_tags.length < 3) {
-          reason_tags.push(REASON_TAGS.regionMatch)
-        }
-        
-        // Add popularity tag
-        if (popularityScore > 0.6 && reason_tags.length < 3) {
-          reason_tags.push(REASON_TAGS.popularProject)
-        }
+        const { reasons, reason_tags } = buildRecommendationExplanation({
+          categoryScore,
+          regionScore,
+          riskScore,
+          popularityScore,
+          fundingRatio,
+          campaignCategoryName: Array.isArray(campaign.categories)
+            ? campaign.categories[0]?.name
+            : campaign.categories?.name,
+          campaignLocation: campaign.location,
+          campaignRiskLevel: campaign.risk_level,
+          investorCount: campaign.investor_count || 0,
+        })
 
         return {
           campaign: {
@@ -642,7 +437,7 @@ Deno.serve(async (req) => {
         user_id: user.id,
         campaign_id: rec.campaign.id,
         event_type: 'impression',
-        source: 'module11',
+        source: 'campaign_card',
         metadata: {
           score: rec.score,
           position: topRecommendations.indexOf(rec) + 1
