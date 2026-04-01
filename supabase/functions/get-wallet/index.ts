@@ -13,28 +13,42 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Initialize Supabase client with service role key
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    // Parse request body
-    const body = await req.json()
-    const userId = body.userId
-
-    // Validate input
-    if (!userId || typeof userId !== 'string') {
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ 
-          error: 'Invalid request: userId is required and must be a string' 
-        }),
-        { 
-          status: 400,
+        JSON.stringify({ error: 'Missing authorization header' }),
+        {
+          status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
+
+    // Validate JWT and derive user id from token
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    })
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await authClient.auth.getUser(token)
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication' }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    // Initialize Supabase client with service role key
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    const userId = user.id
 
     // Query wallets table
     const { data: wallet, error: walletError } = await supabase
@@ -77,10 +91,7 @@ Deno.serve(async (req) => {
     console.error('Error in get-wallet:', err)
     
     return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error',
-        message: String(err)
-      }),
+      JSON.stringify({ error: 'Internal server error' }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
