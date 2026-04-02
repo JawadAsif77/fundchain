@@ -20,10 +20,19 @@ Deno.serve(async (req: Request) => {
       )
     }
 
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
       console.error('Missing Supabase env vars')
       return new Response(
         JSON.stringify({ success: false, error: 'Server misconfigured' }),
@@ -31,18 +40,24 @@ Deno.serve(async (req: Request) => {
       )
     }
 
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    })
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await authClient.auth.getUser(token)
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid authentication' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Parse and validate request body
     const body = await req.json()
-    const { adminId, campaignId, milestoneId, amountFc, notes } = body
-
-    if (!adminId || typeof adminId !== 'string') {
-      return new Response(
-        JSON.stringify({ success: false, error: 'adminId is required and must be a string' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    const { campaignId, milestoneId, amountFc, notes } = body
+    const adminId = user.id
 
     if (!campaignId || typeof campaignId !== 'string') {
       return new Response(

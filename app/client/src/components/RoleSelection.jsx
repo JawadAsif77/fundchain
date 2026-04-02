@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
-import { userApi } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import Loader from './Loader';
 import './RoleSelection.css';
 
@@ -47,11 +47,26 @@ const RoleSelection = () => {
     setError('');
 
     try {
-      // Update user role in database
-      const result = await userApi.updateProfile(user.id, { role: selectedRole });
-      
-      if (result.error) {
-        throw new Error(result.error.message || 'Failed to update role');
+      // Get session and call edge function to update role
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/update-user-role`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ role: selectedRole })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to update role');
       }
 
       // Refresh user profile to get updated role

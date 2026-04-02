@@ -11,6 +11,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { supabase } from '../lib/supabase';
 import { getUserPreferences } from '../services/preferencesService';
 import TransactionHistory from '../components/TransactionHistory';
+import { useEscrowActions } from '../hooks/useEscrowActions';
 
 // Connected Wallet Display Component
 const ConnectedWalletDisplay = () => {
@@ -67,10 +68,18 @@ const Dashboard = ({ tutorialRefs = {} }) => {
   const {
     user,
     profile,
+    wallet,
+    refreshWallet,
     roleStatus,
     loading: authLoading,
     sessionVersion
   } = useAuth();
+
+  const {
+    withdrawCreatorFundsToSol,
+    withdrawLoading,
+    withdrawError
+  } = useEscrowActions();
 
   const [projects, setProjects] = useState([]);
   const [investments, setInvestments] = useState([]);
@@ -82,6 +91,8 @@ const Dashboard = ({ tutorialRefs = {} }) => {
   const [campaignMilestones, setCampaignMilestones] = useState({});
   const [showPreferencesModal, setShowPreferencesModal] = useState(false);
   const [hasUserPreferences, setHasUserPreferences] = useState(true);
+  const [withdrawAmountFc, setWithdrawAmountFc] = useState('');
+  const [withdrawSuccessMsg, setWithdrawSuccessMsg] = useState('');
   const loadedRef = useRef(false);
 
   const navigate = useNavigate();
@@ -89,9 +100,10 @@ const Dashboard = ({ tutorialRefs = {} }) => {
   const debug = import.meta.env.DEV;
 
   // Determine user role first
-  const role = roleStatus?.role || 'investor';
+  const role = roleStatus?.role ?? profile?.role ?? null;
   const isCreator = role === 'creator';
   const isInvestor = role === 'investor';
+  const getInvestorPrefsSeenKey = (userId) => `investor_prefs_seen_${userId}`;
   const kycStatus = roleStatus?.kycStatus;
   const isVerified =
     roleStatus?.isKYCVerified || profile?.is_verified === 'yes' || false;
@@ -144,13 +156,13 @@ const Dashboard = ({ tutorialRefs = {} }) => {
       return;
     }
 
-    // If no explicit role but inferred investor, allow
-    if (!roleStatus.hasRole && role !== 'investor') {
+    // If no role selected, force role selection
+    if (!roleStatus.hasRole) {
       if (debug)
         console.log(
-          '[Dashboard] No explicit creator/admin role, redirecting to /profile'
+          '[Dashboard] No role selected, redirecting to /role-selection'
         );
-      navigate('/profile', { replace: true });
+      navigate('/role-selection', { replace: true });
       return;
     }
 
@@ -188,13 +200,23 @@ const Dashboard = ({ tutorialRefs = {} }) => {
 
     const checkPreferences = async () => {
       try {
+        const seenKey = getInvestorPrefsSeenKey(user.id);
+        const hasSeenPreferencesModal = localStorage.getItem(seenKey) === 'true';
+
+        if (hasSeenPreferencesModal) {
+          setShowPreferencesModal(false);
+          return;
+        }
+
         const prefs = await getUserPreferences(user.id);
         if (!prefs) {
           setHasUserPreferences(false);
           setShowPreferencesModal(true);
+          localStorage.setItem(seenKey, 'true');
         } else {
           setHasUserPreferences(true);
           setShowPreferencesModal(false);
+          localStorage.setItem(seenKey, 'true');
         }
       } catch (err) {
         console.error('Error checking preferences:', err);
@@ -409,6 +431,25 @@ const Dashboard = ({ tutorialRefs = {} }) => {
         : 50,
       region: c.location || 'Not specified'
     };
+  };
+
+  const handleCreatorWithdraw = async () => {
+    const amount = Number(withdrawAmountFc);
+    if (!amount || amount <= 0) {
+      return;
+    }
+
+    try {
+      setWithdrawSuccessMsg('');
+      const result = await withdrawCreatorFundsToSol(amount);
+      setWithdrawSuccessMsg(
+        `Withdrawal request submitted: ${result.amountFc} FC → ${result.amountSol} SOL (Status: ${result.status})`
+      );
+      setWithdrawAmountFc('');
+      await refreshWallet();
+    } catch (_err) {
+      // handled by hook state
+    }
   };
 
   const adaptInvestmentForCard = (investment) => {
@@ -796,7 +837,7 @@ const Dashboard = ({ tutorialRefs = {} }) => {
     return (
     <div>
       {/* Creator Wallet Section */}
-      {profile?.wallet && (
+      {wallet && (
         <div style={{
           backgroundColor: 'var(--color-white)',
           padding: '24px',
@@ -823,7 +864,7 @@ const Dashboard = ({ tutorialRefs = {} }) => {
                 Available Balance
               </div>
               <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#29C7AC' }}>
-                {profile.wallet.balance_fc?.toLocaleString() || 0} FC
+                {wallet.balanceFc?.toLocaleString() || 0} FC
               </div>
             </div>
             <div>
@@ -831,9 +872,61 @@ const Dashboard = ({ tutorialRefs = {} }) => {
                 Locked (Escrowed)
               </div>
               <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#f59e0b' }}>
-                {profile.wallet.locked_fc?.toLocaleString() || 0} FC
+                {wallet.lockedFc?.toLocaleString() || 0} FC
               </div>
             </div>
+          </div>
+          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--color-border)' }}>
+            <div style={{ fontSize: '14px', color: 'var(--color-muted)', marginBottom: '8px' }}>
+              Withdraw FC to Solana Wallet
+            </div>
+            {profile?.wallet_address ? (
+              <div style={{ fontSize: '12px', color: 'var(--color-muted)', marginBottom: '12px' }}>
+                Destination: {profile.wallet_address.slice(0, 6)}...{profile.wallet_address.slice(-6)}
+              </div>
+            ) : (
+              <div style={{ fontSize: '12px', color: '#ef4444', marginBottom: '12px' }}>
+                Link your Solana wallet first to withdraw.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="number"
+                min="1"
+                value={withdrawAmountFc}
+                onChange={(e) => setWithdrawAmountFc(e.target.value)}
+                placeholder="Amount FC"
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--color-border)',
+                  minWidth: '160px'
+                }}
+              />
+              <button
+                onClick={handleCreatorWithdraw}
+                disabled={!profile?.wallet_address || withdrawLoading || !withdrawAmountFc}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#29C7AC',
+                  color: 'white',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  opacity: (!profile?.wallet_address || withdrawLoading || !withdrawAmountFc) ? 0.6 : 1
+                }}
+              >
+                {withdrawLoading ? 'Submitting...' : 'Withdraw to SOL'}
+              </button>
+            </div>
+            {withdrawError && (
+              <div style={{ marginTop: '10px', fontSize: '12px', color: '#ef4444' }}>{withdrawError}</div>
+            )}
+            {withdrawSuccessMsg && (
+              <div style={{ marginTop: '10px', fontSize: '12px', color: '#16a34a' }}>{withdrawSuccessMsg}</div>
+            )}
           </div>
           <p style={{ fontSize: '12px', color: 'var(--color-muted)', marginTop: '12px', fontStyle: 'italic' }}>
             ℹ️ Available FC includes released milestone funds. Check individual campaigns for escrow details.
@@ -1292,8 +1385,16 @@ const Dashboard = ({ tutorialRefs = {} }) => {
       {/* Investor Preferences Onboarding Modal */}
       {showPreferencesModal && (
         <InvestorPreferencesModal
-          onClose={() => setShowPreferencesModal(false)}
+          onClose={() => {
+            if (user?.id) {
+              localStorage.setItem(getInvestorPrefsSeenKey(user.id), 'true');
+            }
+            setShowPreferencesModal(false);
+          }}
           onComplete={() => {
+            if (user?.id) {
+              localStorage.setItem(getInvestorPrefsSeenKey(user.id), 'true');
+            }
             setShowPreferencesModal(false);
             setHasUserPreferences(true);
           }}

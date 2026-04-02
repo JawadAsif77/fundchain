@@ -126,18 +126,33 @@ export const userApi = {
   },
 
   async createUser(userData) {
-    const { data, error } = await supabase
-      .from('users')
-      .insert(userData)
-      .select('*')
-      .single();
-    
-    if (!error && data) {
-      try {
-        supabase.functions.invoke('create-user-wallet');
-      } catch(e) { console.warn('Wallet creation trigger failed', e); }
+    // Use edge function instead of direct insert to bypass RLS recursion
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        return { data: null, error: { message: 'Not authenticated' } };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-user-profile`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(userData)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return { data: null, error: { message: result.error, code: result.code } };
+      }
+
+      return { data: result.data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: error.message } };
     }
-    return { data, error };
   },
 
   async updateWalletAddress(userId, address) {

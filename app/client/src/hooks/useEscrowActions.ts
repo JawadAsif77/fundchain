@@ -74,6 +74,21 @@ interface RefundResponse {
   details?: string;
 }
 
+interface WithdrawCreatorResponse {
+  success: boolean;
+  amountFc?: number;
+  amountSol?: number;
+  exchangeRate?: number;
+  destinationWallet?: string;
+  status?: string;
+  txSignature?: string;
+  wallet?: {
+    balance_fc: number;
+    locked_fc: number;
+  };
+  error?: string;
+}
+
 export const useEscrowActions = () => {
   const { user } = useAuth() as { user: { id: string } | null };
   
@@ -85,6 +100,8 @@ export const useEscrowActions = () => {
   
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundError, setRefundError] = useState<string | null>(null);
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
   const getSupabaseUrl = () => {
     const url = (import.meta as any).env.VITE_SUPABASE_URL as string;
@@ -131,7 +148,6 @@ export const useEscrowActions = () => {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            userId: user.id,
             campaignId,
             amount,
           }),
@@ -183,7 +199,6 @@ export const useEscrowActions = () => {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            adminId: user.id,
             campaignId,
             milestoneId,
             amountFc,
@@ -234,7 +249,6 @@ export const useEscrowActions = () => {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            adminId: user.id,
             campaignId,
             reason,
           }),
@@ -259,6 +273,45 @@ export const useEscrowActions = () => {
     }
   };
 
+  const withdrawCreatorFundsToSol = async (amountFc: number): Promise<WithdrawCreatorResponse> => {
+    setWithdrawLoading(true);
+    setWithdrawError(null);
+
+    try {
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      const supabaseUrl = getSupabaseUrl();
+      const headers = await getAuthHeaders();
+
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/withdraw-fc-to-sol`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ amountFc })
+        }
+      );
+
+      const result: WithdrawCreatorResponse = await response.json();
+
+      if (!response.ok || !result.success) {
+        const errorMsg = result.error || 'Creator withdraw failed';
+        setWithdrawError(errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      return result;
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error occurred';
+      setWithdrawError(errorMsg);
+      throw err;
+    } finally {
+      setWithdrawLoading(false);
+    }
+  };
+
   return {
     // Investment
     investInCampaign,
@@ -274,5 +327,10 @@ export const useEscrowActions = () => {
     refundCampaignInvestors,
     refundLoading,
     refundError,
+
+    // Creator withdraw
+    withdrawCreatorFundsToSol,
+    withdrawLoading,
+    withdrawError,
   };
 };
