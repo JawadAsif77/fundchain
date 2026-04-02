@@ -4,7 +4,7 @@ import { useAuth } from '../store/AuthContext';
 import { supabase } from '../lib/supabase';
 import WalletButton from './WalletButton';
 
-const Header = () => {
+const Header = ({ tutorialRefs = {} }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, profile, logout, validateSession } = useAuth();
   const location = useLocation();
@@ -95,6 +95,7 @@ const Header = () => {
           }}>
             <Link 
               to="/explore" 
+              ref={tutorialRefs.opportunitiesRef || null}
               style={{
                 color: isActiveLink('/explore') ? 'var(--color-primary)' : 'var(--color-text)',
                 fontWeight: 'var(--font-semibold)',
@@ -109,6 +110,7 @@ const Header = () => {
             
             <Link 
               to="/how-it-works"
+              ref={tutorialRefs.howItWorksRef || null}
               style={{
                 color: isActiveLink('/how-it-works') ? 'var(--color-primary)' : 'var(--color-text)',
                 fontWeight: 'var(--font-semibold)',
@@ -122,6 +124,7 @@ const Header = () => {
             
             <Link 
               to="/governance"
+              ref={tutorialRefs.governanceRef || null}
               style={{
                 color: isActiveLink('/governance') ? 'var(--color-primary)' : 'var(--color-text)',
                 fontWeight: 'var(--font-semibold)',
@@ -135,6 +138,7 @@ const Header = () => {
             
             <Link 
               to="/analytics"
+              ref={tutorialRefs.analyticsRef || null}
               style={{
                 color: isActiveLink('/analytics') ? 'var(--color-primary)' : 'var(--color-text)',
                 fontWeight: 'var(--font-semibold)',
@@ -149,6 +153,7 @@ const Header = () => {
             {user && (
               <Link
                 to="/dashboard"
+                ref={tutorialRefs.dashboardNavRef || null}
                 style={{
                   color: isActiveLink('/dashboard') ? 'var(--color-primary)' : 'var(--color-text)',
                   fontWeight: 'var(--font-semibold)',
@@ -216,6 +221,7 @@ const Header = () => {
                 {profile?.role !== 'admin' && (
                   <Link
                     to="/wallet"
+                    ref={tutorialRefs.walletNavRef || null}
                     className="btn btn--ghost btn--sm"
                     onClick={closeMobileMenu}
                     style={{ display: 'none' }}
@@ -226,6 +232,7 @@ const Header = () => {
                 )}
                 <Link
                   to="/profile"
+                  ref={tutorialRefs.profileNavRef || null}
                   className="btn btn--ghost btn--sm"
                   onClick={closeMobileMenu}
                   style={{ display: 'none' }}

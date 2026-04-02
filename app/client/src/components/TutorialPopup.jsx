@@ -125,20 +125,20 @@ export default function TutorialPopup() {
   }, [navigate, step]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 backdrop-blur-sm sm:p-4">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-slate-950/80 p-2 backdrop-blur-sm sm:p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.32, ease: 'easeOut' }}
-        className="relative h-[calc(100vh-16px)] w-[calc(100vw-16px)] overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl sm:h-[calc(100vh-32px)] sm:w-[calc(100vw-32px)] sm:p-8 lg:p-10"
+        className="relative h-[calc(100vh-16px)] w-[calc(100vw-16px)] overflow-hidden rounded-3xl border border-slate-300 bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.28)] sm:h-[calc(100vh-32px)] sm:w-[calc(100vw-32px)] sm:p-8 lg:p-10"
       >
-        <div className="pointer-events-none absolute -left-24 -top-20 h-56 w-56 rounded-full bg-slate-200 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-28 -right-20 h-64 w-64 rounded-full bg-emerald-100 blur-3xl" />
+        <div className="pointer-events-none absolute -left-24 -top-20 h-56 w-56 rounded-full bg-slate-300/70 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-28 -right-20 h-64 w-64 rounded-full bg-emerald-200/70 blur-3xl" />
 
         <button
           type="button"
           onClick={finishTutorial}
-          className="absolute right-5 top-5 text-xs font-semibold uppercase tracking-wide text-slate-500 transition-colors hover:text-slate-700 sm:right-8 sm:top-8"
+          className="absolute right-5 top-5 text-xs font-semibold uppercase tracking-wide text-slate-600 transition-colors hover:text-slate-800 sm:right-8 sm:top-8"
         >
           Skip Tutorial
         </button>
@@ -157,11 +157,11 @@ export default function TutorialPopup() {
               >
                 <div className="mb-6 text-7xl leading-none sm:text-8xl">{currentSlide.icon}</div>
 
-                <h2 className="mb-5 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+                <h2 className="mb-5 text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
                   {currentSlide.title}
                 </h2>
 
-                <p className="max-w-3xl text-base leading-8 text-slate-700 sm:text-lg">
+                <p className="max-w-3xl text-base leading-8 text-slate-800 sm:text-lg">
                   {currentSlide.description}
                 </p>
               </motion.div>
@@ -169,7 +169,7 @@ export default function TutorialPopup() {
           </div>
 
           <div className="pt-5 sm:pt-7">
-            <div className="mb-5 flex items-center justify-center text-sm font-semibold text-slate-500">
+            <div className="mb-5 flex items-center justify-center text-sm font-semibold text-slate-600">
               {stepLabel}
             </div>
 
@@ -185,7 +185,7 @@ export default function TutorialPopup() {
                       opacity: isActive ? 1 : 0.45,
                     }}
                     transition={{ duration: 0.22 }}
-                    className={`rounded-full ${isActive ? 'bg-emerald-600' : 'bg-slate-300'}`}
+                    className={`rounded-full ${isActive ? 'bg-emerald-600' : 'bg-slate-400'}`}
                   />
                 );
               })}
@@ -201,7 +201,7 @@ export default function TutorialPopup() {
                 className={`justify-self-start rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors ${
                   isFirstStep
                     ? 'cursor-not-allowed text-slate-300'
-                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                    : 'border border-slate-300 bg-slate-100 text-slate-800 shadow-sm hover:bg-slate-200'
                 }`}
               >
                 Back
@@ -216,7 +216,7 @@ export default function TutorialPopup() {
                 whileHover={{ y: -1.5, scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={goNext}
-                className="justify-self-end rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:bg-emerald-700"
+                className="justify-self-end rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:bg-emerald-700 hover:shadow-lg"
               >
                 {isLastStep ? 'Get Started' : 'Next'}
               </motion.button>

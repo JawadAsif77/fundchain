@@ -12,7 +12,9 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    navigate('/tutorial', { replace: true });
+    if (!localStorage.getItem('platformTutorialSeen')) {
+      navigate('/tutorial', { replace: true });
+    }
   }, [navigate]);
   
   // Fetch real campaigns from database

@@ -63,7 +63,7 @@ const ConnectedWalletDisplay = () => {
   );
 };
 
-const Dashboard = () => {
+const Dashboard = ({ tutorialRefs = {} }) => {
   const {
     user,
     profile,
@@ -698,20 +698,22 @@ const Dashboard = () => {
           }}
         >
           <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Your Investments</h2>
-          <Link
-            to="/explore"
-            style={{
-              padding: '8px 16px',
-              backgroundColor: 'var(--color-primary)',
-              color: 'var(--color-primary-ink)',
-              textDecoration: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: 500
-            }}
-          >
-            Discover Projects
-          </Link>
+          <div ref={tutorialRefs.discoverProjectsButtonRef || null}>
+            <Link
+              to="/explore"
+              style={{
+                padding: '8px 16px',
+                backgroundColor: 'var(--color-primary)',
+                color: 'var(--color-primary-ink)',
+                textDecoration: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: 500
+              }}
+            >
+              Discover Projects
+            </Link>
+          </div>
         </div>
 
         {userInvestments.length > 0 ? (

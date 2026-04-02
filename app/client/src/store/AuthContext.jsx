@@ -244,6 +244,7 @@ export const AuthProvider = ({ children }) => {
       debugLog(`[Auth] Auth Event: ${event}`);
 
       if (event === 'SIGNED_OUT' || !session) {
+        localStorage.removeItem('pendingDashboardTutorial');
         setUser(null);
         setProfile(null);
         setRoleStatus(null);
@@ -256,6 +257,13 @@ export const AuthProvider = ({ children }) => {
       if (session?.user) {
         // Set user immediately
         setUser(session.user);
+
+        if (event === 'SIGNED_IN') {
+          const hasSeenTutorial = localStorage.getItem('hasSeenTutorial') === 'true';
+          if (!hasSeenTutorial) {
+            localStorage.setItem('pendingDashboardTutorial', 'true');
+          }
+        }
         
         // Only load user data on meaningful events, NOT on token refresh
         // TOKEN_REFRESHED happens every few seconds and doesn't mean user data changed

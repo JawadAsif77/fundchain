@@ -1,0 +1,286 @@
+/**
+ * COMPLETE WORKING EXAMPLE - Copy this entire file to get started immediately
+ * 
+ * This is a fully functional App.jsx that includes the tutorial system.
+ * Just copy this code into your existing App.jsx and customize as needed.
+ */
+
+import React, { useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './store/AuthContext';
+import { TutorialProvider } from './contexts/TutorialContext';
+import ErrorBoundary from './components/ErrorBoundary';
+import Header from './components/Header';
+import Footer from './components/Footer';
+import NetworkStatus from './components/NetworkStatus';
+import ChatWidget from './components/ChatWidget';
+import TutorialOverlay from './components/TutorialOverlay';
+
+// Pages
+import Home from './pages/Home';
+import Explore from './pages/Explore';
+import Campaign from './pages/Campaign';
+import Login from './pages/Login';
+import Register from './pages/Register_simple';
+import Dashboard from './pages/Dashboard';
+import Profile from './pages/ProfileDisplay';
+import ProfileEdit from './pages/ProfileEdit';
+import PublicProfile from './pages/PublicProfile';
+import SearchUsers from './pages/SearchUsers';
+import ResetPassword from './pages/ResetPassword';
+import NotFound from './pages/NotFound';
+import KYCForm from './pages/KYCForm';
+import CreateProject from './pages/CreateProject_Enhanced';
+import AdminPanel from './pages/AdminPanel';
+import AdminLayout from './components/AdminLayout';
+import ProtectedRoute from './components/ProtectedRoute';
+import PublicRoute from './components/PublicRoute';
+import RoleSelection from './components/RoleSelection';
+import TutorialPopup from './components/TutorialPopup';
+import Wallet from './pages/Wallet';
+import Portfolio from './pages/Portfolio';
+import HowItWorks from './pages/HowItWorks';
+import Governance from './pages/Governance';
+import Analytics from './pages/Analytics';
+
+// Styles
+import './styles/globals.css';
+import './styles/layout.css';
+import './styles/card.css';
+import './styles/form.css';
+import './styles/util.css';
+
+/**
+ * Tutorial Steps Configuration
+ * Customize these steps for your dashboard
+ */
+const TUTORIAL_STEPS = [
+  {
+    id: 'wallet-button',
+    targetRef: null,
+    title: '🔗 Connect Your Wallet',
+    description:
+      'Connect your Phantom Wallet to authenticate and access all features. Fund campaigns or receive investor payouts securely.',
+    route: '/dashboard',
+    position: 'bottom',
+  },
+  {
+    id: 'discover-projects',
+    targetRef: null,
+    title: '🔍 Discover Investment Opportunities',
+    description:
+      'Browse verified business campaigns. Each shows funding goals, milestones, creator badges, and AI risk assessments.',
+    route: '/explore',
+    position: 'bottom',
+  },
+  {
+    id: 'create-campaign',
+    targetRef: null,
+    title: '➕ Launch Your Campaign',
+    description:
+      'Have a business idea? Submit your campaign and attract investors. Complete KYC verification to get started.',
+    route: '/create-project',
+    position: 'bottom',
+  },
+  {
+    id: 'analytics-link',
+    targetRef: null,
+    title: '📊 Track Your Performance',
+    description:
+      'View comprehensive analytics about your portfolio performance, ROI, and campaign metrics in real-time.',
+    route: '/analytics',
+    position: 'bottom',
+  },
+  {
+    id: 'help-link',
+    targetRef: null,
+    title: '❓ Learn How It Works',
+    description:
+      'New to the platform? Explore our detailed guide covering wallet setup, KYC, investing, and campaign creation.',
+    route: '/how-it-works',
+    position: 'bottom',
+  },
+];
+
+/**
+ * Main App Component with Tutorial Support
+ */
+function App() {
+  // Create refs for tutorial targets
+  const walletButtonRef = useRef(null);
+  const discoverRef = useRef(null);
+  const createRef = useRef(null);
+  const analyticsRef = useRef(null);
+  const helpRef = useRef(null);
+
+  // Build tutorial steps with actual refs
+  const tutorialSteps = [
+    { ...TUTORIAL_STEPS[0], targetRef: walletButtonRef },
+    { ...TUTORIAL_STEPS[1], targetRef: discoverRef },
+    { ...TUTORIAL_STEPS[2], targetRef: createRef },
+    { ...TUTORIAL_STEPS[3], targetRef: analyticsRef },
+    { ...TUTORIAL_STEPS[4], targetRef: helpRef },
+  ];
+
+  // Refs to pass to Header
+  const tutorialRefs = {
+    walletButtonRef,
+    discoverRef,
+    createRef,
+    analyticsRef,
+    helpRef,
+  };
+
+  return (
+    <ErrorBoundary>
+      <NetworkStatus />
+      <Router>
+        <AuthProvider>
+          {/* Wrap entire app with TutorialProvider */}
+          <TutorialProvider steps={tutorialSteps}>
+            <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+              {/* Pass tutorial refs to Header */}
+              <Header tutorialRefs={tutorialRefs} />
+
+              <main style={{ flex: 1 }}>
+                <Routes>
+                  {/* Admin route - completely separate layout */}
+                  <Route
+                    path="/admin"
+                    element={
+                      <ProtectedRoute requireRole="admin">
+                        <AdminLayout />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Public routes */}
+                  <Route path="/" element={<Home />} />
+                  <Route path="/explore" element={<Explore />} />
+                  <Route path="/campaign/:id" element={<Campaign />} />
+                  <Route path="/how-it-works" element={<HowItWorks />} />
+
+                  {/* Auth routes */}
+                  <Route
+                    path="/login"
+                    element={
+                      <PublicRoute>
+                        <Login />
+                      </PublicRoute>
+                    }
+                  />
+                  <Route
+                    path="/register"
+                    element={
+                      <PublicRoute>
+                        <Register />
+                      </PublicRoute>
+                    }
+                  />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+
+                  {/* Protected routes */}
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile"
+                    element={
+                      <ProtectedRoute>
+                        <Profile />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile/edit"
+                    element={
+                      <ProtectedRoute>
+                        <ProfileEdit />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/public-profile/:userId"
+                    element={<PublicProfile />}
+                  />
+                  <Route
+                    path="/search-users"
+                    element={
+                      <ProtectedRoute>
+                        <SearchUsers />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/portfolio"
+                    element={
+                      <ProtectedRoute>
+                        <Portfolio />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/wallet"
+                    element={
+                      <ProtectedRoute>
+                        <Wallet />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/kyc"
+                    element={
+                      <ProtectedRoute>
+                        <KYCForm />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/create-project"
+                    element={
+                      <ProtectedRoute>
+                        <CreateProject />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/analytics"
+                    element={
+                      <ProtectedRoute>
+                        <Analytics />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/governance"
+                    element={
+                      <ProtectedRoute>
+                        <Governance />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* 404 Not Found */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </main>
+
+              <Footer />
+              <ChatWidget />
+
+              {/* Render Tutorial Overlay - CRITICAL */}
+              <TutorialOverlay />
+            </div>
+          </TutorialProvider>
+        </AuthProvider>
+      </Router>
+    </ErrorBoundary>
+  );
+}
+
+export default App;

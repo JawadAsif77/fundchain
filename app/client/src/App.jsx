@@ -1,6 +1,7 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { useMemo, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './store/AuthContext';
+import { useAuth } from './store/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -33,6 +34,8 @@ import Portfolio from './pages/Portfolio';
 import HowItWorks from './pages/HowItWorks';
 import Governance from './pages/Governance';
 import Analytics from './pages/Analytics';
+import { TutorialProvider } from './contexts/TutorialContext';
+import TutorialOverlay from './components/TutorialOverlay';
 
 // Temporary simple components - all real components are now imported
 // Campaign component is now imported from './pages/Campaign'
@@ -47,14 +50,128 @@ import './styles/card.css';
 import './styles/form.css';
 import './styles/util.css';
 
-function App() {
+function AppContent() {
   console.log('App component rendering...');
+  const { isAuthenticated, roleStatus } = useAuth();
+  const location = useLocation();
+
+  const mainRef = useRef(null);
+  const discoverProjectsButtonRef = useRef(null);
+  const opportunitiesRef = useRef(null);
+  const howItWorksRef = useRef(null);
+  const governanceRef = useRef(null);
+  const analyticsRef = useRef(null);
+  const dashboardNavRef = useRef(null);
+  const walletNavRef = useRef(null);
+  const profileNavRef = useRef(null);
+  const userRole = roleStatus?.role || 'investor';
+
+  const shouldRunSpotlightTutorial =
+    isAuthenticated &&
+    location.pathname.startsWith('/dashboard') &&
+    localStorage.getItem('pendingDashboardTutorial') === 'true';
+
+  const tutorialSteps = useMemo(() => {
+    const steps = [
+      {
+        id: 'nav-opportunities',
+        targetRef: opportunitiesRef,
+        title: 'Opportunities',
+        description:
+          'Browse investment opportunities and evaluate campaigns before committing funds.',
+        route: '/explore',
+        position: 'bottom',
+      },
+      {
+        id: 'nav-how-it-works',
+        targetRef: howItWorksRef,
+        title: 'How It Works',
+        description:
+          'Open this to understand the full funding lifecycle, voting flow, and platform process.',
+        route: '/how-it-works',
+        position: 'bottom',
+      },
+      {
+        id: 'nav-governance',
+        targetRef: governanceRef,
+        title: 'Governance',
+        description:
+          'Use governance to understand voting rights, milestone approvals, and refund decisions.',
+        route: '/governance',
+        position: 'bottom',
+      },
+      {
+        id: 'nav-analytics',
+        targetRef: analyticsRef,
+        title: 'Analytics',
+        description:
+          'Track key platform and campaign metrics here to make better investment decisions.',
+        route: '/analytics',
+        position: 'bottom',
+      },
+      {
+        id: 'nav-dashboard',
+        targetRef: dashboardNavRef,
+        title: 'Dashboard',
+        description:
+          'Return to your personal dashboard anytime to monitor investments and activity.',
+        route: '/dashboard',
+        position: 'bottom',
+      },
+      {
+        id: 'workspace-area',
+        targetRef: mainRef,
+        title: 'Workspace Area',
+        description:
+          'This is your main workspace where dashboard content, onboarding, and campaign tools are displayed.',
+        route: '/dashboard',
+        position: 'top',
+      },
+    ];
+
+    if (isAuthenticated && userRole !== 'admin') {
+      steps.push({
+        id: 'nav-wallet',
+        targetRef: walletNavRef,
+        title: 'Wallet',
+        description:
+          'Open Wallet to check your FC balance, locked funds, and transaction activity.',
+        route: '/wallet',
+        position: 'bottom',
+      });
+    }
+
+    if (isAuthenticated) {
+      steps.push({
+        id: 'nav-profile',
+        targetRef: profileNavRef,
+        title: 'Profile',
+        description:
+          'Manage your profile details and account settings from here.',
+        route: '/profile',
+        position: 'bottom',
+      });
+    }
+
+    if (userRole === 'investor') {
+      steps.push({
+        id: 'discover-projects',
+        targetRef: discoverProjectsButtonRef,
+        title: 'Discover Projects',
+        description:
+          'Click this button to discover active campaigns, review risk details, and start investing with confidence.',
+        route: '/explore',
+        position: 'bottom',
+      });
+    }
+
+    return steps;
+  }, [isAuthenticated, userRole]);
+
+  const activeSteps = shouldRunSpotlightTutorial ? tutorialSteps : [];
   
   return (
-    <ErrorBoundary>
-        <NetworkStatus />
-        <Router>
-          <Routes>
+    <Routes>
             {/* Admin route - completely separate layout */}
             <Route 
               path="/admin" 
@@ -72,11 +189,22 @@ function App() {
             <Route 
               path="/*" 
               element={
-                <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-                  <Header />
-                  <main style={{ flex: 1 }}>
-                    <Routes>
+                <TutorialProvider steps={activeSteps}>
+                  <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+                    <Header
+                      tutorialRefs={{
+                        opportunitiesRef,
+                        howItWorksRef,
+                        governanceRef,
+                        analyticsRef,
+                        dashboardNavRef,
+                      }}
+                    />
+                    <main ref={mainRef} style={{ flex: 1 }}>
+                      <Routes>
                       {/* Public routes */}
+                    walletNavRef,
+                    profileNavRef,
                       <Route path="/" element={<Home />} />
                       <Route path="/explore" element={<Explore />} />
                       <Route path="/search" element={<SearchUsers />} />
@@ -141,7 +269,7 @@ function App() {
                         path="/dashboard" 
                         element={
                           <ProtectedRoute>
-                            <Dashboard />
+                            <Dashboard tutorialRefs={{ discoverProjectsButtonRef }} />
                           </ProtectedRoute>
                         } 
                       />
@@ -180,17 +308,28 @@ function App() {
                       
                       {/* 404 catch-all */}
                       <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </main>
-                  <Footer />
-                  
-                  {/* Global Chat Widget - visible on all non-admin pages for authenticated users */}
-                  <ChatWidget />
-                </div>
+                      </Routes>
+                    </main>
+                    <Footer />
+                    
+                    {/* Global Chat Widget - visible on all non-admin pages for authenticated users */}
+                    <ChatWidget />
+                    <TutorialOverlay />
+                  </div>
+                </TutorialProvider>
               }
             />
-          </Routes>
-        </Router>
+    </Routes>
+  );
+}
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <NetworkStatus />
+      <Router>
+        <AppContent />
+      </Router>
     </ErrorBoundary>
   );
 }
