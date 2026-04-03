@@ -1,6 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { campaignApi } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import {
+  PLATFORM_KPI_CONTRACT,
+  ANALYTICS_WINDOWS,
+  METRIC_VALUE_TYPES,
+} from '../constants/analyticsContracts';
+import {
+  getPlatformKpis,
+  getInvestorPortfolioSummary,
+  getCreatorFundingProgress,
+} from '../services/analyticsService';
 import '../styles/analytics.css';
 
 const Analytics = () => {
@@ -8,6 +19,27 @@ const Analytics = () => {
   const [showMethodology, setShowMethodology] = useState(false);
   const [topCampaigns, setTopCampaigns] = useState([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(true);
+  const [loadingKpis, setLoadingKpis] = useState(true);
+  const [loadingInvestorDiversity, setLoadingInvestorDiversity] = useState(true);
+  const [loadingTrendData, setLoadingTrendData] = useState(true);
+  const [loadingCategoryFunding, setLoadingCategoryFunding] = useState(true);
+  const [loadingTopInvestors, setLoadingTopInvestors] = useState(true);
+  const [platformKpiRaw, setPlatformKpiRaw] = useState({});
+  const [analyticsMeta, setAnalyticsMeta] = useState({
+    platform: null,
+    investor: null,
+    creator: null,
+  });
+  const [analyticsErrors, setAnalyticsErrors] = useState({
+    platform: false,
+    investor: false,
+    creator: false,
+  });
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [lastRefreshAt, setLastRefreshAt] = useState(Date.now());
+  const [refreshNow, setRefreshNow] = useState(Date.now());
+  const [realtimeStatus, setRealtimeStatus] = useState('connecting');
+  const [reconnectCount, setReconnectCount] = useState(0);
 
   // Fetch real campaigns from database
   useEffect(() => {
@@ -40,61 +72,179 @@ const Analytics = () => {
     };
 
     fetchTopCampaigns();
-  }, []);
+  }, [refreshTick]);
 
-  // Placeholder data - structured to easily replace with Supabase views later
-  const kpiData = [
-    {
+  // Contract-backed placeholder data.
+  // Step 2 goal: keep the same UI values while binding every card to a canonical KPI id.
+  const KPI_PLACEHOLDER_VALUES = {
+    total_funding_raised_fc: {
       icon: '💰',
-      label: 'Total Funding Raised',
       value: '2.5M FC',
       delta: '+12.5%',
       deltaType: 'positive',
-      tooltip: 'Sum of campaigns.current_funding in FC tokens'
+      tooltip: 'Sum of campaigns.current_funding in FC tokens',
     },
-    {
+    active_campaigns_count: {
       icon: '🚀',
-      label: 'Active Campaigns',
       value: '153',
       delta: '+8',
       deltaType: 'positive',
-      tooltip: 'Count of campaigns where status = "active"'
+      tooltip: 'Count of campaigns where status = "active"',
     },
-    {
+    total_investors_count: {
       icon: '👥',
-      label: 'Total Investors',
       value: '10k+',
       delta: '+245',
       deltaType: 'positive',
-      tooltip: 'Count of unique user_investments.user_id'
+      tooltip: 'Count of unique user_investments.user_id',
     },
-    {
+    milestones_completed_count: {
       icon: '✅',
-      label: 'Milestones Completed',
       value: '650',
       delta: '+28',
       deltaType: 'positive',
-      tooltip: 'Count of milestones where status = "completed"'
+      tooltip: 'Count of milestones where status = "completed"',
     },
-    {
+    avg_trust_score: {
       icon: '🛡️',
-      label: 'Avg Trust Score',
       value: '92%',
       delta: '+2%',
       deltaType: 'positive',
-      tooltip: 'Average of campaigns.trust_score'
+      tooltip: 'Average of campaigns.trust_score',
     },
-    {
+    ai_flags_count: {
       icon: '🔍',
-      label: 'AI Flags (30d)',
       value: '12',
       delta: '-3',
       deltaType: 'negative',
-      tooltip: 'Count of ai_flags where created_at > now() - 30 days'
-    }
-  ];
+      tooltip: 'Count of ai_flags where created_at > now() - 30 days',
+    },
+  };
 
-  const categoryData = [
+  const buildPlaceholderKpiData = () =>
+    PLATFORM_KPI_CONTRACT.map((metric) => ({
+      id: metric.id,
+      label: metric.label,
+      window: metric.defaultWindow,
+      ...KPI_PLACEHOLDER_VALUES[metric.id],
+    }));
+
+  const [kpiData, setKpiData] = useState(buildPlaceholderKpiData);
+
+  const formatKpiValue = (metric, rawValue) => {
+    if (rawValue == null || rawValue === '') {
+      return KPI_PLACEHOLDER_VALUES[metric.id]?.value ?? 'N/A';
+    }
+
+    switch (metric.valueType) {
+      case METRIC_VALUE_TYPES.CURRENCY_FC:
+        return `${new Intl.NumberFormat('en-US', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        }).format(Number(rawValue) || 0)} FC`;
+      case METRIC_VALUE_TYPES.PERCENT:
+        return `${Number(rawValue).toFixed(1)}%`;
+      case METRIC_VALUE_TYPES.SCORE:
+        return `${Number(rawValue).toFixed(1)}%`;
+      case METRIC_VALUE_TYPES.COUNT:
+      default:
+        return new Intl.NumberFormat('en-US').format(Number(rawValue) || 0);
+    }
+  };
+
+  const formatKpiDelta = (delta) => {
+    if (delta == null || delta === '') return null;
+    const deltaNumber = Number(delta);
+    if (Number.isNaN(deltaNumber)) return String(delta);
+    const sign = deltaNumber > 0 ? '+' : '';
+    return `${sign}${deltaNumber}`;
+  };
+
+  const getDeltaArrow = (deltaType) => {
+    if (deltaType === 'positive') return '↗';
+    if (deltaType === 'negative') return '↘';
+    return '→';
+  };
+
+  const formatMetaTimestamp = (isoValue) => {
+    if (!isoValue) return 'Unknown';
+    const parsed = new Date(isoValue);
+    if (Number.isNaN(parsed.getTime())) return 'Unknown';
+    return parsed.toLocaleString();
+  };
+
+  const formatRelativeRefresh = (timestamp) => {
+    if (!timestamp) return 'unknown';
+    const diffSeconds = Math.max(0, Math.floor((refreshNow - timestamp) / 1000));
+    if (diffSeconds < 5) return 'just now';
+    if (diffSeconds < 60) return `${diffSeconds}s ago`;
+    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
+    return `${Math.floor(diffSeconds / 3600)}h ago`;
+  };
+
+  const triggerManualRefresh = () => {
+    setLoadingCampaigns(true);
+    setLoadingKpis(true);
+    setLoadingTrendData(true);
+    setLoadingTopInvestors(true);
+    setLoadingInvestorDiversity(true);
+    setLoadingCategoryFunding(true);
+    setRefreshTick((prev) => prev + 1);
+  };
+
+  useEffect(() => {
+    setLastRefreshAt(Date.now());
+  }, [refreshTick]);
+
+  useEffect(() => {
+    const timerId = setInterval(() => {
+      setRefreshNow(Date.now());
+    }, 5000);
+
+    return () => clearInterval(timerId);
+  }, []);
+
+  useEffect(() => {
+    const fetchPlatformKpis = async () => {
+      setLoadingKpis(true);
+      try {
+        const response = await getPlatformKpis(ANALYTICS_WINDOWS.DAILY_30);
+        setAnalyticsMeta((prev) => ({ ...prev, platform: response?.meta || null }));
+        setAnalyticsErrors((prev) => ({ ...prev, platform: false }));
+        const kpisById = new Map((response?.kpis || []).map((kpi) => [kpi.id, kpi]));
+        setPlatformKpiRaw(Object.fromEntries((response?.kpis || []).map((kpi) => [kpi.id, kpi])));
+
+        const merged = PLATFORM_KPI_CONTRACT.map((metric) => {
+          const base = KPI_PLACEHOLDER_VALUES[metric.id] || {};
+          const live = kpisById.get(metric.id);
+
+          return {
+            id: metric.id,
+            label: metric.label,
+            window: metric.defaultWindow,
+            icon: base.icon,
+            tooltip: base.tooltip,
+            value: formatKpiValue(metric, live?.value),
+            delta: formatKpiDelta(live?.delta) ?? base.delta,
+            deltaType: live?.deltaType || base.deltaType || 'neutral',
+          };
+        });
+
+        setKpiData(merged);
+      } catch (error) {
+        console.error('Failed to fetch platform KPIs:', error);
+        setAnalyticsErrors((prev) => ({ ...prev, platform: true }));
+        setPlatformKpiRaw({});
+        setKpiData(buildPlaceholderKpiData());
+      } finally {
+        setLoadingKpis(false);
+      }
+    };
+
+    fetchPlatformKpis();
+  }, [refreshTick]);
+
+  const DEFAULT_CATEGORY_DATA = [
     { name: 'Technology', value: 35, color: '#29C7AC' },
     { name: 'Fintech', value: 25, color: '#6366F1' },
     { name: 'Healthcare', value: 20, color: '#10B981' },
@@ -102,7 +252,9 @@ const Analytics = () => {
     { name: 'Other', value: 8, color: '#EF4444' }
   ];
 
-  const trendData = {
+  const [categoryData, setCategoryData] = useState(DEFAULT_CATEGORY_DATA);
+
+  const DEFAULT_TREND_DATA = {
     monthly: [
       { period: 'Jan', successful: 45, failed: 8 },
       { period: 'Feb', successful: 52, failed: 12 },
@@ -119,7 +271,84 @@ const Analytics = () => {
     ]
   };
 
-  const topInvestors = [
+  const [trendData, setTrendData] = useState(DEFAULT_TREND_DATA);
+
+  const normalizeTrendPoint = (entry, fallbackPeriod) => {
+    const period = entry?.period || entry?.label || entry?.month || entry?.quarter || fallbackPeriod;
+    const successfulRaw = entry?.successful ?? entry?.completed ?? entry?.funded ?? entry?.value ?? 0;
+    const failedRaw = entry?.failed ?? entry?.rejected ?? entry?.dropped ?? 0;
+
+    return {
+      period: String(period),
+      successful: Math.max(0, Number(successfulRaw) || 0),
+      failed: Math.max(0, Number(failedRaw) || 0),
+    };
+  };
+
+  const aggregateQuarterly = (monthlySeries) => {
+    const chunks = [];
+    for (let i = 0; i < monthlySeries.length; i += 3) {
+      chunks.push(monthlySeries.slice(i, i + 3));
+    }
+
+    return chunks.map((chunk, idx) => ({
+      period: `Q${idx + 1}`,
+      successful: chunk.reduce((sum, item) => sum + (item.successful || 0), 0),
+      failed: chunk.reduce((sum, item) => sum + (item.failed || 0), 0),
+    }));
+  };
+
+  useEffect(() => {
+    const fetchCreatorTrends = async () => {
+      setLoadingTrendData(true);
+      try {
+        const response = await getCreatorFundingProgress(ANALYTICS_WINDOWS.MONTHLY_12);
+        setAnalyticsMeta((prev) => ({ ...prev, creator: response?.meta || null }));
+        setAnalyticsErrors((prev) => ({ ...prev, creator: false }));
+        const charts = response?.charts || {};
+
+        const monthlySource = Array.isArray(charts.monthly_success_trends)
+          ? charts.monthly_success_trends
+          : Array.isArray(charts.backers_growth_over_time)
+          ? charts.backers_growth_over_time
+          : [];
+
+        const quarterlySource = Array.isArray(charts.quarterly_success_trends)
+          ? charts.quarterly_success_trends
+          : [];
+
+        const normalizedMonthly = monthlySource
+          .map((entry, idx) => normalizeTrendPoint(entry, `P${idx + 1}`))
+          .filter((entry) => entry.period);
+
+        const normalizedQuarterly = quarterlySource
+          .map((entry, idx) => normalizeTrendPoint(entry, `Q${idx + 1}`))
+          .filter((entry) => entry.period);
+
+        if (normalizedMonthly.length > 0) {
+          setTrendData({
+            monthly: normalizedMonthly,
+            quarterly:
+              normalizedQuarterly.length > 0
+                ? normalizedQuarterly
+                : aggregateQuarterly(normalizedMonthly),
+          });
+        } else {
+          setTrendData(DEFAULT_TREND_DATA);
+        }
+      } catch (error) {
+        console.error('Failed to fetch creator trends:', error);
+        setAnalyticsErrors((prev) => ({ ...prev, creator: true }));
+        setTrendData(DEFAULT_TREND_DATA);
+      } finally {
+        setLoadingTrendData(false);
+      }
+    };
+
+    fetchCreatorTrends();
+  }, [refreshTick]);
+
+  const DEFAULT_TOP_INVESTORS = [
     { name: 'Investor A***', totalInvested: 125000, campaigns: 15 },
     { name: 'Investor B***', totalInvested: 98000, campaigns: 12 },
     { name: 'Investor C***', totalInvested: 87000, campaigns: 18 },
@@ -127,7 +356,9 @@ const Analytics = () => {
     { name: 'Investor E***', totalInvested: 65000, campaigns: 11 }
   ];
 
-  const investorDiversity = [
+  const [topInvestors, setTopInvestors] = useState(DEFAULT_TOP_INVESTORS);
+
+  const DEFAULT_INVESTOR_DIVERSITY = [
     { category: 'Technology', percentage: 32 },
     { category: 'Fintech', percentage: 21 },
     { category: 'Healthcare', percentage: 18 },
@@ -135,39 +366,321 @@ const Analytics = () => {
     { category: 'Other', percentage: 14 }
   ];
 
-  const aiInsights = [
-    {
-      icon: '📈',
-      title: 'Funding Momentum',
-      value: 'High',
-      description: 'Campaign funding velocity up 23% this week',
-      type: 'positive'
-    },
-    {
-      icon: '🛡️',
-      title: 'Trust Index Change',
-      value: '+4% WoW',
-      description: 'Platform trust metrics trending upward',
-      type: 'positive'
-    },
-    {
-      icon: '⚠️',
-      title: 'Risk Anomalies',
-      value: '2 campaigns flagged',
-      description: 'Automated review triggered for unusual patterns',
-      type: 'warning'
-    },
-    {
-      icon: '💡',
-      title: 'Conversion Tip',
-      value: 'Add 2 images',
-      description: 'Campaigns with 3+ images see 9% higher conversion',
-      type: 'info'
-    }
-  ];
+  const [investorDiversity, setInvestorDiversity] = useState(DEFAULT_INVESTOR_DIVERSITY);
+
+  const CATEGORY_COLORS = {
+    technology: '#29C7AC',
+    fintech: '#6366F1',
+    healthcare: '#10B981',
+    education: '#F59E0B',
+    other: '#EF4444',
+  };
+
+  const FALLBACK_COLORS = ['#29C7AC', '#6366F1', '#10B981', '#F59E0B', '#EF4444'];
+
+  const mapCategoryColor = (name, index) => {
+    const key = String(name || 'other').trim().toLowerCase();
+    return CATEGORY_COLORS[key] || FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+  };
+
+  useEffect(() => {
+    const fetchInvestorDiversity = async () => {
+      setLoadingTopInvestors(true);
+      setLoadingInvestorDiversity(true);
+      setLoadingCategoryFunding(true);
+      try {
+        const response = await getInvestorPortfolioSummary(ANALYTICS_WINDOWS.DAILY_30);
+        setAnalyticsMeta((prev) => ({ ...prev, investor: response?.meta || null }));
+        setAnalyticsErrors((prev) => ({ ...prev, investor: false }));
+        const allocationByCategory = response?.charts?.allocation_by_category;
+        const topInvestorsSource =
+          (Array.isArray(response?.top_investors) && response.top_investors) ||
+          (Array.isArray(response?.charts?.top_investors) && response.charts.top_investors) ||
+          (Array.isArray(response?.summary?.top_investors) && response.summary.top_investors) ||
+          [];
+
+        if (topInvestorsSource.length > 0) {
+          const mappedTopInvestors = topInvestorsSource
+            .map((entry, idx) => {
+              const rawName =
+                entry?.name ||
+                entry?.investor_name ||
+                entry?.user_name ||
+                entry?.wallet_address ||
+                `Investor ${idx + 1}`;
+              const name = String(rawName);
+              const totalInvested = Number(
+                entry?.total_invested_fc ?? entry?.invested ?? entry?.value ?? entry?.amount ?? 0
+              );
+              const campaigns = Number(
+                entry?.campaigns_backed ?? entry?.campaigns ?? entry?.count ?? 0
+              );
+
+              return {
+                name,
+                totalInvested: Number.isFinite(totalInvested) ? totalInvested : 0,
+                campaigns: Number.isFinite(campaigns) ? campaigns : 0,
+              };
+            })
+            .sort((a, b) => b.totalInvested - a.totalInvested)
+            .slice(0, 5);
+
+          if (mappedTopInvestors.length > 0) {
+            setTopInvestors(mappedTopInvestors);
+          } else {
+            setTopInvestors(DEFAULT_TOP_INVESTORS);
+          }
+        } else {
+          setTopInvestors(DEFAULT_TOP_INVESTORS);
+        }
+
+        if (Array.isArray(allocationByCategory) && allocationByCategory.length > 0) {
+          const mapped = allocationByCategory
+            .map((entry) => {
+              const category = entry?.category || entry?.name || 'Other';
+              const numericValue = Number(entry?.percentage ?? entry?.value ?? 0);
+              const percentage = Number.isFinite(numericValue)
+                ? Math.max(0, Math.min(100, numericValue))
+                : 0;
+
+              return { category, percentage };
+            })
+            .sort((a, b) => b.percentage - a.percentage);
+
+          if (mapped.length > 0) {
+            setInvestorDiversity(mapped);
+
+            const total = mapped.reduce((sum, item) => sum + item.percentage, 0);
+            const normalizedCategoryData = mapped.map((item, index) => {
+              const normalizedValue = total > 0 ? (item.percentage / total) * 100 : item.percentage;
+              return {
+                name: item.category,
+                value: Number(normalizedValue.toFixed(1)),
+                color: mapCategoryColor(item.category, index),
+              };
+            });
+
+            if (normalizedCategoryData.length > 0) {
+              setCategoryData(normalizedCategoryData);
+            }
+            return;
+          }
+        }
+
+        setInvestorDiversity(DEFAULT_INVESTOR_DIVERSITY);
+        setCategoryData(DEFAULT_CATEGORY_DATA);
+      } catch (error) {
+        console.error('Failed to fetch investor diversity:', error);
+        setAnalyticsErrors((prev) => ({ ...prev, investor: true }));
+        setTopInvestors(DEFAULT_TOP_INVESTORS);
+        setInvestorDiversity(DEFAULT_INVESTOR_DIVERSITY);
+        setCategoryData(DEFAULT_CATEGORY_DATA);
+      } finally {
+        setLoadingTopInvestors(false);
+        setLoadingInvestorDiversity(false);
+        setLoadingCategoryFunding(false);
+      }
+    };
+
+    fetchInvestorDiversity();
+  }, [refreshTick]);
+
+  useEffect(() => {
+    let refreshDebounceTimer = null;
+
+    const queueRefresh = () => {
+      if (refreshDebounceTimer) {
+        clearTimeout(refreshDebounceTimer);
+      }
+
+      refreshDebounceTimer = setTimeout(() => {
+        setRefreshTick((prev) => prev + 1);
+      }, 450);
+    };
+
+    const analyticsChannel = supabase
+      .channel('analytics-live-updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'campaigns' },
+        queueRefresh
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_investments' },
+        queueRefresh
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'milestones' },
+        queueRefresh
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ai_flags' },
+        queueRefresh
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected');
+          return;
+        }
+
+        if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+          setRealtimeStatus('reconnecting');
+          setReconnectCount((prev) => prev + 1);
+          return;
+        }
+
+        if (status === 'CLOSED') {
+          setRealtimeStatus('disconnected');
+        }
+      });
+
+    const pollIntervalId = setInterval(() => {
+      setRefreshTick((prev) => prev + 1);
+    }, 30000);
+
+    return () => {
+      clearInterval(pollIntervalId);
+      if (refreshDebounceTimer) {
+        clearTimeout(refreshDebounceTimer);
+      }
+      setRealtimeStatus('disconnected');
+      supabase.removeChannel(analyticsChannel);
+    };
+  }, []);
+
+  const aiInsights = useMemo(() => {
+    const monthly = Array.isArray(trendData?.monthly) ? trendData.monthly : [];
+    const latest = monthly[monthly.length - 1];
+    const previous = monthly[monthly.length - 2];
+    const momentumDelta =
+      latest && previous
+        ? ((Number(latest.successful || 0) - Number(previous.successful || 0)) /
+            Math.max(1, Number(previous.successful || 0))) *
+          100
+        : null;
+
+    const trustDelta = Number(platformKpiRaw?.avg_trust_score?.delta);
+    const riskFlags = Number(platformKpiRaw?.ai_flags_count?.value);
+    const activeCampaigns = Number(platformKpiRaw?.active_campaigns_count?.value);
+
+    const momentumType =
+      momentumDelta == null ? 'info' : momentumDelta >= 0 ? 'positive' : 'warning';
+    const momentumValue =
+      momentumDelta == null
+        ? 'Stable'
+        : `${momentumDelta >= 0 ? '+' : ''}${momentumDelta.toFixed(1)}%`;
+
+    const trustType = Number.isFinite(trustDelta)
+      ? trustDelta >= 0
+        ? 'positive'
+        : 'warning'
+      : 'info';
+    const trustValue = Number.isFinite(trustDelta)
+      ? `${trustDelta >= 0 ? '+' : ''}${trustDelta.toFixed(1)}% WoW`
+      : 'No change';
+
+    const riskType = Number.isFinite(riskFlags)
+      ? riskFlags > 10
+        ? 'warning'
+        : 'positive'
+      : 'info';
+    const riskValue = Number.isFinite(riskFlags)
+      ? `${Math.round(riskFlags)} campaigns flagged`
+      : 'No anomaly data';
+
+    const conversionValue = Number.isFinite(activeCampaigns)
+      ? `${Math.round(activeCampaigns)} active campaigns`
+      : 'Add 2 images';
+
+    return [
+      {
+        icon: '📈',
+        title: 'Funding Momentum',
+        value: momentumValue,
+        description:
+          momentumDelta == null
+            ? 'Insufficient trend history to estimate momentum change yet.'
+            : 'Derived from change in successful campaign outcomes between recent periods.',
+        type: momentumType,
+      },
+      {
+        icon: '🛡️',
+        title: 'Trust Index Change',
+        value: trustValue,
+        description:
+          'Computed from average trust score delta in the platform KPI analytics feed.',
+        type: trustType,
+      },
+      {
+        icon: '⚠️',
+        title: 'Risk Anomalies',
+        value: riskValue,
+        description: 'Based on current AI flag counts from the platform KPI contract.',
+        type: riskType,
+      },
+      {
+        icon: '💡',
+        title: 'Conversion Tip',
+        value: conversionValue,
+        description:
+          'Use campaign media and milestone clarity to improve investor conversion outcomes.',
+        type: 'info',
+      },
+    ];
+  }, [trendData, platformKpiRaw]);
+
+  const analyticsDataStatus = useMemo(() => {
+    const metaList = [analyticsMeta.platform, analyticsMeta.investor, analyticsMeta.creator].filter(Boolean);
+    const parsedTimes = metaList
+      .map((meta) => new Date(meta.generated_at))
+      .filter((d) => !Number.isNaN(d.getTime()));
+
+    const lastUpdatedDate =
+      parsedTimes.length > 0
+        ? new Date(Math.max(...parsedTimes.map((d) => d.getTime())))
+        : null;
+
+    const sourceSet = new Set(metaList.map((meta) => meta.source).filter(Boolean));
+    const sourceLabel = sourceSet.size > 0 ? Array.from(sourceSet).join(', ') : 'unknown';
+
+    const hasErrors = Object.values(analyticsErrors).some(Boolean);
+    const isLoading =
+      loadingCampaigns ||
+      loadingKpis ||
+      loadingInvestorDiversity ||
+      loadingTrendData ||
+      loadingCategoryFunding ||
+      loadingTopInvestors;
+
+    return {
+      health: hasErrors ? 'degraded' : 'healthy',
+      sourceLabel,
+      lastUpdated: lastUpdatedDate ? formatMetaTimestamp(lastUpdatedDate.toISOString()) : 'Unknown',
+      lastRefreshRelative: formatRelativeRefresh(lastRefreshAt),
+      isLoading,
+      realtimeStatus,
+      reconnectCount,
+    };
+  }, [
+    analyticsMeta,
+    analyticsErrors,
+    loadingCampaigns,
+    loadingKpis,
+    loadingInvestorDiversity,
+    loadingTrendData,
+    loadingCategoryFunding,
+    loadingTopInvestors,
+    lastRefreshAt,
+    refreshNow,
+    realtimeStatus,
+    reconnectCount,
+  ]);
 
   // Helper function to create donut chart path
-  const createDonutPath = (percentage, index, total) => {
+  const createDonutPath = (percentage, index) => {
     const angle = (percentage / 100) * 360;
     const startAngle = categoryData.slice(0, index).reduce((sum, item) => sum + (item.value / 100) * 360, 0);
     const endAngle = startAngle + angle;
@@ -209,6 +722,58 @@ const Analytics = () => {
                 Future: On-chain data
               </span>
             </div>
+            <div className="analytics-status-panel">
+              <strong
+                className={`analytics-status-health ${
+                  analyticsDataStatus.health === 'healthy' ? 'healthy' : 'degraded'
+                }`}
+              >
+                Data Health: {analyticsDataStatus.health}
+              </strong>
+              <span className="analytics-status-meta">
+                Last Updated: {analyticsDataStatus.lastUpdated}
+              </span>
+              <span className="analytics-status-meta">
+                Last Refreshed: {analyticsDataStatus.lastRefreshRelative}
+              </span>
+              <span className="analytics-status-meta">
+                Source: {analyticsDataStatus.sourceLabel}
+              </span>
+              <span
+                className={`analytics-realtime-badge ${analyticsDataStatus.realtimeStatus}`}
+              >
+                <span
+                  className={`analytics-realtime-dot ${analyticsDataStatus.realtimeStatus}`}
+                  aria-hidden="true"
+                ></span>
+                {analyticsDataStatus.realtimeStatus === 'connected' && 'Realtime Connected'}
+                {analyticsDataStatus.realtimeStatus === 'reconnecting' &&
+                  `Reconnecting${
+                    analyticsDataStatus.reconnectCount > 0
+                      ? ` (retry ${analyticsDataStatus.reconnectCount})`
+                      : ''
+                  }`}
+                {analyticsDataStatus.realtimeStatus === 'disconnected' && 'Realtime Disconnected'}
+                {analyticsDataStatus.realtimeStatus === 'connecting' && 'Connecting Realtime...'}
+              </span>
+              {analyticsDataStatus.realtimeStatus === 'connected' &&
+                analyticsDataStatus.reconnectCount > 0 && (
+                  <span className="analytics-status-meta">
+                    Recovered after {analyticsDataStatus.reconnectCount}{' '}
+                    {analyticsDataStatus.reconnectCount === 1 ? 'retry' : 'retries'}
+                  </span>
+                )}
+              {analyticsDataStatus.isLoading && (
+                <span className="analytics-status-refreshing">Refreshing...</span>
+              )}
+              <button
+                type="button"
+                className="analytics-status-refresh-btn"
+                onClick={triggerManualRefresh}
+              >
+                {analyticsDataStatus.isLoading ? 'Refreshing...' : 'Refresh Now'}
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -216,15 +781,20 @@ const Analytics = () => {
       {/* KPI Summary */}
       <section className="analytics-kpis">
         <div className="container">
+          {loadingKpis && (
+            <p className="analytics-loading-text">
+              Loading KPI metrics...
+            </p>
+          )}
           <div className="kpi-grid">
-            {kpiData.map((kpi, index) => (
-              <div key={index} className="kpi-card" title={kpi.tooltip}>
+            {kpiData.map((kpi) => (
+              <div key={kpi.id} className="kpi-card" title={kpi.tooltip}>
                 <div className="kpi-icon">{kpi.icon}</div>
                 <div className="kpi-content">
                   <div className="kpi-label">{kpi.label}</div>
                   <div className="kpi-value">{kpi.value}</div>
                   <div className={`kpi-delta ${kpi.deltaType}`}>
-                    {kpi.deltaType === 'positive' ? '↗' : '↘'} {kpi.delta}
+                    {getDeltaArrow(kpi.deltaType)} {kpi.delta || 'N/A'}
                   </div>
                 </div>
               </div>
@@ -240,6 +810,11 @@ const Analytics = () => {
             {/* Funding by Category */}
             <div className="chart-card">
               <h3>Funding by Category</h3>
+              {loadingCategoryFunding && (
+                <p className="analytics-loading-text">
+                  Loading category funding...
+                </p>
+              )}
               <div className="donut-chart-container">
                 <svg viewBox="0 0 100 100" className="donut-chart">
                   {categoryData.map((category, index) => (
@@ -287,6 +862,11 @@ const Analytics = () => {
                   </button>
                 </div>
               </div>
+              {loadingTrendData && (
+                <p className="analytics-loading-text">
+                  Loading trend data...
+                </p>
+              )}
               <div className="trend-chart-container">
                 <svg viewBox="0 0 400 200" className="trend-chart">
                   {/* Grid lines */}
@@ -355,8 +935,8 @@ const Analytics = () => {
               <div></div>
             </div>
             {loadingCampaigns ? (
-              <div className="table-row" style={{ textAlign: 'center', padding: '40px' }}>
-                <div style={{ gridColumn: '1 / -1', color: '#6b7280' }}>Loading campaigns...</div>
+              <div className="table-row table-row-message">
+                <div className="table-row-message-text">Loading campaigns...</div>
               </div>
             ) : topCampaigns.length > 0 ? (
               topCampaigns.map((campaign) => (
@@ -387,8 +967,8 @@ const Analytics = () => {
               </div>
             ))
             ) : (
-              <div className="table-row" style={{ textAlign: 'center', padding: '40px' }}>
-                <div style={{ gridColumn: '1 / -1', color: '#6b7280' }}>No active campaigns available.</div>
+              <div className="table-row table-row-message">
+                <div className="table-row-message-text">No active campaigns available.</div>
               </div>
             )}
           </div>
@@ -403,6 +983,11 @@ const Analytics = () => {
             {/* Most Active Investors */}
             <div className="insight-card">
               <h3>Most Active Investors</h3>
+              {loadingTopInvestors && (
+                <p className="analytics-loading-text">
+                  Loading active investors...
+                </p>
+              )}
               <div className="investors-list">
                 {topInvestors.map((investor, index) => (
                   <div key={index} className="investor-item">
@@ -423,6 +1008,11 @@ const Analytics = () => {
             {/* Investor Diversity */}
             <div className="insight-card">
               <h3>Investor Diversity by Category</h3>
+              {loadingInvestorDiversity && (
+                <p className="analytics-loading-text">
+                  Loading investor diversity...
+                </p>
+              )}
               <div className="diversity-bars">
                 {investorDiversity.map((item, index) => (
                   <div key={index} className="diversity-item">
@@ -433,7 +1023,7 @@ const Analytics = () => {
                     <div className="diversity-bar">
                       <div 
                         className="diversity-fill" 
-                        style={{ width: `${item.percentage}%` }}
+                        style={{ width: `${Math.max(0, Math.min(100, item.percentage))}%` }}
                       ></div>
                     </div>
                   </div>

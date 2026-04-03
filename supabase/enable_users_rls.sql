@@ -7,6 +7,23 @@
 -- Enable RLS on users table
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
+-- Helper to avoid recursive users-table policy checks.
+-- SECURITY DEFINER allows checking admin role without triggering policy recursion.
+CREATE OR REPLACE FUNCTION public.is_admin_user(target_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.users u
+    WHERE u.id = target_user_id
+      AND u.role = 'admin'
+  );
+$$;
+
 -- Drop existing policies if any
 DROP POLICY IF EXISTS "Users can read own profile" ON public.users;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
@@ -46,11 +63,7 @@ CREATE POLICY "Admin can read all users"
 ON public.users
 FOR SELECT
 USING (
-  EXISTS (
-    SELECT 1 FROM public.users
-    WHERE users.id = auth.uid()
-    AND users.role = 'admin'
-  )
+  public.is_admin_user(auth.uid())
 );
 
 -- Policy: Admin can update any user
@@ -58,11 +71,7 @@ CREATE POLICY "Admin can update any user"
 ON public.users
 FOR UPDATE
 USING (
-  EXISTS (
-    SELECT 1 FROM public.users
-    WHERE users.id = auth.uid()
-    AND users.role = 'admin'
-  )
+  public.is_admin_user(auth.uid())
 );
 
 -- Policy: Admin can delete users
@@ -70,11 +79,7 @@ CREATE POLICY "Admin can delete users"
 ON public.users
 FOR DELETE
 USING (
-  EXISTS (
-    SELECT 1 FROM public.users
-    WHERE users.id = auth.uid()
-    AND users.role = 'admin'
-  )
+  public.is_admin_user(auth.uid())
 );
 
 -- Refresh the schema cache

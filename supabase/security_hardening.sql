@@ -9,6 +9,22 @@
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users FORCE ROW LEVEL SECURITY;
 
+-- Helper to avoid recursive users-table policy checks.
+CREATE OR REPLACE FUNCTION public.is_admin_user(target_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.users u
+    WHERE u.id = target_user_id
+      AND u.role = 'admin'
+  );
+$$;
+
 DROP POLICY IF EXISTS "Allow public read access to user profiles" ON public.users;
 DROP POLICY IF EXISTS "Allow anonymous read access to user profiles" ON public.users;
 DROP POLICY IF EXISTS "Public users are viewable by everyone" ON public.users;
@@ -49,10 +65,7 @@ ON public.users
 FOR SELECT
 TO authenticated
 USING (
-  EXISTS (
-    SELECT 1 FROM public.users u
-    WHERE u.id = auth.uid() AND u.role = 'admin'
-  )
+  public.is_admin_user(auth.uid())
 );
 
 -- ----------------------------

@@ -4,6 +4,8 @@ import { useAuth } from '../store/AuthContext';
 import CampaignCard from '../components/CampaignCard';
 import TutorialPopup from '../components/TutorialPopup';
 import { campaignApi } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import '../styles/home-realtime.css';
 
 const Home = () => {
   const { user } = useAuth();
@@ -11,6 +13,12 @@ const Home = () => {
   const [featuredCampaigns, setFeaturedCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showTutorialPopup, setShowTutorialPopup] = useState(false);
+  const [campaignRefreshTick, setCampaignRefreshTick] = useState(0);
+  const [campaignRealtimeStatus, setCampaignRealtimeStatus] = useState('connecting');
+  const [campaignReconnectCount, setCampaignReconnectCount] = useState(0);
+  const [campaignLastUpdatedAt, setCampaignLastUpdatedAt] = useState(Date.now());
+  const [campaignNow, setCampaignNow] = useState(Date.now());
+  const [isRefreshingCampaigns, setIsRefreshingCampaigns] = useState(false);
 
   useEffect(() => {
     const visitsKey = 'tutorialPopupVisits';
@@ -23,10 +31,74 @@ const Home = () => {
       localStorage.setItem(visitsKey, String(visits + 1));
     }
   }, []);
+
+  useEffect(() => {
+    let refreshDebounceTimer = null;
+
+    const queueRefresh = () => {
+      if (refreshDebounceTimer) {
+        clearTimeout(refreshDebounceTimer);
+      }
+
+      refreshDebounceTimer = setTimeout(() => {
+        setCampaignRefreshTick((prev) => prev + 1);
+      }, 450);
+    };
+
+    const campaignsChannel = supabase
+      .channel('home-featured-campaigns-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'campaigns' },
+        queueRefresh
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setCampaignRealtimeStatus('connected');
+          return;
+        }
+
+        if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+          setCampaignRealtimeStatus('reconnecting');
+          setCampaignReconnectCount((prev) => prev + 1);
+          return;
+        }
+
+        if (status === 'CLOSED') {
+          setCampaignRealtimeStatus('disconnected');
+        }
+      });
+
+    const pollIntervalId = setInterval(() => {
+      setCampaignRefreshTick((prev) => prev + 1);
+    }, 30000);
+
+    return () => {
+      clearInterval(pollIntervalId);
+      if (refreshDebounceTimer) {
+        clearTimeout(refreshDebounceTimer);
+      }
+      setCampaignRealtimeStatus('disconnected');
+      supabase.removeChannel(campaignsChannel);
+    };
+  }, []);
+
+  useEffect(() => {
+    const timerId = setInterval(() => {
+      setCampaignNow(Date.now());
+    }, 5000);
+
+    return () => clearInterval(timerId);
+  }, []);
   
   // Fetch real campaigns from database
   useEffect(() => {
     const fetchCampaigns = async () => {
+      const isInitialLoad = campaignRefreshTick === 0;
+      if (!isInitialLoad) {
+        setIsRefreshingCampaigns(true);
+      }
+
       try {
         const { data } = await campaignApi.getCampaigns({ status: 'active' });
         // Get top 3 campaigns sorted by raised amount
@@ -51,16 +123,39 @@ const Home = () => {
           .sort((a, b) => (b.raisedAmount || 0) - (a.raisedAmount || 0))
           .slice(0, 3);
         setFeaturedCampaigns(top3);
+        setCampaignLastUpdatedAt(Date.now());
       } catch (error) {
         console.error('Failed to fetch campaigns:', error);
         setFeaturedCampaigns([]);
       } finally {
+        setIsRefreshingCampaigns(false);
         setLoading(false);
       }
     };
     
     fetchCampaigns();
-  }, []);
+  }, [campaignRefreshTick]);
+
+  const formatRelativeCampaignUpdate = () => {
+    const seconds = Math.max(0, Math.floor((campaignNow - campaignLastUpdatedAt) / 1000));
+    if (seconds < 5) return 'just now';
+    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    return `${Math.floor(seconds / 3600)}h ago`;
+  };
+
+  const handleManualCampaignRefresh = () => {
+    setCampaignRefreshTick((prev) => prev + 1);
+  };
+
+  const homeRealtimeLabel =
+    campaignRealtimeStatus === 'connected'
+      ? 'Live Campaign Feed'
+      : campaignRealtimeStatus === 'reconnecting'
+      ? `Reconnecting${campaignReconnectCount > 0 ? ` (${campaignReconnectCount})` : ''}`
+      : campaignRealtimeStatus === 'disconnected'
+      ? 'Feed Disconnected'
+      : 'Connecting Feed...';
 
   // Features data
   const features = [
@@ -659,6 +754,27 @@ const Home = () => {
             }}>
               Top Investment Opportunities
             </div>
+            <div className={`home-live-badge ${campaignRealtimeStatus}`}>
+              <span className={`home-live-dot ${campaignRealtimeStatus}`}></span>
+              {homeRealtimeLabel}
+            </div>
+            <div className="home-live-updated-text">
+              Last updated: {formatRelativeCampaignUpdate()}
+            </div>
+            <button
+              type="button"
+              className="home-live-refresh-btn"
+              onClick={handleManualCampaignRefresh}
+              disabled={loading || isRefreshingCampaigns}
+            >
+              {loading || isRefreshingCampaigns ? 'Refreshing...' : 'Refresh'}
+            </button>
+            <span
+              className="home-live-auto-note"
+              title="Auto-refreshes every 30 seconds and when realtime campaign events are received."
+            >
+              Auto-refresh: 30s
+            </span>
             <h2 style={{ 
               fontSize: '2.5rem', 
               fontWeight: 'bold', 
@@ -1171,7 +1287,7 @@ const Home = () => {
                 color: '#4a5568', 
                 marginBottom: '12px' 
               }}>
-                Hi! I'm your AI investment advisor. I can help you with:
+                Hi! I&apos;m your AI investment advisor. I can help you with:
               </p>
               <div style={{ fontSize: '0.875rem', color: '#4a5568', marginBottom: '16px' }}>
                 <div style={{ marginBottom: '4px' }}>• Investment opportunity analysis</div>

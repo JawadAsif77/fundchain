@@ -78,14 +78,15 @@ export const AuthProvider = ({ children }) => {
   const failedUserCreationsRef = useRef(new Set()); // Track users that failed creation
 
   // --- 1. CORE DATA LOADER (Prevents Duplicate Fetches) ---
-  const loadUserData = useCallback(async (userId, sessionUser = null) => {
+  const loadUserData = useCallback(async (userId, sessionUser = null, options = {}) => {
+    const { forceRefresh = false } = options;
     if (fetchingUserDataRef.current === userId) return;
     
     // Check if this user already failed creation - prevent infinite retries
-    if (failedUserCreationsRef.current.has(userId) && !sessionUser) {
+    if (!forceRefresh && failedUserCreationsRef.current.has(userId) && !sessionUser) {
       debugLog('[Auth] Skipping retry for user with failed creation:', userId);
       setLoading(false);
-      return;
+      return null;
     }
     
     fetchingUserDataRef.current = userId;
@@ -158,7 +159,7 @@ export const AuthProvider = ({ children }) => {
           // Still set loading to false and return - user can't proceed without profile
           setProfile(null);
           setLoading(false);
-          return;
+          return null;
         }
         
         userProfile = createdUser;
@@ -197,8 +198,11 @@ export const AuthProvider = ({ children }) => {
         }).catch(e => { if (isDev) console.warn('Wallet load warning:', e); });
       }
 
+      return userProfile;
+
     } catch (e) {
       console.error('[Auth] loadUserData error:', e);
+      return null;
     } finally {
       fetchingUserDataRef.current = null;
       debugLog('[Auth] Setting loading to false');
@@ -348,6 +352,13 @@ export const AuthProvider = ({ children }) => {
 
   const clearError = useCallback(() => setError(null), []);
 
+  const refreshProfile = useCallback(async () => {
+    if (!user?.id) return null;
+    // Role updates can happen immediately before refresh; clear dedupe cache first.
+    clearRequestCache();
+    return loadUserData(user.id, user, { forceRefresh: true });
+  }, [user, loadUserData]);
+
   // --- 5. COMPUTED VALUES (Preserved from your original file) ---
   
   const currentUser = useMemo(() => {
@@ -396,7 +407,7 @@ export const AuthProvider = ({ children }) => {
     resetPassword,
     clearError,
     refreshWallet: () => getWallet(user?.id).then(w => w.status==='success' && setWallet({balanceFc: w.balanceFc, lockedFc: w.lockedFc})),
-    refreshProfile: () => loadUserData(user?.id, user),
+    refreshProfile,
     isAuthenticated: !!user,
     isEmailConfirmed: !!user?.email_confirmed_at,
     needsProfileCompletion,
@@ -406,7 +417,7 @@ export const AuthProvider = ({ children }) => {
   }), [
     currentUser, profile, roleStatus, wallet, sessionVersion, loading, error,
     login, register, logout, updateProfileHandler, resetPassword, clearError,
-    loadUserData, user, needsProfileCompletion, needsRoleSelection, needsKYC, isFullyOnboarded
+    loadUserData, user, refreshProfile, needsProfileCompletion, needsRoleSelection, needsKYC, isFullyOnboarded
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

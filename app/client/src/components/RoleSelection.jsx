@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -14,19 +14,30 @@ const RoleSelection = () => {
   const [selectedRole, setSelectedRole] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
+  const redirectTimerRef = useRef(null);
   const { user, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   // Security: If user already has a role, redirect to dashboard
-  React.useEffect(() => {
+  useEffect(() => {
     if (profile?.role) {
       navigate('/dashboard', { replace: true });
     }
   }, [profile, navigate]);
 
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleRoleSelect = (role) => {
     setSelectedRole(role);
     setError('');
+    setWarning('');
   };
 
   const handleSubmit = async (e) => {
@@ -45,6 +56,7 @@ const RoleSelection = () => {
 
     setIsSubmitting(true);
     setError('');
+    setWarning('');
 
     try {
       // Get session and call edge function to update role
@@ -69,11 +81,26 @@ const RoleSelection = () => {
         throw new Error(result.error || 'Failed to update role');
       }
 
-      // Refresh user profile to get updated role
-      await refreshProfile();
+      // Refresh user profile to get updated role from database/auth context
+      const refreshedProfile = await refreshProfile();
+      const effectiveRole = refreshedProfile?.role || result?.data?.role || selectedRole;
+
+      if (!refreshedProfile?.role && result?.data?.role) {
+        setIsSubmitting(false);
+        setWarning('Your role was saved successfully. Syncing your session now and redirecting...');
+
+        redirectTimerRef.current = setTimeout(() => {
+          if (effectiveRole === 'creator') {
+            navigate('/kyc', { replace: true });
+          } else {
+            navigate('/dashboard', { replace: true });
+          }
+        }, 1200);
+        return;
+      }
 
       // Redirect based on role
-      if (selectedRole === 'creator') {
+      if (effectiveRole === 'creator') {
         // Creators must complete KYC first
         navigate('/kyc', { replace: true });
       } else {
@@ -107,6 +134,12 @@ const RoleSelection = () => {
           {error && (
             <div className="role-error-message">
               {error}
+            </div>
+          )}
+
+          {warning && (
+            <div className="role-warning-message">
+              {warning}
             </div>
           )}
 

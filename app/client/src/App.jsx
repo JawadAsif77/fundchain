@@ -1,6 +1,5 @@
-import React, { useMemo, useRef } from 'react';
+import React, { Suspense, lazy, useMemo, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
-import { AuthProvider } from './store/AuthContext';
 import { useAuth } from './store/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
@@ -9,31 +8,30 @@ import NetworkStatus from './components/NetworkStatus';
 import ChatWidget from './components/ChatWidget';
 
 // Pages
-import Home from './pages/Home';
-import Explore from './pages/Explore';
-import Campaign from './pages/Campaign';
-import Login from './pages/Login';
-import Register from './pages/Register_simple';
-import Dashboard from './pages/Dashboard';
-import Profile from './pages/ProfileDisplay';
-import ProfileEdit from './pages/ProfileEdit';
-import PublicProfile from './pages/PublicProfile';
-import SearchUsers from './pages/SearchUsers';
-import ResetPassword from './pages/ResetPassword';
-import NotFound from './pages/NotFound';
-import KYCForm from './pages/KYCForm';
-import CreateProject from './pages/CreateProject_Enhanced';
-import AdminPanel from './pages/AdminPanel';
+const Home = lazy(() => import('./pages/Home'));
+const Explore = lazy(() => import('./pages/Explore'));
+const Campaign = lazy(() => import('./pages/Campaign'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register_simple'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Profile = lazy(() => import('./pages/ProfileDisplay'));
+const ProfileEdit = lazy(() => import('./pages/ProfileEdit'));
+const PublicProfile = lazy(() => import('./pages/PublicProfile'));
+const SearchUsers = lazy(() => import('./pages/SearchUsers'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const KYCForm = lazy(() => import('./pages/KYCForm'));
+const CreateProject = lazy(() => import('./pages/CreateProject_Enhanced'));
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import RoleSelection from './components/RoleSelection';
-import TutorialPopup from './components/TutorialPopup';
-import Wallet from './pages/Wallet';
-import Portfolio from './pages/Portfolio';
-import HowItWorks from './pages/HowItWorks';
-import Governance from './pages/Governance';
-import Analytics from './pages/Analytics';
+const TutorialPopup = lazy(() => import('./components/TutorialPopup'));
+const Wallet = lazy(() => import('./pages/Wallet'));
+const Portfolio = lazy(() => import('./pages/Portfolio'));
+const HowItWorks = lazy(() => import('./pages/HowItWorks'));
+const Governance = lazy(() => import('./pages/Governance'));
+const Analytics = lazy(() => import('./pages/Analytics'));
 import { TutorialProvider } from './contexts/TutorialContext';
 import TutorialOverlay from './components/TutorialOverlay';
 
@@ -50,8 +48,13 @@ import './styles/card.css';
 import './styles/form.css';
 import './styles/util.css';
 
+const RouteLoader = () => (
+  <div className="container" style={{ padding: '40px 16px', color: '#6b7280' }}>
+    Loading page...
+  </div>
+);
+
 function AppContent() {
-  console.log('App component rendering...');
   const { isAuthenticated, roleStatus } = useAuth();
   const location = useLocation();
 
@@ -183,7 +186,14 @@ function AppContent() {
             />
 
             {/* Dedicated full-screen tutorial route */}
-            <Route path="/tutorial" element={<TutorialPopup />} />
+            <Route
+              path="/tutorial"
+              element={
+                <Suspense fallback={<RouteLoader />}>
+                  <TutorialPopup />
+                </Suspense>
+              }
+            />
             
             {/* All other routes use the normal layout */}
             <Route 
@@ -203,6 +213,7 @@ function AppContent() {
                       }}
                     />
                     <main ref={mainRef} style={{ flex: 1 }}>
+                      <Suspense fallback={<RouteLoader />}>
                       <Routes>
                       {/* Public routes */}
                       <Route path="/" element={<Home />} />
@@ -315,6 +326,7 @@ function AppContent() {
                       {/* 404 catch-all */}
                       <Route path="*" element={<NotFound />} />
                       </Routes>
+                      </Suspense>
                     </main>
                     <Footer />
                     
