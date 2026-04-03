@@ -198,15 +198,16 @@ function AppContent() {
                         governanceRef,
                         analyticsRef,
                         dashboardNavRef,
+                        walletNavRef,
+                        profileNavRef,
                       }}
                     />
                     <main ref={mainRef} style={{ flex: 1 }}>
                       <Routes>
                       {/* Public routes */}
-                    walletNavRef,
-                    profileNavRef,
                       <Route path="/" element={<Home />} />
                       <Route path="/explore" element={<Explore />} />
+                      <Route path="/campaigns" element={<Explore />} />
                       <Route path="/search" element={<SearchUsers />} />
                       <Route path="/how-it-works" element={<HowItWorks />} />
                       <Route path="/governance" element={<Governance />} />
@@ -218,6 +219,11 @@ function AppContent() {
                         </PublicRoute>
                       } />
                       <Route path="/register" element={
+                        <PublicRoute>
+                          <Register />
+                        </PublicRoute>
+                      } />
+                      <Route path="/create-account" element={
                         <PublicRoute>
                           <Register />
                         </PublicRoute>

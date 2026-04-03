@@ -1,21 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import CampaignCard from '../components/CampaignCard';
+import TutorialPopup from '../components/TutorialPopup';
 import { campaignApi } from '../lib/api';
 
 const Home = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [showChatbot, setShowChatbot] = useState(false);
   const [featuredCampaigns, setFeaturedCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showTutorialPopup, setShowTutorialPopup] = useState(false);
 
   useEffect(() => {
-    if (!localStorage.getItem('platformTutorialSeen')) {
-      navigate('/tutorial', { replace: true });
+    const visitsKey = 'tutorialPopupVisits';
+    const rawVisits = localStorage.getItem(visitsKey);
+    const visits = Number.isFinite(Number(rawVisits)) ? Number(rawVisits) : 0;
+
+    // Show only for first and second app visits.
+    if (visits < 2) {
+      setShowTutorialPopup(true);
+      localStorage.setItem(visitsKey, String(visits + 1));
     }
-  }, [navigate]);
+  }, []);
   
   // Fetch real campaigns from database
   useEffect(() => {
@@ -150,7 +157,11 @@ const Home = () => {
   ];
 
   return (
-    <div>
+    <>
+      {showTutorialPopup && (
+        <TutorialPopup onClose={() => setShowTutorialPopup(false)} />
+      )}
+      <div>
       {/* Hero Section */}
       <section style={{ 
         backgroundColor: 'white',
@@ -1185,7 +1196,8 @@ const Home = () => {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
