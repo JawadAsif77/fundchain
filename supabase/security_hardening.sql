@@ -10,17 +10,18 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users FORCE ROW LEVEL SECURITY;
 
 -- Helper to avoid recursive users-table policy checks.
-CREATE OR REPLACE FUNCTION public.is_admin_user(target_user_id uuid)
+CREATE OR REPLACE FUNCTION public.current_user_is_admin()
 RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public
+SET row_security = off
 AS $$
   SELECT EXISTS (
     SELECT 1
     FROM public.users u
-    WHERE u.id = target_user_id
+    WHERE u.id = auth.uid()
       AND u.role = 'admin'
   );
 $$;
@@ -65,7 +66,7 @@ ON public.users
 FOR SELECT
 TO authenticated
 USING (
-  public.is_admin_user(auth.uid())
+  public.current_user_is_admin()
 );
 
 -- ----------------------------
@@ -151,10 +152,7 @@ ON public.platform_wallet
 FOR SELECT
 TO authenticated
 USING (
-  EXISTS (
-    SELECT 1 FROM public.users u
-    WHERE u.id = auth.uid() AND u.role = 'admin'
-  )
+  public.current_user_is_admin()
 );
 
 ALTER TABLE public.campaign_wallets ENABLE ROW LEVEL SECURITY;
@@ -172,10 +170,7 @@ USING (
     WHERE c.id = campaign_wallets.campaign_id
       AND (
         c.creator_id = auth.uid()
-        OR EXISTS (
-          SELECT 1 FROM public.users u
-          WHERE u.id = auth.uid() AND u.role = 'admin'
-        )
+        OR public.current_user_is_admin()
       )
   )
 );
