@@ -1,10 +1,10 @@
-# 🚀 FundChain - Investment Crowdfunding Platform
+# FundChain - Investment Crowdfunding Platform
 
 **Smart crowdfunding made simple.** FundChain is a modern investment platform that connects entrepreneurs with investors through a secure, transparent, and easy-to-use interface.
 
 ---
 
-## 📌 What is FundChain?
+## What is FundChain?
 
 FundChain is a web-based investment crowdfunding platform designed to revolutionize how projects get funded. Whether you're an entrepreneur looking to raise capital or an investor seeking opportunities, FundChain provides all the tools you need in one place.
 
@@ -12,9 +12,9 @@ FundChain is a web-based investment crowdfunding platform designed to revolution
 
 ---
 
-## ✨ Core Features
+## Core Features
 
-### For Investors 🏦
+### For Investors
 - **Browse Opportunities** - Discover vetted investment projects across different categories
 - **Smart Investment** - Invest directly in projects using FundChain tokens or Solana
 - **Portfolio Management** - Track all your investments and returns in one dashboard
@@ -22,7 +22,7 @@ FundChain is a web-based investment crowdfunding platform designed to revolution
 - **Investment Recommendations** - Get personalized project suggestions based on your preferences
 - **Community** - Connect with other investors and project creators
 
-### For Creators 💡
+### For Creators
 - **Launch Campaigns** - Create and manage fundraising campaigns with milestone-based funding
 - **Showcase Projects** - Present your project with rich media, team information, and detailed plans
 - **KYC Verification** - Complete identity verification to build credibility with investors
@@ -30,7 +30,7 @@ FundChain is a web-based investment crowdfunding platform designed to revolution
 - **Investor Communication** - Share updates and communicate directly with your backers
 - **Fund Management** - Receive funds and withdraw earnings directly to your Solana wallet
 
-### For Everyone 🔒
+### For Everyone
 - **Secure Authentication** - Multi-role login (Investor/Creator/Admin) with enterprise-grade security
 - **Role-Based Access** - Tailored experience based on your role on the platform
 - **KYC/AML Compliance** - Identity verification and anti-money laundering checks
@@ -39,7 +39,7 @@ FundChain is a web-based investment crowdfunding platform designed to revolution
 
 ---
 
-## 🎯 How It Works
+## How It Works
 
 ### Step 1: Sign Up
 Create your account and choose your role (Investor or Creator)
@@ -58,7 +58,7 @@ Create your account and choose your role (Investor or Creator)
 
 ---
 
-## 💰 Investment Features
+## Investment Features
 
 ### Token System
 - **FC Tokens** - FundChain's internal investment token (1 FC = $1)
@@ -79,18 +79,18 @@ Create your account and choose your role (Investor or Creator)
 
 ---
 
-## 🔐 Security & Trust
+## Security & Trust
 
-✅ **Row-Level Security (RLS)** - Database-level access control  
-✅ **JWT Authentication** - Secure token-based authentication  
-✅ **KYC/AML Verification** - Identity verification and compliance checks  
-✅ **Blockchain-Backed Transactions** - On-chain settlement on Solana  
-✅ **Encrypted Sensitive Data** - All personal data encrypted at rest  
-✅ **Admin Oversight** - Platform administrators monitor for fraud and abuse  
+* **Row-Level Security (RLS)** - Database-level access control
+* **JWT Authentication** - Secure token-based authentication
+* **KYC/AML Verification** - Identity verification and compliance checks
+* **Blockchain-Backed Transactions** - On-chain settlement on Solana
+* **Encrypted Sensitive Data** - All personal data encrypted at rest
+* **Admin Oversight** - Platform administrators monitor for fraud and abuse  
 
 ---
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 ### Frontend
 - **React 18** - Modern UI framework
@@ -121,7 +121,7 @@ Create your account and choose your role (Investor or Creator)
 
 ---
 
-## 📱 Available on
+## Available on
 
 - **Web**: [fundchain.vercel.app](https://fundchain.vercel.app)
 - **Browser**: Chrome, Firefox, Safari, Edge (latest versions)
@@ -129,7 +129,7 @@ Create your account and choose your role (Investor or Creator)
 
 ---
 
-## 🚀 Quick Start for Users
+## Quick Start for Users
 
 ### 1. Sign Up
 1. Go to [FundChain App](https://fundchain.vercel.app)
@@ -151,21 +151,21 @@ Create your account and choose your role (Investor or Creator)
 
 ---
 
-## 📊 Platform Capabilities
+## Platform Capabilities
 
 | Feature | Investors | Creators | Admins |
 |---------|-----------|----------|--------|
-| Browse Projects | ✅ | ✅ | ✅ |
-| Invest in Campaigns | ✅ | ❌ | ✅ |
-| Create Campaigns | ❌ | ✅ | ✅ |
-| KYC Verification | ❌ | ✅ | ✅ |
-| Portfolio Tracking | ✅ | ❌ | ✅ |
-| Withdraw Funds | ✅ | ✅ | ✅ |
-| Admin Dashboard | ❌ | ❌ | ✅ |
+| Browse Projects | * | * | * |
+| Invest in Campaigns | * | - | * |
+| Create Campaigns | - | * | * |
+| KYC Verification | - | * | * |
+| Portfolio Tracking | * | - | * |
+| Withdraw Funds | * | * | * |
+| Admin Dashboard | - | - | * |
 
 ---
 
-## 🤝 Community & Support
+## Community & Support
 
 - **Report Issues:** [GitHub Issues](https://github.com/JawadAsif77/fundchain/issues)
 - **Feature Requests:** [GitHub Discussions](https://github.com/JawadAsif77/fundchain/discussions)
@@ -173,21 +173,23 @@ Create your account and choose your role (Investor or Creator)
 
 ---
 
-## 👥 Team
+## Team
 
 | Role | Member | GitHub |
 |------|--------|--------|
-| Lead Developer | Jawad Asif | [@JawadAsif77](https://github.com/JawadAsif77) |
+| Project Leader (Full Stack & AI/ML Engineer) | Jawad Asif | [@JawadAsif77](https://github.com/JawadAsif77) |
+| UI/UX Designer (Researcher & Analyser) | Mahnoor Haider | - |
+| DevOps Engineer (Database Core) | M.Aashir | - |
 
 ---
 
-## 📄 License
+## License
 
 FundChain is open source and available under the MIT License. See [LICENSE](LICENSE) for more details.
 
 ---
 
-## 🔗 Links
+## Links
 
 - **GitHub:** [github.com/JawadAsif77/fundchain](https://github.com/JawadAsif77/fundchain)
 - **Live App:** [fundchain.vercel.app](https://fundchain.vercel.app)
@@ -195,12 +197,12 @@ FundChain is open source and available under the MIT License. See [LICENSE](LICE
 
 ---
 
-**Made with ❤️ by the FundChain Team**
+**Made by the FundChain Team**
   - In-app notification center
   - Customizable notification preferences
   - Real-time activity updates
 
-### 📊 **Advanced Analytics & Reporting**
+### **Advanced Analytics & Reporting**
 - **Business Intelligence Dashboard**
   - Campaign success prediction models
   - Market trend analysis
@@ -215,7 +217,7 @@ FundChain is open source and available under the MIT License. See [LICENSE](LICE
   - API for third-party integrations
   - Real-time data visualization
 
-### 💼 **Enterprise Features**
+### **Enterprise Features**
 - **Institutional Investor Tools**
   - Dedicated investor portals
   - Advanced due diligence tools
@@ -232,9 +234,9 @@ FundChain is open source and available under the MIT License. See [LICENSE](LICE
 
 ---
 
-## 🏗️ Technical Architecture
+## Technical Architecture
 
-### **Frontend Stack** 🎨
+### **Frontend Stack**
 ```typescript
 React 18.2.0              // Modern UI Framework
 TypeScript 4.9+           // Type Safety
@@ -248,7 +250,7 @@ React Hook Form           // Form Management
 Zod                       // Runtime Type Validation
 ```
 
-### **Backend Infrastructure** ⚙️
+### **Backend Infrastructure**
 ```sql
 Supabase                  // Backend-as-a-Service
 PostgreSQL 15             // Primary Database
@@ -258,7 +260,7 @@ Real-time Subscriptions  // Live Data Sync
 Supabase Storage         // File Storage
 ```
 
-### **Third-Party Integrations** 🔌
+### **Third-Party Integrations**
 ```javascript
 Stripe                    // Payment Processing
 SendGrid                 // Email Services
@@ -268,7 +270,7 @@ Algolia                   // Search Engine
 Auth0                     // Advanced Authentication
 ```
 
-### **DevOps & Deployment** 🚀
+### **DevOps & Deployment**
 ```yaml
 Vercel                    // Frontend Hosting
 Supabase Cloud           // Backend Hosting
@@ -280,7 +282,7 @@ Cloudflare               // CDN & Security
 
 ---
 
-## 📊 Database Schema
+## Database Schema
 
 ### **Core Tables Structure**
 
@@ -339,7 +341,7 @@ system_settings     // Platform configuration
 
 ---
 
-## 🔧 Installation & Setup
+## Installation & Setup
 
 ### **Prerequisites**
 ```bash
@@ -435,7 +437,7 @@ supabase start
 
 ## 🛠️ Advanced Features
 
-### **Security & Compliance** 🔒
+### **Security & Compliance**
 - **Multi-Factor Authentication (MFA)**
 - **End-to-End Encryption** for sensitive data
 - **GDPR Compliance** with data protection
@@ -443,7 +445,7 @@ supabase start
 - **PCI DSS** compliance for payments
 - **Regular Security Audits** and penetration testing
 
-### **Performance & Scalability** ⚡
+### **Performance & Scalability**
 - **CDN Integration** for global content delivery
 - **Database Optimization** with advanced indexing
 - **Caching Strategies** for improved response times
@@ -451,7 +453,7 @@ supabase start
 - **Auto-scaling** infrastructure
 - **Performance Monitoring** with real-time alerts
 
-### **Integration Capabilities** 🔗
+### **Integration Capabilities**
 - **RESTful API** for third-party integrations
 - **Webhooks** for real-time event notifications
 - **SDK Development** for easier integration
@@ -461,7 +463,7 @@ supabase start
 
 ---
 
-## 📦 Deployment
+## Deployment
 
 ### **Production Deployment**
 ```bash
@@ -503,7 +505,7 @@ docker-compose up -d
 
 ---
 
-## 👥 Contributing
+## Contributing
 
 ### **Development Workflow**
 1. **Fork** the repository
@@ -531,7 +533,7 @@ refactor: optimize database queries
 
 ---
 
-## 📈 Performance Metrics
+## Performance Metrics
 
 ### **Current Performance** (As of Nov 2024)
 - **Page Load Time**: < 2.5 seconds
@@ -550,7 +552,7 @@ refactor: optimize database queries
 
 ---
 
-## 🔍 Testing Strategy
+## Testing Strategy
 
 ### **Testing Pyramid**
 ```bash
@@ -579,27 +581,27 @@ npm run test:security
 
 ---
 
-## 📞 Support & Community
+## Support & Community
 
 ### **👨‍💻 Development Team**
 - **Lead Developer**: [@JawadAsif77](https://github.com/JawadAsif77)
 - **Repository**: [github.com/JawadAsif77/fundchain](https://github.com/JawadAsif77/fundchain)
 - **Email**: [contact@fundchain.app](mailto:contact@fundchain.app)
 
-### **🆘 Getting Help**
-- **🐛 Bug Reports**: [GitHub Issues](https://github.com/JawadAsif77/fundchain/issues)
-- **💡 Feature Requests**: [GitHub Discussions](https://github.com/JawadAsif77/fundchain/discussions)
-- **📚 Documentation**: [docs.fundchain.app](https://docs.fundchain.app)
-- **💬 Community**: [Discord Server](https://discord.gg/fundchain)
+### **Getting Help**
+- **Bug Reports**: [GitHub Issues](https://github.com/JawadAsif77/fundchain/issues)
+- **Feature Requests**: [GitHub Discussions](https://github.com/JawadAsif77/fundchain/discussions)
+- **Documentation**: [docs.fundchain.app](https://docs.fundchain.app)
+- **Community**: [Discord Server](https://discord.gg/fundchain)
 
-### **📋 Roadmap & Updates**
+### **Roadmap & Updates**
 - **Public Roadmap**: [roadmap.fundchain.app](https://roadmap.fundchain.app)
 - **Release Notes**: [GitHub Releases](https://github.com/JawadAsif77/fundchain/releases)
 - **Development Blog**: [blog.fundchain.app](https://blog.fundchain.app)
 
 ---
 
-## 📄 Legal & License
+## Legal & License
 
 ### **License**
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
@@ -610,20 +612,20 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 - **Cookie Policy**: [cookies.fundchain.app](https://cookies.fundchain.app)
 
 ### **Compliance**
-- **GDPR Compliant** 🇪🇺
-- **CCPA Compliant** 🇺🇸
-- **SOC 2 Type II** 🔒
-- **PCI DSS Level 1** 💳
+- **GDPR Compliant**
+- **CCPA Compliant**
+- **SOC 2 Type II**
+- **PCI DSS Level 1**
 
 ---
 
 <div align="center">
 
-## 🌟 **Thank You for Your Interest in FundChain!**
+## Thank You for Your Interest in FundChain!
 
-### **Star this repository if you find it helpful!** ⭐
+### Star this repository if you find it helpful!
 
-**Built with ❤️ using React, Vite, Supabase, and the power of community**
+**Built using React, Vite, Supabase, and the power of community**
 
 [![GitHub stars](https://img.shields.io/github/stars/JawadAsif77/fundchain.svg?style=social&label=Star)](https://github.com/JawadAsif77/fundchain/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/JawadAsif77/fundchain.svg?style=social&label=Fork)](https://github.com/JawadAsif77/fundchain/network)
@@ -631,6 +633,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 ### **Join our community and help shape the future of crowdfunding!**
 
-[🚀 Live Demo](https://fundchain.vercel.app) • [📚 Documentation](https://docs.fundchain.app) • [💬 Discord](https://discord.gg/fundchain) • [🐛 Report Bug](https://github.com/JawadAsif77/fundchain/issues)
+[Live Demo](https://fundchain.vercel.app) • [Documentation](https://docs.fundchain.app) • [Discord](https://discord.gg/fundchain) • [Report Bug](https://github.com/JawadAsif77/fundchain/issues)
 
 </div>
