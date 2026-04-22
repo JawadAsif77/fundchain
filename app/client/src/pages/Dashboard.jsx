@@ -11,6 +11,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { supabase } from '../lib/supabase';
 import { getUserPreferences } from '../services/preferencesService';
 import TransactionHistory from '../components/TransactionHistory';
+import MyReports from '../components/reports/MyReports';
 import { useEscrowActions } from '../hooks/useEscrowActions';
 
 // Connected Wallet Display Component
@@ -1539,6 +1540,16 @@ const Dashboard = ({ tutorialRefs = {} }) => {
 
       {/* Body */}
       {isInvestor ? renderInvestorDashboard() : renderCreatorDashboard()}
+
+      <div
+        style={{
+          marginTop: '40px',
+          borderTop: '1px solid var(--color-border)',
+          paddingTop: '28px'
+        }}
+      >
+        <MyReports />
+      </div>
 
       {/* Recommended Projects Section - Below Main Content */}
       <section style={{ marginTop: '64px', marginBottom: '48px' }}>

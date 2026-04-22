@@ -809,12 +809,13 @@ export const qaApi = {
     if (!user) throw new Error('Not authenticated');
 
     const { data, error } = await supabase
-      .from('content_reports')
+      .from('reports')
       .insert({
-        content_type: contentType,
-        content_id: contentId,
-        reported_by: user.id,
-        reason
+        category: contentType,
+        campaign_id: contentId,
+        reporter_user_id: user.id,
+        description: reason,
+        status: 'PENDING'
       })
       .select()
       .single();
@@ -939,16 +940,18 @@ export const adminApi = {
    */
   async getContentReports() {
     const { data: reports, error } = await supabase
-      .from('content_reports')
+      .from('reports')
       .select('*')
-      .eq('resolved', false)
+      .neq('status', 'RESOLVED')
       .order('created_at', { ascending: false });
     
     if (error) throw error;
     
     // Fetch reporter details separately
     if (reports && reports.length > 0) {
-      const reporterIds = [...new Set(reports.map(r => r.reported_by))];
+      const reporterIds = [
+        ...new Set(reports.map(r => r.reporter_user_id))
+      ];
       const { data: users } = await supabase
         .from('users')
         .select('id, username, email')
@@ -960,7 +963,7 @@ export const adminApi = {
       
       return reports.map(r => ({
         ...r,
-        reporter: usersMap[r.reported_by] || null
+        reporter: usersMap[r.reporter_user_id] || null
       }));
     }
     
@@ -1058,8 +1061,12 @@ export const adminApi = {
    */
   async resolveReport(reportId) {
     const { data, error } = await supabase
-      .from('content_reports')
-      .update({ resolved: true })
+      .from('reports')
+      .update({
+        status: 'RESOLVED',
+        resolution: 'NO_VIOLATION',
+        resolved_at: new Date().toISOString()
+      })
       .eq('id', reportId)
       .select()
       .single();

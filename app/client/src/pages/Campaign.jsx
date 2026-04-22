@@ -9,6 +9,7 @@ import { campaignApi } from '../lib/api.js';
 import RiskBadge from '../components/RiskBadge';
 import { analyzeCampaignRisk } from '../services/riskAnalysis';
 import AdminRiskOverride from '../components/AdminRiskOverride';
+import ReportModal from '../components/reports/ReportModal';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { useEscrowActions } from '../hooks/useEscrowActions';
@@ -29,6 +30,7 @@ const Campaign = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [updatesKey, setUpdatesKey] = useState(0);
   const [reanalysisLoading, setReanalysisLoading] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const isCreator = userId === campaign?.creatorId;
   const isAdmin = profile?.role === 'admin';
@@ -1265,6 +1267,29 @@ const Campaign = () => {
                     </button>
                   </div>
                 )}
+
+                {userId && !isCreator && campaign?.id && (
+                  <div className="card" style={{ marginTop: '12px', padding: '14px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsReportModalOpen(true)}
+                      className="btn btn-primary"
+                      style={{
+                        width: '100%',
+                        padding: '14px',
+                        fontSize: '16px',
+                        fontWeight: 'bold',
+                        backgroundColor: '#ffffff',
+                        color: '#ef4444',
+                        border: '2px solid #29C7AC',
+                        borderRadius: '999px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span style={{ color: '#ef4444', fontSize: '20px', marginRight: '6px' }}>⚑</span>Report this project
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1375,6 +1400,13 @@ const Campaign = () => {
           </div>
         </div>
       )}
+
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        campaignId={campaign.id}
+        campaignTitle={campaign.title}
+      />
     </div>
   );
 };

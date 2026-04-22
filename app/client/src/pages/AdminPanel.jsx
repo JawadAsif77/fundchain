@@ -36,6 +36,12 @@ const AdminPanel = () => {
   const [allQuestions, setAllQuestions] = useState([]);
   const [allAnswers, setAllAnswers] = useState([]);
   const [moderationLoading, setModerationLoading] = useState(false);
+  const [noteModal, setNoteModal] = useState({
+    isOpen: false,
+    reportId: null,
+    actionType: null,
+    note: ''
+  });
   // Risk management state
   const [riskCampaigns, setRiskCampaigns] = useState([]);
   const [riskLoading, setRiskLoading] = useState(false);
@@ -65,7 +71,42 @@ const AdminPanel = () => {
     try {
       setModerationLoading(true);
       const [reports, questions, answers] = await Promise.all([
-        adminApi.getContentReports(),
+        (async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          const supabaseUrl = supabase.supabaseUrl;
+
+          const response = await fetch(`${supabaseUrl}/functions/v1/admin-reports`, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            console.error('Error loading content reports:', result);
+            setError(result.error || 'Failed to load reports');
+            return [];
+          }
+
+          // Map new reports schema to existing moderation UI expectations.
+          return (result?.reports || []).map((report) => ({
+            id: report.report_id,
+            content_type: 'campaign',
+            content_id: report.campaign_id,
+            created_at: report.created_at,
+            reason: report.description,
+            reporter: report.is_anonymous ? null : { username: 'User', email: '' },
+            category: report.category,
+            campaign_title: report.campaign_title,
+            status: report.status,
+            resolution: report.resolution,
+            ai_risk_contribution: report.ai_risk_contribution
+          }));
+        })(),
         adminApi.getAllQuestions(),
         adminApi.getAllAnswers()
       ]);
@@ -152,6 +193,78 @@ const AdminPanel = () => {
     } catch (err) {
       alert('Failed to resolve report: ' + err.message);
     }
+  };
+
+  const handleAdminAction = async (reportId, actionType, notes = '') => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      if (!token) {
+        alert('Authentication error. Please log in again.')
+        return
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+      // If VITE_SUPABASE_URL does not exist in this file,
+      // use whatever environment variable is already used
+      // for the Supabase project URL in this codebase
+
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/admin-reports/${reportId}/action`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            action_type: actionType,
+            notes: notes
+          })
+        }
+      )
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Action failed')
+      }
+
+      alert(`Action "${actionType}" applied successfully.`)
+      loadContentReports()
+
+    } catch (err) {
+      alert('Failed to apply action: ' + err.message)
+    }
+  }
+
+  const handleActionWithNote = (reportId, actionType) => {
+    setNoteModal({
+      isOpen: true,
+      reportId,
+      actionType,
+      note: ''
+    });
+  }
+
+  const handleNoteModalSubmit = () => {
+    handleAdminAction(noteModal.reportId, noteModal.actionType, noteModal.note);
+    setNoteModal({
+      isOpen: false,
+      reportId: null,
+      actionType: null,
+      note: ''
+    });
+  };
+
+  const handleNoteModalClose = () => {
+    setNoteModal({
+      isOpen: false,
+      reportId: null,
+      actionType: null,
+      note: ''
+    });
   };
 
   const loadPlatformWallet = async () => {
@@ -1958,22 +2071,140 @@ const AdminPanel = () => {
                             🚫 Hide Answer
                           </button>
                         )}
-                        <button
-                          onClick={() => handleResolveReport(report.id)}
-                          style={{
-                            flex: 1,
-                            padding: '10px 16px',
-                            backgroundColor: '#10b981',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '14px',
-                            fontWeight: '500',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          ✅ Resolve (No Action)
-                        </button>
+                        <div style={{ 
+                          display: 'flex', 
+                          gap: '8px', 
+                          flexWrap: 'wrap',
+                          marginTop: '8px' 
+                        }}>
+
+                          {/* Warn Creator - sends official warning to campaign creator */}
+                          <button
+                            onClick={() => handleActionWithNote(report.id, 'WARNED_CREATOR')}
+                            style={{
+                              flex: 1,
+                              minWidth: '120px',
+                              padding: '8px 12px',
+                              backgroundColor: '#f59e0b',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            ⚠️ Warn Creator
+                          </button>
+
+                          {/* Escalate - moves report to senior admin review */}
+                          <button
+                            onClick={() => handleAdminAction(
+                              report.id, 
+                              'ESCALATED', 
+                              'Escalated for senior review'
+                            )}
+                            style={{
+                              flex: 1,
+                              minWidth: '120px',
+                              padding: '8px 12px',
+                              backgroundColor: '#3b82f6',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            🔺 Escalate
+                          </button>
+
+                          {/* Delist Campaign - flags campaign as fraudulent */}
+                          <button
+                            onClick={() => {
+                              if (window.confirm(
+                                'Are you sure you want to delist this campaign?\n\n' +
+                                'This will flag the campaign as fraudulent and ' +
+                                'it will be hidden from public listings.'
+                              )) {
+                                handleActionWithNote(report.id, 'DELISTED_PROJECT')
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              minWidth: '120px',
+                              padding: '8px 12px',
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            🚫 Delist Campaign
+                          </button>
+
+                          {/* Suspend User - suspends the campaign creator */}
+                          <button
+                            onClick={() => {
+                              if (window.confirm(
+                                'Are you sure you want to suspend this user?\n\n' +
+                                'They will lose access to the platform immediately.'
+                              )) {
+                                handleActionWithNote(report.id, 'SUSPENDED_USER')
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              minWidth: '120px',
+                              padding: '8px 12px',
+                              backgroundColor: '#7c3aed',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            🔴 Suspend User
+                          </button>
+
+                          {/* Dismiss - marks as no violation, deducts reporter reputation */}
+                          <button
+                            onClick={() => {
+                              if (window.confirm(
+                                'Dismiss this report as No Violation?\n\n' +
+                                'This will deduct reputation points from the ' +
+                                'reporter for submitting a false report.'
+                              )) {
+                                handleAdminAction(
+                                  report.id, 
+                                  'DISMISSED', 
+                                  'No violation found after thorough review'
+                                )
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              minWidth: '120px',
+                              padding: '8px 12px',
+                              backgroundColor: '#6b7280',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            ✅ Dismiss (No Violation)
+                          </button>
+
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -2759,6 +2990,127 @@ const AdminPanel = () => {
               >
                 {actionLoading ? 'Processing...' : 'Approve'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {noteModal.isOpen && (
+        <div
+          onClick={handleNoteModalClose}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            padding: '16px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '560px',
+              backgroundColor: '#1f2937',
+              border: '1px solid #374151',
+              borderRadius: '12px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              color: '#f9fafb'
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '16px 20px',
+                borderBottom: '1px solid #374151'
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '700' }}>Add a Note</h3>
+              <button
+                onClick={handleNoteModalClose}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  color: '#d1d5db',
+                  fontSize: '22px',
+                  cursor: 'pointer',
+                  lineHeight: 1
+                }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ padding: '18px 20px 20px 20px' }}>
+              <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#d1d5db' }}>
+                Action: <strong style={{ color: '#f9fafb' }}>{(noteModal.actionType || '').replace(/_/g, ' ')}</strong>
+              </p>
+
+              <textarea
+                value={noteModal.note}
+                onChange={(e) =>
+                  setNoteModal((prev) => ({
+                    ...prev,
+                    note: e.target.value.slice(0, 500)
+                  }))
+                }
+                maxLength={500}
+                placeholder="Optional: Add relevant details, investigation findings, or context for this admin action."
+                style={{
+                  width: '100%',
+                  minHeight: '140px',
+                  resize: 'vertical',
+                  borderRadius: '8px',
+                  border: '1px solid #4b5563',
+                  backgroundColor: '#111827',
+                  color: '#f9fafb',
+                  padding: '12px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#9ca3af', textAlign: 'right' }}>
+                {noteModal.note.length}/500
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
+                <button
+                  onClick={handleNoteModalClose}
+                  style={{
+                    padding: '10px 14px',
+                    backgroundColor: '#374151',
+                    color: '#f9fafb',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '600'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleNoteModalSubmit}
+                  style={{
+                    padding: '10px 14px',
+                    backgroundColor: '#2563eb',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '600'
+                  }}
+                >
+                  Confirm Action
+                </button>
+              </div>
             </div>
           </div>
         </div>
