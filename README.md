@@ -1,328 +1,208 @@
-# 🚀 FundChain - Investment Crowdfunding Platform
+# FundChain - Investment Crowdfunding Platform
 
-> A comprehensive investment crowdfunding platform built with React, Vite, and Supabase, featuring role-based authentication, project management, and investment tracking.
-
-[![React](https://img.shields.io/badge/React-18.2.0-blue.svg)](https://reactjs.org/)
-[![Vite](https://img.shields.io/badge/Vite-4.4.5-646CFF.svg)](https://vitejs.dev/)
-[![Supabase](https://img.shields.io/badge/Supabase-2.38.0-3ECF8E.svg)](https://supabase.com/)
-[![Version](https://img.shields.io/badge/Version-4.0.0_Enterprise_Ready-brightgreen.svg)]()
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-
-## 📋 Table of Contents
-
-- [🆕 Latest Updates](#-latest-updates)
-- [🌟 Project Overview](#-project-overview)
-- [🎯 Current Status & Achievements](#-current-status--achievements)
-- [🏗️ Technical Architecture](#️-technical-architecture)
-- [📊 Database Schema](#-database-schema)
-- [🔧 Installation & Setup](#-installation--setup)
-- [🚀 Development Phases](#-development-phases)
-- [🔮 Future Roadmap](#-future-roadmap)
-- [📱 Planned Modules](#-planned-modules)
-- [🛠️ Advanced Features](#️-advanced-features)
-- [📦 Deployment](#-deployment)
-- [👥 Contributing](#-contributing)
-- [📞 Support](#-support)
+**Smart crowdfunding made simple.** FundChain is a modern investment platform that connects entrepreneurs with investors through a secure, transparent, and easy-to-use interface.
 
 ---
 
-## 🆕 Latest Updates
+## What is FundChain?
 
-### **December 2024 - Solana Blockchain Integration** 🎉
+FundChain is a web-based investment crowdfunding platform designed to revolutionize how projects get funded. Whether you're an entrepreneur looking to raise capital or an investor seeking opportunities, FundChain provides all the tools you need in one place.
 
-We're excited to announce the integration of Solana blockchain technology into FundChain!
-
-#### **New Features:**
-- ⚡ **Phantom Wallet Integration** - Connect your Phantom wallet seamlessly
-- 💸 **SOL to FC Token Swaps** - Direct conversion from SOL to FundChain tokens
-- 🔗 **On-Chain Transactions** - All investments recorded on Solana blockchain
-- 🌐 **Devnet Support** - Currently running on Solana devnet for testing
-- 💰 **Unified Funding Modal** - Single interface for adding funds via Phantom
-- 📊 **Transaction History** - View blockchain-verified transaction records
-- 🔐 **Secure Token Transfers** - Automated SOL transfers to treasury wallet
-
-#### **Technical Highlights:**
-- Official Solana Wallet Adapter integration
-- Real-time balance updates from blockchain
-- Smart contract preparation for milestone-based fund release
-- Transparent transaction tracking with Solana Explorer links
-- Conversion rate: 1 SOL = 100 FC tokens (devnet)
-
-#### **Branch:** `Wallet/Solana`
-**Status:** ✅ Completed and ready for testing
+**Live Platform:** [FundChain App](https://fundchain.vercel.app)
 
 ---
 
-## 🌟 Project Overview
+## Core Features
 
-FundChain is a modern investment crowdfunding platform designed to revolutionize how entrepreneurs connect with investors. Built as a comprehensive alternative to traditional funding methods, our platform serves as the bridge between innovative projects and financial backing.
+### For Investors
+- **Browse Opportunities** - Discover vetted investment projects across different categories
+- **Smart Investment** - Invest directly in projects using FundChain tokens or Solana
+- **Portfolio Management** - Track all your investments and returns in one dashboard
+- **Real-Time Analytics** - View project performance, milestone updates, and investor returns
+- **Investment Recommendations** - Get personalized project suggestions based on your preferences
+- **Community** - Connect with other investors and project creators
 
-### 🎯 Core Mission
-Connect entrepreneurs (creators) with potential investors through a secure, transparent, and feature-rich platform that supports multiple investment models and ensures trust through advanced verification systems.
+### For Creators
+- **Launch Campaigns** - Create and manage fundraising campaigns with milestone-based funding
+- **Showcase Projects** - Present your project with rich media, team information, and detailed plans
+- **KYC Verification** - Complete identity verification to build credibility with investors
+- **Milestone Tracking** - Set funding milestones and track progress toward goals
+- **Investor Communication** - Share updates and communicate directly with your backers
+- **Fund Management** - Receive funds and withdraw earnings directly to your Solana wallet
 
-### 👥 Target Audience
-
-#### **Investors** 🏦
-- Browse and discover investment opportunities
-- Make secure investments with real-time tracking
-- Access detailed project analytics and performance metrics
-- Build and manage diversified portfolios
-- Connect with other investors and creators
-
-#### **Creators** 💡
-- Launch and manage fundraising campaigns
-- Complete KYC verification for credibility
-- Track funding milestones and goals
-- Communicate with investors through updates
-- Access advanced project management tools
-
-#### **Administrators** ⚡
-- Monitor platform activities and user interactions
-- Manage user verification and compliance
-- Access comprehensive analytics and reporting
-- Oversee content moderation and safety
-- Configure platform settings and policies
+### For Everyone
+- **Secure Authentication** - Multi-role login (Investor/Creator/Admin) with enterprise-grade security
+- **Role-Based Access** - Tailored experience based on your role on the platform
+- **KYC/AML Compliance** - Identity verification and anti-money laundering checks
+- **Transparent Transactions** - All investments recorded on Solana blockchain
+- **Support** - Built-in help system and community support
 
 ---
 
-## 🎯 Current Status & Achievements
+## How It Works
 
-### **Version**: 4.0.0 Enterprise Ready
-### **Last Updated**: November 2024
-### **Branch**: admin-panel
-### **Repository**: [github.com/JawadAsif77/fundchain](https://github.com/JawadAsif77/fundchain)
+### Step 1: Sign Up
+Create your account and choose your role (Investor or Creator)
 
----
+### Step 2: Complete Your Profile
+- Investors: Set your investment preferences
+- Creators: Complete KYC verification and undergo identity checks
 
-## 🏁 Development Phases
+### Step 3: Start Using
+- **Investors:** Browse projects, invest in campaigns, track portfolio
+- **Creators:** Launch campaigns, add milestones, receive investments
 
-### ✅ **Phase 1: Foundation** (Completed - Sep 2024)
-**Duration**: 2-3 months  
-**Status**: ✅ Completed
-
-#### **Core Achievements:**
-- **🔐 Authentication System**
-  - Multi-role authentication (Investor/Creator/Admin)
-  - Secure JWT-based session management
-  - Role-based routing and access control
-  - Enhanced logout with complete cache clearing
-  - Smart post-login redirection
-  - Onboarding flow for new users
-
-- **👤 User Management**
-  - Automatic user profile creation
-  - Basic profile information handling
-  - Email verification workflow
-  - Password reset functionality
-
-- **🏗️ Foundation Infrastructure**
-  - React 18.2.0 + Vite 4.5.14 setup
-  - Supabase integration for backend services
-  - Initial database schema design
-  - Basic UI component library
-  - Routing structure implementation
+### Step 4: Grow
+- **Investors:** Earn returns as projects succeed and reach milestones
+- **Creators:** Receive funds from investors, complete milestones, and grow your business
 
 ---
 
-### ✅ **Phase 2: Social Enhancement** (Completed - Oct 2024)
-**Duration**: 2-3 months  
-**Status**: ✅ Completed
+## Investment Features
 
-#### **Social Features:**
-- **👍 Campaign Interaction System**
-  - Like/unlike campaigns with real-time updates
-  - Social sharing integration (Facebook, Twitter, LinkedIn)
-  - Campaign bookmarking and favorites
-  - User activity feed and notifications
+### Token System
+- **FC Tokens** - FundChain's internal investment token (1 FC = $1)
+- **Solana Integration** - Convert SOL to FC tokens instantly (1 SOL = 100 FC)
+- **Direct Transactions** - All transactions recorded on Solana blockchain
 
-- **📱 Social Media Integration**
-  - Profile social media links
-  - Social login options (Google, GitHub)
-  - Share campaign achievements
-  - Cross-platform social verification
+### Campaign Management
+- Milestone-based funding structure
+- Transparent fund escrow system
+- Automated milestone completion and fund release
+- Creator wallet for fund management
 
-- **👥 Community Features**
-  - User following/follower system
-  - Comment system with nested replies
-  - User reputation and trust scoring
-  - Community guidelines and moderation
-
-#### **Media Management:**
-- **📁 Advanced File Upload System**
-  - Multi-format support (images, videos, documents, audio)
-  - Supabase Storage integration
-  - File compression and optimization
-  - Campaign media galleries
-  - Featured media highlighting
-
-#### **Trust & Safety:**
-- **🛡️ Verification System**
-  - Multi-level user verification (Email, Phone, ID)
-  - Dynamic trust score calculation
-  - Campaign verification badges
-  - Content moderation and reporting
-  - Automated spam detection
+### Investment Tracking
+- Real-time investment history
+- Portfolio analytics and metrics
+- ROI calculations
+- Investment performance dashboard
 
 ---
 
-### ✅ **Phase 3: Advanced Features** (Completed - Nov 2024)
-**Duration**: 3-4 months  
-**Status**: ✅ Completed
+## Security & Trust
 
-#### **🏢 Project Management System**
-- **Project Creation Workflow**
-  - Comprehensive project setup wizard
-  - Milestone-based funding structure
-  - Goal setting and tracking
-  - Project categorization and tagging
-  - Rich text project descriptions
-
-- **📈 Investment Features**
-  - Real-time investment processing
-  - Portfolio dashboard with analytics
-  - Investment history and tracking
-  - ROI calculation and projections
-  - Investment recommendations engine
-
-- **🏆 KYC/AML Compliance**
-  - Creator identity verification
-  - Company registration verification
-  - Financial document upload and review
-  - Accredited investor verification
-  - Anti-money laundering checks
-
-#### **👤 Enhanced Profile System**
-- **Profile Display & Management**
-  - Beautiful profile showcase pages
-  - Comprehensive profile editing
-  - Social media integration
-  - Achievement badges and statistics
-  - Privacy controls and settings
-
-- **📊 Advanced Analytics**
-  - User engagement metrics
-  - Campaign performance analytics
-  - Investment trend analysis
-  - Platform usage statistics
-  - Custom reporting tools
+* **Row-Level Security (RLS)** - Database-level access control
+* **JWT Authentication** - Secure token-based authentication
+* **KYC/AML Verification** - Identity verification and compliance checks
+* **Blockchain-Backed Transactions** - On-chain settlement on Solana
+* **Encrypted Sensitive Data** - All personal data encrypted at rest
+* **Admin Oversight** - Platform administrators monitor for fraud and abuse  
 
 ---
 
-### 🔄 **Phase 4: Enterprise & Admin Panel** (Current Phase)
-**Duration**: 3-4 months  
-**Status**: 🔄 In Progress (80% Complete)
+## Technology Stack
 
-#### **⚡ Admin Panel Development**
-- **User Management Dashboard**
-  - User overview and statistics
-  - User verification management
-  - Account suspension and moderation
-  - Bulk user operations
-  - User activity monitoring
+### Frontend
+- **React 18** - Modern UI framework
+- **Vite** - Lightning-fast build tool
+- **Framer Motion** - Smooth animations and UI transitions
+- **React Router** - Client-side routing
+- **TailwindCSS** - Utility-first styling
 
-- **Campaign Management**
-  - Campaign approval workflow
-  - Content moderation tools
-  - Campaign performance monitoring
-  - Featured campaign management
-  - Campaign category administration
+### Backend & Database
+- **Supabase** - PostgreSQL database + authentication
+- **Edge Functions (Deno)** - Serverless functions for business logic
+- **Row-Level Security** - Fine-grained database access control
 
-- **Financial Management**
-  - Transaction monitoring and reporting
-  - Payment gateway management
-  - Fee structure configuration
-  - Financial reconciliation tools
-  - Tax reporting capabilities
+### Blockchain
+- **Solana** - Blockchain for transactions and tokens
+- **Phantom Wallet** - Wallet integration for SOL/FC transfers
+- **Web3.js** - Blockchain interaction library
 
-#### **🔧 Current Sprint Goals:**
-- [ ] Complete admin analytics dashboard
-- [ ] Implement advanced reporting system
-- [ ] Add bulk operations functionality
-- [ ] Enhance security monitoring
-- [ ] Finalize compliance tools
+### Additional Services
+- **OpenRouter API** - AI-powered recommendations and analysis
+- **Supabase Storage** - Document and media management
+- **Vercel** - Deployment and hosting
+
+### Development Tools
+- **TypeScript / JavaScript** - Type-safe development
+- **Git** - Version control
+- **NPM** - Package management
 
 ---
 
-## 🔮 Future Roadmap
+## Available on
 
-### 🌟 **Phase 5: Mobile & Advanced Features** (Planned - Q1 2025)
-**Duration**: 4-5 months  
-**Status**: 📋 Planned
-
-#### **📱 Mobile Application Development**
-- **React Native Implementation**
-  - Cross-platform mobile app (iOS & Android)
-  - Native performance optimization
-  - Push notification system
-  - Offline functionality support
-  - Mobile-specific UI/UX design
-
-#### **🤖 AI & Machine Learning**
-- **Investment Intelligence**
-  - AI-powered investment recommendations
-  - Risk assessment algorithms
-  - Market trend analysis
-  - Fraud detection system
-  - Predictive analytics for success rates
-
-#### **🌐 International Expansion**
-- **Multi-language Support**
-  - Internationalization (i18n) implementation
-  - Multi-currency support
-  - Regional compliance features
-  - Local payment gateway integration
-  - Cultural adaptation features
+- **Web**: [fundchain.vercel.app](https://fundchain.vercel.app)
+- **Browser**: Chrome, Firefox, Safari, Edge (latest versions)
+- **Mobile**: Responsive design works on all devices
 
 ---
 
-### 🚀 **Phase 6: Enterprise Solutions** (Planned - Q2 2025)
-**Duration**: 5-6 months  
-**Status**: 📋 Planned
+## Quick Start for Users
 
-#### **🏢 White-Label Solutions**
-- **Custom Branding Platform**
-  - White-label deployment options
-  - Custom domain configuration
-  - Branded mobile applications
-  - Custom feature sets
-  - Enterprise-level SLAs
+### 1. Sign Up
+1. Go to [FundChain App](https://fundchain.vercel.app)
+2. Click "Sign Up"
+3. Enter your email and create a password
+4. Choose your role (Investor or Creator)
 
-#### **🔗 Blockchain Integration**
-- **Decentralized Finance (DeFi) Features**
-  - Smart contract integration
-  - Cryptocurrency payment support
-  - NFT-based campaign rewards
-  - Decentralized identity verification
-  - Blockchain-based voting systems
+### 2. Verify Your Identity
+- Investors: Optional profile completion
+- Creators: Complete KYC verification (required to launch campaigns)
 
-#### **🌍 Advanced Compliance**
-- **Global Regulatory Support**
-  - SEC compliance (US)
-  - FCA compliance (UK)
-  - MiFID II compliance (EU)
-  - Automated regulatory reporting
-  - Cross-border transaction support
+### 3. Fund Your Account
+- Buy FC tokens using your wallet
+- Or connect Phantom wallet and swap SOL to FC
+
+### 4. Start Investing or Creating
+- **Investors:** Browse and invest in projects
+- **Creators:** Launch your first campaign
 
 ---
 
-## 📱 Planned Modules
+## Platform Capabilities
 
-### 🔔 **Real-time Communication System**
-- **Instant Messaging**
-  - Real-time chat between investors and creators
-  - Group messaging for campaign backers
-  - File sharing capabilities
-  - Message encryption and security
-  - Chat moderation tools
+| Feature | Investors | Creators | Admins |
+|---------|-----------|----------|--------|
+| Browse Projects | * | * | * |
+| Invest in Campaigns | * | - | * |
+| Create Campaigns | - | * | * |
+| KYC Verification | - | * | * |
+| Portfolio Tracking | * | - | * |
+| Withdraw Funds | * | * | * |
+| Admin Dashboard | - | - | * |
 
-- **Notification Engine**
-  - Email notification system
-  - Push notifications for mobile
+---
+
+## Community & Support
+
+- **Report Issues:** [GitHub Issues](https://github.com/JawadAsif77/fundchain/issues)
+- **Feature Requests:** [GitHub Discussions](https://github.com/JawadAsif77/fundchain/discussions)
+- **Documentation:** [Docs](https://github.com/JawadAsif77/fundchain)
+
+---
+
+## Team
+
+| Role | Member | GitHub |
+|------|--------|--------|
+| Project Leader (Full Stack & AI/ML Engineer) | Jawad Asif | [@JawadAsif77](https://github.com/JawadAsif77) |
+| UI/UX Designer (Researcher & Analyser) | Mahnoor Haider | - |
+| DevOps Engineer (Database Core) | M.Aashir | - |
+
+---
+
+## License
+
+FundChain is open source and available under the MIT License. See [LICENSE](LICENSE) for more details.
+
+---
+
+## Links
+
+- **GitHub:** [github.com/JawadAsif77/fundchain](https://github.com/JawadAsif77/fundchain)
+- **Live App:** [fundchain.vercel.app](https://fundchain.vercel.app)
+- **Repository Commits:** [GitHub Commits](https://github.com/JawadAsif77/fundchain/commits/main)
+
+---
+
+**Made by the FundChain Team**
   - In-app notification center
   - Customizable notification preferences
   - Real-time activity updates
 
-### 📊 **Advanced Analytics & Reporting**
+### **Advanced Analytics & Reporting**
 - **Business Intelligence Dashboard**
   - Campaign success prediction models
   - Market trend analysis
@@ -337,7 +217,7 @@ Connect entrepreneurs (creators) with potential investors through a secure, tran
   - API for third-party integrations
   - Real-time data visualization
 
-### 💼 **Enterprise Features**
+### **Enterprise Features**
 - **Institutional Investor Tools**
   - Dedicated investor portals
   - Advanced due diligence tools
@@ -354,9 +234,9 @@ Connect entrepreneurs (creators) with potential investors through a secure, tran
 
 ---
 
-## 🏗️ Technical Architecture
+## Technical Architecture
 
-### **Frontend Stack** 🎨
+### **Frontend Stack**
 ```typescript
 React 18.2.0              // Modern UI Framework
 TypeScript 4.9+           // Type Safety
@@ -370,7 +250,7 @@ React Hook Form           // Form Management
 Zod                       // Runtime Type Validation
 ```
 
-### **Backend Infrastructure** ⚙️
+### **Backend Infrastructure**
 ```sql
 Supabase                  // Backend-as-a-Service
 PostgreSQL 15             // Primary Database
@@ -380,7 +260,7 @@ Real-time Subscriptions  // Live Data Sync
 Supabase Storage         // File Storage
 ```
 
-### **Third-Party Integrations** 🔌
+### **Third-Party Integrations**
 ```javascript
 Stripe                    // Payment Processing
 SendGrid                 // Email Services
@@ -390,7 +270,7 @@ Algolia                   // Search Engine
 Auth0                     // Advanced Authentication
 ```
 
-### **DevOps & Deployment** 🚀
+### **DevOps & Deployment**
 ```yaml
 Vercel                    // Frontend Hosting
 Supabase Cloud           // Backend Hosting
@@ -402,7 +282,7 @@ Cloudflare               // CDN & Security
 
 ---
 
-## 📊 Database Schema
+## Database Schema
 
 ### **Core Tables Structure**
 
@@ -461,7 +341,7 @@ system_settings     // Platform configuration
 
 ---
 
-## 🔧 Installation & Setup
+## Installation & Setup
 
 ### **Prerequisites**
 ```bash
@@ -557,7 +437,7 @@ supabase start
 
 ## 🛠️ Advanced Features
 
-### **Security & Compliance** 🔒
+### **Security & Compliance**
 - **Multi-Factor Authentication (MFA)**
 - **End-to-End Encryption** for sensitive data
 - **GDPR Compliance** with data protection
@@ -565,7 +445,7 @@ supabase start
 - **PCI DSS** compliance for payments
 - **Regular Security Audits** and penetration testing
 
-### **Performance & Scalability** ⚡
+### **Performance & Scalability**
 - **CDN Integration** for global content delivery
 - **Database Optimization** with advanced indexing
 - **Caching Strategies** for improved response times
@@ -573,7 +453,7 @@ supabase start
 - **Auto-scaling** infrastructure
 - **Performance Monitoring** with real-time alerts
 
-### **Integration Capabilities** 🔗
+### **Integration Capabilities**
 - **RESTful API** for third-party integrations
 - **Webhooks** for real-time event notifications
 - **SDK Development** for easier integration
@@ -583,7 +463,7 @@ supabase start
 
 ---
 
-## 📦 Deployment
+## Deployment
 
 ### **Production Deployment**
 ```bash
@@ -625,7 +505,7 @@ docker-compose up -d
 
 ---
 
-## 👥 Contributing
+## Contributing
 
 ### **Development Workflow**
 1. **Fork** the repository
@@ -653,7 +533,7 @@ refactor: optimize database queries
 
 ---
 
-## 📈 Performance Metrics
+## Performance Metrics
 
 ### **Current Performance** (As of Nov 2024)
 - **Page Load Time**: < 2.5 seconds
@@ -672,7 +552,7 @@ refactor: optimize database queries
 
 ---
 
-## 🔍 Testing Strategy
+## Testing Strategy
 
 ### **Testing Pyramid**
 ```bash
@@ -701,27 +581,27 @@ npm run test:security
 
 ---
 
-## 📞 Support & Community
+## Support & Community
 
 ### **👨‍💻 Development Team**
 - **Lead Developer**: [@JawadAsif77](https://github.com/JawadAsif77)
 - **Repository**: [github.com/JawadAsif77/fundchain](https://github.com/JawadAsif77/fundchain)
 - **Email**: [contact@fundchain.app](mailto:contact@fundchain.app)
 
-### **🆘 Getting Help**
-- **🐛 Bug Reports**: [GitHub Issues](https://github.com/JawadAsif77/fundchain/issues)
-- **💡 Feature Requests**: [GitHub Discussions](https://github.com/JawadAsif77/fundchain/discussions)
-- **📚 Documentation**: [docs.fundchain.app](https://docs.fundchain.app)
-- **💬 Community**: [Discord Server](https://discord.gg/fundchain)
+### **Getting Help**
+- **Bug Reports**: [GitHub Issues](https://github.com/JawadAsif77/fundchain/issues)
+- **Feature Requests**: [GitHub Discussions](https://github.com/JawadAsif77/fundchain/discussions)
+- **Documentation**: [docs.fundchain.app](https://docs.fundchain.app)
+- **Community**: [Discord Server](https://discord.gg/fundchain)
 
-### **📋 Roadmap & Updates**
+### **Roadmap & Updates**
 - **Public Roadmap**: [roadmap.fundchain.app](https://roadmap.fundchain.app)
 - **Release Notes**: [GitHub Releases](https://github.com/JawadAsif77/fundchain/releases)
 - **Development Blog**: [blog.fundchain.app](https://blog.fundchain.app)
 
 ---
 
-## 📄 Legal & License
+## Legal & License
 
 ### **License**
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
@@ -732,20 +612,20 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 - **Cookie Policy**: [cookies.fundchain.app](https://cookies.fundchain.app)
 
 ### **Compliance**
-- **GDPR Compliant** 🇪🇺
-- **CCPA Compliant** 🇺🇸
-- **SOC 2 Type II** 🔒
-- **PCI DSS Level 1** 💳
+- **GDPR Compliant**
+- **CCPA Compliant**
+- **SOC 2 Type II**
+- **PCI DSS Level 1**
 
 ---
 
 <div align="center">
 
-## 🌟 **Thank You for Your Interest in FundChain!**
+## Thank You for Your Interest in FundChain!
 
-### **Star this repository if you find it helpful!** ⭐
+### Star this repository if you find it helpful!
 
-**Built with ❤️ using React, Vite, Supabase, and the power of community**
+**Built using React, Vite, Supabase, and the power of community**
 
 [![GitHub stars](https://img.shields.io/github/stars/JawadAsif77/fundchain.svg?style=social&label=Star)](https://github.com/JawadAsif77/fundchain/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/JawadAsif77/fundchain.svg?style=social&label=Fork)](https://github.com/JawadAsif77/fundchain/network)
@@ -753,6 +633,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 ### **Join our community and help shape the future of crowdfunding!**
 
-[🚀 Live Demo](https://fundchain.vercel.app) • [📚 Documentation](https://docs.fundchain.app) • [💬 Discord](https://discord.gg/fundchain) • [🐛 Report Bug](https://github.com/JawadAsif77/fundchain/issues)
+[Live Demo](https://fundchain.vercel.app) • [Documentation](https://docs.fundchain.app) • [Discord](https://discord.gg/fundchain) • [Report Bug](https://github.com/JawadAsif77/fundchain/issues)
 
 </div>
