@@ -246,6 +246,16 @@ export const campaignApi = {
         finalCreatorId = data?.user?.id;
       }
       const category_id = await this.ensureCategoryByName(form.category);
+
+      // Prevent suspended users from creating campaigns
+      const { data: authData } = await supabase.auth.getUser();
+      const uid = creatorId || authData?.user?.id;
+      if (uid) {
+        const { data: userRow } = await supabase.from('users').select('is_suspended').eq('id', uid).maybeSingle();
+        if (userRow?.is_suspended) {
+          return { success: false, error: 'Account suspended. You cannot create campaigns.' };
+        }
+      }
       
       // Map form fields to database column names (from main)
       const { category, deadline, goalAmount, summary, imageUrl, ...campaignData } = form;
@@ -279,7 +289,7 @@ export const campaignApi = {
   },
 
   async getCampaigns(filters = {}) {
-    let query = supabase.from('campaigns').select('*, categories(*)');
+    let query = supabase.from('campaigns').select('*, categories(*)').neq('is_flagged', true);
     if (filters.status) query = query.eq('status', filters.status || 'active');
     if (filters.search) query = query.ilike('title', `%${filters.search}%`);
     query = query.order('created_at', { ascending: false });
@@ -302,7 +312,7 @@ export const campaignApi = {
   },
 
   async getCampaignBySlug(slug) {
-    const { data, error } = await supabase.from('campaigns').select('*, categories(*)').eq('slug', slug).single();
+    const { data, error } = await supabase.from('campaigns').select('*, categories(*)').eq('slug', slug).neq('is_flagged', true).single();
     if (error) throw new Error('Not found');
     return { data };
   },
@@ -363,6 +373,10 @@ export const walletApi = {
   async invest(campaignId, amount) {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth.user.id;
+    // Prevent suspended users from investing
+    const { data: userRow, error: userErr } = await supabase.from('users').select('is_suspended').eq('id', uid).maybeSingle();
+    if (userErr) return { success: false, error: 'Unable to verify account status' };
+    if (userRow?.is_suspended) return { success: false, error: 'Account suspended. You cannot invest.' };
     
     const { data: u } = await supabase.from('users').select('preferences').eq('id', uid).single();
     const bal = Number(u?.preferences?.wallet_balance || 0);

@@ -194,6 +194,34 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
         }
+        // Also mark the campaign as pending review so moderators can take further action
+        const { error: campaignPendingError } = await supabase
+          .from('campaigns')
+          .update({ status: 'pending_review' })
+          .eq('id', report.campaign_id)
+
+        if (campaignPendingError) {
+          console.error('admin-reports: failed to mark campaign pending review', campaignPendingError)
+          // don't block escalation if campaign update fails; just log
+        } else {
+          // notify the creator about escalation
+          try {
+            const { data: campaignRow } = await supabase.from('campaigns').select('creator_id').eq('id', report.campaign_id).maybeSingle()
+            const creatorId = campaignRow?.creator_id
+            if (creatorId) {
+              const { error: notifyErr } = await supabase.from('notifications').insert({
+                user_id: creatorId,
+                title: 'Campaign Under Review',
+                message: 'Your campaign has been escalated for senior review by moderators.',
+                type: 'admin_message',
+                is_read: false,
+              })
+              if (notifyErr) console.log('admin-reports: failed to insert escalation notification', notifyErr)
+            }
+          } catch (e) {
+            console.log('admin-reports: notification attempt failed', e)
+          }
+        }
       }
 
       const { error: adminActionError } = await supabase

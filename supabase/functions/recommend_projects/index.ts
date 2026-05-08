@@ -341,8 +341,9 @@ Deno.serve(async (req) => {
     // ============================================================================
     let campaignsQuery = supabase
       .from('campaigns')
-      .select('id, slug, title, category_id, location, risk_level, final_risk_score, status, funding_goal, current_funding, investor_count, categories(name)')
+      .select('id, slug, title, category_id, location, risk_level, final_risk_score, status, funding_goal, current_funding, investor_count, categories(name), is_flagged')
       .eq('status', 'active')
+      .neq('is_flagged', true)
 
     // Apply category filter if provided
     if (filters.category_ids && filters.category_ids.length > 0) {

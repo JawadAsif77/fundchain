@@ -70,6 +70,8 @@ const Campaign = () => {
           wallet_risk_score: data.wallet_risk_score,
           onchain_risk_details: data.onchain_risk_details,
           creatorId: data.creator_id,
+          is_flagged: data.is_flagged || false,
+          flag_reason: data.flag_reason || null,
           // Enhanced fields
           campaign_image_url: data.campaign_image_url,
           video_pitch_url: data.video_pitch_url,
@@ -282,6 +284,60 @@ const Campaign = () => {
     <div className="main">
       <div className="page-content">
         <div className="container">
+          {/* Flagged Campaign Warning Banner */}
+          {campaign?.is_flagged && (
+            <div style={{
+              marginBottom: '24px',
+              padding: '20px',
+              background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+              border: '2px solid #dc2626',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '16px'
+            }}>
+              <div style={{
+                fontSize: '28px',
+                flexShrink: 0,
+                marginTop: '4px'
+              }}>
+                ⚠️
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{
+                  margin: '0 0 8px 0',
+                  fontSize: '18px',
+                  fontWeight: '700',
+                  color: '#991b1b'
+                }}>
+                  Campaign Unavailable
+                </h3>
+                <p style={{
+                  margin: '0 0 8px 0',
+                  fontSize: '14px',
+                  color: '#7f1d1d',
+                  lineHeight: '1.5'
+                }}>
+                  This campaign has been removed from our platform due to a community report and admin review.
+                  {campaign?.flag_reason && (
+                    <>
+                      <br />
+                      <strong>Reason:</strong> {campaign.flag_reason}
+                    </>
+                  )}
+                </p>
+                <p style={{
+                  margin: '0',
+                  fontSize: '13px',
+                  color: '#991b1b',
+                  fontWeight: '500'
+                }}>
+                  💬 If you believe this was a mistake, <a href="/support" style={{ color: '#dc2626', textDecoration: 'underline', fontWeight: '600' }}>contact support</a>.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="two-column">
             {/* Main Content */}
             <div>

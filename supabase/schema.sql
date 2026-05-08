@@ -100,6 +100,7 @@ CREATE TABLE public.users (
   is_verified verified_status NOT NULL DEFAULT 'no',
   verification_level integer DEFAULT 0,
   trust_score numeric DEFAULT 0,
+    is_suspended boolean DEFAULT false,
   
   -- Referral
   referral_code text UNIQUE,
@@ -207,6 +208,11 @@ CREATE TABLE public.campaigns (
   wallet_risk_score double precision,
   final_risk_score double precision,
   admin_risk_override double precision,
+  -- Moderation
+  report_count integer DEFAULT 0,
+  risk_score double precision,
+  is_flagged boolean DEFAULT false,
+  flag_reason text,
   
   -- Timestamps
   created_at timestamptz DEFAULT now(),

@@ -321,7 +321,7 @@ const ReportModal = ({ isOpen, onClose, campaignId, campaignTitle }: ReportModal
                   >
                     You have reached your daily report limit of {dailyLimit} reports. You can submit more reports tomorrow.
                   </div>
-                ) : remaining === 1 ? (
+                ) : remaining > 0 ? (
                   <div
                     style={{
                       backgroundColor: '#fffbeb',
@@ -332,20 +332,9 @@ const ReportModal = ({ isOpen, onClose, campaignId, campaignTitle }: ReportModal
                       fontSize: '14px',
                     }}
                   >
-                    You have 1 report remaining today. Use it carefully.
-                  </div>
-                ) : remaining === 2 ? (
-                  <div
-                    style={{
-                      backgroundColor: '#fffbeb',
-                      border: '1px solid #fde68a',
-                      color: '#92400e',
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                    }}
-                  >
-                    You have 2 reports remaining today.
+                    You can report max {dailyLimit} projects in a day.
+                    <br />
+                    Reports remaining: {remaining}
                   </div>
                 ) : null}
               </div>

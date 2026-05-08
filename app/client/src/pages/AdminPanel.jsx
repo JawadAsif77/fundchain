@@ -42,10 +42,79 @@ const AdminPanel = () => {
     actionType: null,
     note: ''
   });
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    details: [],
+    icon: 'warning',
+    onConfirm: null,
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    isDangerous: false
+  });
+  // Alert/Notification modal state
+  const [alertModal, setAlertModal] = useState({
+    isOpen: false,
+    type: 'success', // success, error, warning, info
+    title: '',
+    message: '',
+    icon: '✅',
+    onClose: null
+  });
   // Risk management state
   const [riskCampaigns, setRiskCampaigns] = useState([]);
   const [riskLoading, setRiskLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Helper function to show confirmation dialog
+  const showConfirm = (config) => {
+    setConfirmModal({
+      isOpen: true,
+      title: config.title || 'Confirm Action',
+      message: config.message || '',
+      details: config.details || [],
+      icon: config.icon || 'warning',
+      onConfirm: config.onConfirm || (() => {}),
+      confirmText: config.confirmText || 'Confirm',
+      cancelText: config.cancelText || 'Cancel',
+      isDangerous: config.isDangerous || false
+    });
+  };
+
+  const handleConfirmAction = () => {
+    if (confirmModal.onConfirm) {
+      confirmModal.onConfirm();
+    }
+    setConfirmModal({ ...confirmModal, isOpen: false });
+  };
+
+  // Helper function to show notification
+  const showAlert = (config) => {
+    const typeConfig = {
+      success: { icon: '✅', color: '#10b981', bgColor: '#f0fdf4' },
+      error: { icon: '❌', color: '#dc2626', bgColor: '#fef2f2' },
+      warning: { icon: '⚠️', color: '#f59e0b', bgColor: '#fffbeb' },
+      info: { icon: 'ℹ️', color: '#3b82f6', bgColor: '#eff6ff' }
+    };
+    const type = config.type || 'success';
+    const colors = typeConfig[type];
+    setAlertModal({
+      isOpen: true,
+      type: type,
+      title: config.title || 'Success',
+      message: config.message || '',
+      icon: colors.icon,
+      color: colors.color,
+      bgColor: colors.bgColor,
+      onClose: config.onClose || (() => {})
+    });
+    // Auto-close after 3.5 seconds
+    setTimeout(() => {
+      setAlertModal(prev => ({ ...prev, isOpen: false }));
+    }, 3500);
+  };
 
   // Check if user is admin
   useEffect(() => {
@@ -92,20 +161,61 @@ const AdminPanel = () => {
             return [];
           }
 
-          // Map new reports schema to existing moderation UI expectations.
-          return (result?.reports || []).map((report) => ({
-            id: report.report_id,
-            content_type: 'campaign',
-            content_id: report.campaign_id,
-            created_at: report.created_at,
-            reason: report.description,
-            reporter: report.is_anonymous ? null : { username: 'User', email: '' },
-            category: report.category,
-            campaign_title: report.campaign_title,
-            status: report.status,
-            resolution: report.resolution,
-            ai_risk_contribution: report.ai_risk_contribution
-          }));
+          // Enrich reports with campaign and creator details + report counts
+          const enrichedReports = await Promise.all(
+            (result?.reports || []).map(async (report) => {
+              // Fetch campaign details
+              const { data: campaignData } = await supabase
+                .from('campaigns')
+                .select('id, title, short_description, status, funding_goal, current_funding, creator_id, created_at, campaign_image_url, risk_level, final_risk_score')
+                .eq('id', report.campaign_id)
+                .maybeSingle();
+
+              // Fetch creator/user details
+              const { data: creatorData } = campaignData?.creator_id ? await supabase
+                .from('users')
+                .select('id, email, full_name, username, kyc_status, is_suspended, created_at')
+                .eq('id', campaignData.creator_id)
+                .maybeSingle() : { data: null };
+
+              // Count total reports for this campaign
+              const { count: campaignReportCount } = await supabase
+                .from('reports')
+                .select('id', { count: 'exact', head: true })
+                .eq('campaign_id', report.campaign_id);
+
+              // Count total reports for campaigns by this creator
+              const { data: creatorCampaignIds } = campaignData?.creator_id ? await supabase
+                .from('campaigns')
+                .select('id')
+                .eq('creator_id', campaignData.creator_id) : { data: [] };
+
+              const { count: creatorReportCount } = (creatorCampaignIds || []).length > 0 ? await supabase
+                .from('reports')
+                .select('id', { count: 'exact', head: true })
+                .in('campaign_id', creatorCampaignIds.map(c => c.id)) : { count: 0 };
+
+              return {
+                id: report.report_id,
+                content_type: 'campaign',
+                content_id: report.campaign_id,
+                created_at: report.created_at,
+                reason: report.description,
+                reporter: report.is_anonymous ? null : { username: 'User', email: '' },
+                category: report.category,
+                campaign_title: report.campaign_title,
+                status: report.status,
+                resolution: report.resolution,
+                ai_risk_contribution: report.ai_risk_contribution,
+                campaign: campaignData,
+                creator: creatorData,
+                campaign_report_count: campaignReportCount || 0,
+                creator_report_count: creatorReportCount || 0
+              };
+            })
+          );
+
+          return enrichedReports;
         })(),
         adminApi.getAllQuestions(),
         adminApi.getAllAnswers()
@@ -156,42 +266,84 @@ const AdminPanel = () => {
   };
 
   const handleHideQuestion = async (questionId, reportId) => {
-    if (!confirm('Are you sure you want to hide this question?')) return;
-    
-    try {
-      await adminApi.hideQuestion(questionId);
-      if (reportId) {
-        await adminApi.resolveReport(reportId);
+    showConfirm({
+      title: '🚫 Hide Question',
+      message: 'Are you sure you want to hide this question?',
+      details: ['Question will no longer be visible to users', 'Report will be marked as resolved'],
+      icon: 'ban',
+      isDangerous: true,
+      confirmText: 'Hide Question',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        try {
+          await adminApi.hideQuestion(questionId);
+          if (reportId) {
+            await adminApi.resolveReport(reportId);
+          }
+          showAlert({
+            type: 'success',
+            title: '✅ Question Hidden',
+            message: 'The question has been successfully hidden'
+          });
+          loadContentReports();
+        } catch (err) {
+          showAlert({
+            type: 'error',
+            title: '❌ Failed to Hide Question',
+            message: err.message
+          });
+        }
       }
-      alert('Question hidden successfully');
-      loadContentReports();
-    } catch (err) {
-      alert('Failed to hide question: ' + err.message);
-    }
+    });
   };
 
   const handleHideAnswer = async (answerId, reportId) => {
-    if (!confirm('Are you sure you want to hide this answer?')) return;
-    
-    try {
-      await adminApi.hideAnswer(answerId);
-      if (reportId) {
-        await adminApi.resolveReport(reportId);
+    showConfirm({
+      title: '🚫 Hide Answer',
+      message: 'Are you sure you want to hide this answer?',
+      details: ['Answer will no longer be visible to users', 'Report will be marked as resolved'],
+      icon: 'ban',
+      isDangerous: true,
+      confirmText: 'Hide Answer',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        try {
+          await adminApi.hideAnswer(answerId);
+          if (reportId) {
+            await adminApi.resolveReport(reportId);
+          }
+          showAlert({
+            type: 'success',
+            title: '✅ Answer Hidden',
+            message: 'The answer has been successfully hidden'
+          });
+          loadContentReports();
+        } catch (err) {
+          showAlert({
+            type: 'error',
+            title: '❌ Failed to Hide Answer',
+            message: err.message
+          });
+        }
       }
-      alert('Answer hidden successfully');
-      loadContentReports();
-    } catch (err) {
-      alert('Failed to hide answer: ' + err.message);
-    }
+    });
   };
 
   const handleResolveReport = async (reportId) => {
     try {
       await adminApi.resolveReport(reportId);
-      alert('Report marked as resolved');
+      showAlert({
+        type: 'success',
+        title: '✅ Report Resolved',
+        message: 'Report has been marked as resolved'
+      });
       loadContentReports();
     } catch (err) {
-      alert('Failed to resolve report: ' + err.message);
+      showAlert({
+        type: 'error',
+        title: '❌ Failed to Resolve Report',
+        message: err.message
+      });
     }
   };
 
@@ -201,14 +353,15 @@ const AdminPanel = () => {
       const token = session?.access_token
 
       if (!token) {
-        alert('Authentication error. Please log in again.')
+        showAlert({
+          type: 'error',
+          title: '❌ Authentication Error',
+          message: 'Please log in again'
+        });
         return
       }
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-      // If VITE_SUPABASE_URL does not exist in this file,
-      // use whatever environment variable is already used
-      // for the Supabase project URL in this codebase
 
       const response = await fetch(
         `${supabaseUrl}/functions/v1/admin-reports/${reportId}/action`,
@@ -231,11 +384,27 @@ const AdminPanel = () => {
         throw new Error(result.error || 'Action failed')
       }
 
-      alert(`Action "${actionType}" applied successfully.`)
+      const actionLabel = {
+        'WARNED_CREATOR': 'Creator Warned',
+        'ESCALATED': 'Report Escalated',
+        'DELISTED_PROJECT': 'Campaign Delisted',
+        'SUSPENDED_USER': 'User Suspended',
+        'DISMISSED': 'Report Dismissed'
+      }[actionType] || actionType;
+
+      showAlert({
+        type: 'success',
+        title: '✅ Action Successful',
+        message: `${actionLabel} successfully`
+      });
       loadContentReports()
 
     } catch (err) {
-      alert('Failed to apply action: ' + err.message)
+      showAlert({
+        type: 'error',
+        title: '❌ Action Failed',
+        message: err.message
+      });
     }
   }
 
@@ -749,6 +918,129 @@ const AdminPanel = () => {
           </div>
         )}
 
+             {alertModal.isOpen && (
+               <div style={{
+                 position: 'fixed',
+                 inset: 0,
+                 backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: 'center',
+                 zIndex: 10001,
+                 padding: '16px',
+                 animation: 'fadeIn 0.2s ease-out'
+               }}>
+                 <div style={{
+                   backgroundColor: 'white',
+                   borderRadius: '16px',
+                   boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+                   width: '100%',
+                   maxWidth: '450px',
+                   padding: '0',
+                   animation: 'slideUp 0.3s ease-out',
+                   overflow: 'hidden',
+                   border: `3px solid ${alertModal.color || '#10b981'}`
+                 }}>
+                   {/* Alert Header with Icon */}
+                   <div style={{
+                     padding: '28px 24px',
+                     backgroundColor: alertModal.bgColor || '#f0fdf4',
+                     display: 'flex',
+                     gap: '16px',
+                     alignItems: 'flex-start'
+                   }}>
+                     <div style={{
+                       fontSize: '44px',
+                       flexShrink: 0
+                     }}>
+                       {alertModal.icon}
+                     </div>
+                     <div style={{ flex: 1 }}>
+                       <h3 style={{
+                         margin: '0 0 4px 0',
+                         fontSize: '18px',
+                         fontWeight: '700',
+                         color: '#111827'
+                       }}>
+                         {alertModal.title}
+                       </h3>
+                       {alertModal.message && (
+                         <p style={{
+                           margin: '4px 0 0 0',
+                           fontSize: '14px',
+                           color: '#6b7280',
+                           lineHeight: '1.5'
+                         }}>
+                           {alertModal.message}
+                         </p>
+                       )}
+                     </div>
+                   </div>
+
+                   {/* Alert Footer with Close Button */}
+                   <div style={{
+                     padding: '16px 24px',
+                     display: 'flex',
+                     justifyContent: 'flex-end',
+                     backgroundColor: '#f9fafb',
+                     borderTop: '1px solid #e5e7eb'
+                   }}>
+                     <button
+                       onClick={() => {
+                         setAlertModal(prev => ({ ...prev, isOpen: false }));
+                         if (alertModal.onClose) {
+                           alertModal.onClose();
+                         }
+                       }}
+                       style={{
+                         padding: '8px 20px',
+                         backgroundColor: alertModal.color || '#10b981',
+                         color: 'white',
+                         border: 'none',
+                         borderRadius: '6px',
+                         fontSize: '13px',
+                         fontWeight: '600',
+                         cursor: 'pointer',
+                         transition: 'all 0.2s ease',
+                         textTransform: 'uppercase',
+                         letterSpacing: '0.5px'
+                       }}
+                       onMouseEnter={(e) => {
+                         e.target.style.opacity = '0.9';
+                         e.target.style.transform = 'scale(1.02)';
+                       }}
+                       onMouseLeave={(e) => {
+                         e.target.style.opacity = '1';
+                         e.target.style.transform = 'scale(1)';
+                       }}
+                     >
+                       OK
+                     </button>
+                   </div>
+                 </div>
+
+                 <style>{`
+                   @keyframes fadeIn {
+                     from {
+                       opacity: 0;
+                     }
+                     to {
+                       opacity: 1;
+                     }
+                   }
+                   @keyframes slideUp {
+                     from {
+                       transform: translateY(30px);
+                       opacity: 0;
+                     }
+                     to {
+                       transform: translateY(0);
+                       opacity: 1;
+                     }
+                   }
+                 `}</style>
+               </div>
+             )}
         {/* Tab Navigation */}
         <div style={{
           display: 'flex',
@@ -1980,51 +2272,130 @@ const AdminPanel = () => {
                       key={report.id}
                       style={{
                         backgroundColor: '#fef3c7',
-                        border: '1px solid #fbbf24',
-                        borderRadius: '8px',
+                        border: '2px solid #fbbf24',
+                        borderRadius: '12px',
                         padding: '20px',
-                        marginBottom: '16px'
+                        marginBottom: '20px'
                       }}
                     >
+                      {/* Header: Type, Date, Report Counts */}
                       <div style={{ marginBottom: '16px' }}>
                         <div style={{ 
                           display: 'flex', 
                           alignItems: 'center', 
                           justifyContent: 'space-between',
-                          marginBottom: '8px'
+                          marginBottom: '12px',
+                          flexWrap: 'wrap',
+                          gap: '8px'
                         }}>
-                          <span style={{
-                            backgroundColor: '#dc2626',
-                            color: 'white',
-                            padding: '4px 12px',
-                            borderRadius: '12px',
-                            fontSize: '12px',
-                            fontWeight: 'bold',
-                            textTransform: 'uppercase'
-                          }}>
-                            {report.content_type}
-                          </span>
-                          <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                            Reported: {new Date(report.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>
-                          Reported by: {report.reporter?.username || report.reporter?.email || 'Unknown'}
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span style={{
+                              backgroundColor: '#dc2626',
+                              color: 'white',
+                              padding: '4px 12px',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: 'bold',
+                              textTransform: 'uppercase'
+                            }}>
+                              {report.content_type}
+                            </span>
+                            <span style={{ fontSize: '12px', color: '#92400e', fontWeight: 'bold' }}>
+                              Reported: {new Date(report.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '12px', fontSize: '12px' }}>
+                            <span style={{ backgroundColor: '#fed7aa', padding: '4px 10px', borderRadius: '6px', fontWeight: '600' }}>
+                              📊 Campaign: {report.campaign_report_count} report{report.campaign_report_count !== 1 ? 's' : ''}
+                            </span>
+                            <span style={{ backgroundColor: '#fed7aa', padding: '4px 10px', borderRadius: '6px', fontWeight: '600' }}>
+                              👤 Creator: {report.creator_report_count} report{report.creator_report_count !== 1 ? 's' : ''}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
+                      {/* Campaign & Creator Info Section */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                        {/* Campaign Card */}
+                        <div style={{ backgroundColor: 'white', padding: '16px', borderRadius: '8px', border: '1px solid #fcd34d' }}>
+                          <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#92400e', marginBottom: '8px' }}>📢 CAMPAIGN</div>
+                          {report.campaign?.campaign_image_url && (
+                            <img src={report.campaign.campaign_image_url} alt="campaign" style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '6px', marginBottom: '8px' }} />
+                          )}
+                          <div style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '4px' }}>
+                            {report.campaign?.title}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.4' }}>
+                            {report.campaign?.short_description?.substring(0, 100)}...
+                          </div>
+                          <div style={{ display: 'grid', gap: '4px', fontSize: '12px', color: '#6b7280' }}>
+                            <div><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{report.campaign?.status}</span></div>
+                            <div><strong>Funding:</strong> {Number(report.campaign?.current_funding || 0).toLocaleString()} / {Number(report.campaign?.funding_goal || 0).toLocaleString()} FC</div>
+                            <div><strong>Created:</strong> {new Date(report.campaign?.created_at).toLocaleDateString()}</div>
+                            {report.campaign?.risk_level && (
+                              <div><strong>Risk:</strong> <span style={{ color: getScoreColor(report.campaign?.final_risk_score, true), fontWeight: '600' }}>{report.campaign.risk_level}</span></div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Creator Card */}
+                        <div style={{ backgroundColor: 'white', padding: '16px', borderRadius: '8px', border: '1px solid #fcd34d' }}>
+                          <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#92400e', marginBottom: '8px' }}>👤 CREATOR</div>
+                          {report.creator ? (
+                            <div style={{ display: 'grid', gap: '8px', fontSize: '12px', color: '#6b7280' }}>
+                              <div><strong style={{ color: '#111827' }}>{report.creator.full_name || report.creator.username}</strong></div>
+                              <div><strong>Email:</strong> {report.creator.email}</div>
+                              <div><strong>Username:</strong> @{report.creator.username}</div>
+                              <div>
+                                <strong>KYC:</strong> 
+                                <span style={{
+                                  marginLeft: '6px',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: '600',
+                                  backgroundColor: report.creator.kyc_status === 'verified' ? '#d1fae5' : report.creator.kyc_status === 'pending' ? '#fef3c7' : '#fee2e2',
+                                  color: report.creator.kyc_status === 'verified' ? '#065f46' : report.creator.kyc_status === 'pending' ? '#92400e' : '#991b1b'
+                                }}>
+                                  {report.creator.kyc_status?.toUpperCase() || 'NOT_SUBMITTED'}
+                                </span>
+                              </div>
+                              <div>
+                                <strong>Status:</strong>
+                                <span style={{
+                                  marginLeft: '6px',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: '600',
+                                  backgroundColor: report.creator.is_suspended ? '#fee2e2' : '#d1fae5',
+                                  color: report.creator.is_suspended ? '#991b1b' : '#065f46'
+                                }}>
+                                  {report.creator.is_suspended ? '🔴 SUSPENDED' : '✅ ACTIVE'}
+                                </span>
+                              </div>
+                              <div><strong>Member Since:</strong> {new Date(report.creator.created_at).toLocaleDateString()}</div>
+                            </div>
+                          ) : (
+                            <div style={{ color: '#6b7280', fontSize: '12px' }}>Creator info not available</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Report Reason */}
                       {report.reason && (
                         <div style={{ 
                           backgroundColor: 'white', 
                           padding: '12px', 
                           borderRadius: '6px',
-                          marginBottom: '12px',
-                          borderLeft: '3px solid #dc2626'
+                          marginBottom: '16px',
+                          borderLeft: '4px solid #dc2626'
                         }}>
-                          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px', fontWeight: 'bold' }}>
-                            REASON:
+                          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                            Report Reason: {report.category}
                           </div>
-                          <div style={{ fontSize: '14px', color: '#1f2937' }}>
+                          <div style={{ fontSize: '13px', color: '#1f2937', lineHeight: '1.5' }}>
                             {report.reason}
                           </div>
                         </div>
@@ -2123,13 +2494,20 @@ const AdminPanel = () => {
                           {/* Delist Campaign - flags campaign as fraudulent */}
                           <button
                             onClick={() => {
-                              if (window.confirm(
-                                'Are you sure you want to delist this campaign?\n\n' +
-                                'This will flag the campaign as fraudulent and ' +
-                                'it will be hidden from public listings.'
-                              )) {
-                                handleActionWithNote(report.id, 'DELISTED_PROJECT')
-                              }
+                              showConfirm({
+                                title: '🚫 Delist Campaign',
+                                message: 'Are you sure you want to delist this campaign?',
+                                details: [
+                                  'This will flag the campaign as fraudulent',
+                                  'Campaign will be hidden from public listings',
+                                  'Investors will be notified automatically'
+                                ],
+                                icon: 'flag',
+                                isDangerous: true,
+                                confirmText: 'Delist Campaign',
+                                cancelText: 'Cancel',
+                                onConfirm: () => handleActionWithNote(report.id, 'DELISTED_PROJECT')
+                              });
                             }}
                             style={{
                               flex: 1,
@@ -2150,12 +2528,20 @@ const AdminPanel = () => {
                           {/* Suspend User - suspends the campaign creator */}
                           <button
                             onClick={() => {
-                              if (window.confirm(
-                                'Are you sure you want to suspend this user?\n\n' +
-                                'They will lose access to the platform immediately.'
-                              )) {
-                                handleActionWithNote(report.id, 'SUSPENDED_USER')
-                              }
+                              showConfirm({
+                                title: '🔴 Suspend User',
+                                message: 'Are you sure you want to suspend this user?',
+                                details: [
+                                  'User will lose access to the platform immediately',
+                                  'Their account will be marked as suspended',
+                                  'They cannot create campaigns or invest'
+                                ],
+                                icon: 'ban',
+                                isDangerous: true,
+                                confirmText: 'Suspend User',
+                                cancelText: 'Cancel',
+                                onConfirm: () => handleActionWithNote(report.id, 'SUSPENDED_USER')
+                              });
                             }}
                             style={{
                               flex: 1,
@@ -2176,17 +2562,20 @@ const AdminPanel = () => {
                           {/* Dismiss - marks as no violation, deducts reporter reputation */}
                           <button
                             onClick={() => {
-                              if (window.confirm(
-                                'Dismiss this report as No Violation?\n\n' +
-                                'This will deduct reputation points from the ' +
-                                'reporter for submitting a false report.'
-                              )) {
-                                handleAdminAction(
-                                  report.id, 
-                                  'DISMISSED', 
-                                  'No violation found after thorough review'
-                                )
-                              }
+                              showConfirm({
+                                title: '✅ Dismiss Report',
+                                message: 'Dismiss this report as No Violation?',
+                                details: [
+                                  'Reporter will lose 10 reputation points',
+                                  'This is for submitting a false report',
+                                  'Report will be marked as resolved'
+                                ],
+                                icon: 'check',
+                                isDangerous: false,
+                                confirmText: 'Dismiss Report',
+                                cancelText: 'Cancel',
+                                onConfirm: () => handleAdminAction(report.id, 'DISMISSED', 'No violation found after thorough review')
+                              });
                             }}
                             style={{
                               flex: 1,
@@ -3113,6 +3502,192 @@ const AdminPanel = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Beautiful Confirmation Modal */}
+      {confirmModal.isOpen && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '16px',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+            width: '100%',
+            maxWidth: '500px',
+            padding: '0',
+            animation: 'slideUp 0.3s ease-out'
+          }}>
+            {/* Modal Header with Icon */}
+            <div style={{
+              padding: '32px 24px 24px 24px',
+              textAlign: 'center',
+              borderBottom: '1px solid #e5e7eb'
+            }}>
+              <div style={{
+                fontSize: '56px',
+                marginBottom: '16px',
+                display: 'inline-block',
+                width: '80px',
+                height: '80px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: confirmModal.isDangerous ? '#fef2f2' : '#f0fdf4',
+                color: confirmModal.isDangerous ? '#dc2626' : '#10b981'
+              }}>
+                {confirmModal.icon === 'warning' && '⚠️'}
+                {confirmModal.icon === 'flag' && '🚩'}
+                {confirmModal.icon === 'ban' && '🚫'}
+                {confirmModal.icon === 'check' && '✅'}
+              </div>
+
+              <h2 style={{
+                margin: '0 0 8px 0',
+                fontSize: '24px',
+                fontWeight: '700',
+                color: '#111827'
+              }}>
+                {confirmModal.title}
+              </h2>
+              
+              <p style={{
+                margin: '8px 0 0 0',
+                fontSize: '16px',
+                color: '#6b7280',
+                lineHeight: '1.5'
+              }}>
+                {confirmModal.message}
+              </p>
+            </div>
+
+            {/* Modal Body with Details */}
+            {confirmModal.details.length > 0 && (
+              <div style={{
+                padding: '20px 24px',
+                backgroundColor: confirmModal.isDangerous ? '#fef2f2' : '#f0fdf4',
+                borderRadius: '0',
+                margin: '0'
+              }}>
+                <div style={{
+                  display: 'grid',
+                  gap: '12px'
+                }}>
+                  {confirmModal.details.map((detail, idx) => (
+                    <div key={idx} style={{
+                      display: 'flex',
+                      gap: '12px',
+                      alignItems: 'flex-start',
+                      fontSize: '14px',
+                      color: confirmModal.isDangerous ? '#991b1b' : '#065f46'
+                    }}>
+                      <span style={{ fontSize: '18px', marginTop: '-2px' }}>
+                        {confirmModal.isDangerous ? '•' : '✓'}
+                      </span>
+                      <span>{detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Modal Footer with Buttons */}
+            <div style={{
+              padding: '24px',
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'flex-end',
+              borderTop: '1px solid #e5e7eb'
+            }}>
+              <button
+                onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+                style={{
+                  padding: '10px 24px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  minWidth: '100px'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#e5e7eb';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = '#f3f4f6';
+                }}
+              >
+                {confirmModal.cancelText}
+              </button>
+
+              <button
+                onClick={handleConfirmAction}
+                style={{
+                  padding: '10px 28px',
+                  backgroundColor: confirmModal.isDangerous ? '#dc2626' : '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  minWidth: '120px',
+                  boxShadow: confirmModal.isDangerous 
+                    ? '0 4px 12px rgba(220, 38, 38, 0.3)' 
+                    : '0 4px 12px rgba(16, 185, 129, 0.3)'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = confirmModal.isDangerous 
+                    ? '0 8px 16px rgba(220, 38, 38, 0.4)' 
+                    : '0 8px 16px rgba(16, 185, 129, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = confirmModal.isDangerous 
+                    ? '0 4px 12px rgba(220, 38, 38, 0.3)' 
+                    : '0 4px 12px rgba(16, 185, 129, 0.3)';
+                }}
+              >
+                {confirmModal.confirmText}
+              </button>
+            </div>
+          </div>
+
+          <style>{`
+            @keyframes fadeIn {
+              from {
+                opacity: 0;
+              }
+              to {
+                opacity: 1;
+              }
+            }
+            @keyframes slideUp {
+              from {
+                transform: translateY(30px);
+                opacity: 0;
+              }
+              to {
+                transform: translateY(0);
+                opacity: 1;
+              }
+            }
+          `}</style>
         </div>
       )}
     </div>

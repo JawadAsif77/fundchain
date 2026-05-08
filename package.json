@@ -1,5 +1,8 @@
 {
   "dependencies": {
-    "openai": "^6.15.0"
+    "@supabase/supabase-js": "^2.105.3",
+    "dotenv": "^17.4.2",
+    "openai": "^6.15.0",
+    "ws": "^8.20.0"
   }
 }

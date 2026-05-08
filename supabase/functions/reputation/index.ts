@@ -95,9 +95,10 @@ Deno.serve(async (req) => {
         })
       }
 
+      // Fetch user's reputation (keeps using user_reputation table for the score)
       const { data: repRow, error: repError } = await supabase
         .from('user_reputation')
-        .select('user_id, reputation, reports_submitted_today')
+        .select('user_id, reputation')
         .eq('user_id', userId)
         .maybeSingle()
 
@@ -115,6 +116,27 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
+
+      // Compute today's submitted reports dynamically from the reports table
+      const today = new Date()
+      today.setUTCHours(0, 0, 0, 0)
+      const todayIso = today.toISOString()
+
+      const { data: reportsData, count: reportsCount, error: reportsCountError } = await supabase
+        .from('reports')
+        .select('id', { count: 'exact' })
+        .eq('reporter_user_id', userId)
+        .gte('created_at', todayIso)
+
+      if (reportsCountError) {
+        console.error('reputation: failed to compute today\'s report count', reportsCountError)
+        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const reportsSubmittedToday = Number(reportsCount ?? (Array.isArray(reportsData) ? reportsData.length : 0))
 
       const { data: logRows, error: logError } = await supabase
         .from('reputation_log')
@@ -139,7 +161,7 @@ Deno.serve(async (req) => {
           success: true,
           user_id: userId,
           current_reputation: currentReputation,
-          reports_submitted_today: Number(repRow.reports_submitted_today || 0),
+          reports_submitted_today: reportsSubmittedToday,
           daily_limit: dailyLimit,
           history: logRows || [],
         }),
