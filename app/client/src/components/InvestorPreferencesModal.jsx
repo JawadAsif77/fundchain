@@ -8,25 +8,79 @@ const InvestorPreferencesModal = ({ onClose, onComplete }) => {
   const [step, setStep] = useState(1); // 1=categories, 2=regions, 3=risk
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedRegions, setSelectedRegions] = useState([]);
   const [riskTolerance, setRiskTolerance] = useState('MEDIUM');
   const [error, setError] = useState('');
 
+  const DEFAULT_CATEGORIES = [
+    { name: 'Technology', description: 'Software, AI, and innovative tech' },
+    { name: 'Healthcare', description: 'Health, biotech, and wellness' },
+    { name: 'Education', description: 'Learning and training platforms' },
+    { name: 'FinTech', description: 'Payments, lending, and financial tools' },
+    { name: 'E-commerce', description: 'Online retail and marketplaces' },
+    { name: 'Green Energy', description: 'Renewables and sustainability' },
+    { name: 'Real Estate', description: 'Property and construction' },
+    { name: 'Agriculture', description: 'Farming and food systems' },
+    { name: 'Entertainment', description: 'Media, games, and content' }
+  ];
+
+  const getFallbackCategories = () =>
+    DEFAULT_CATEGORIES.map((cat) => ({
+      id: `name:${cat.name}`,
+      name: cat.name,
+      description: cat.description,
+      isFallback: true
+    }));
+
   // Fetch categories on mount
   useEffect(() => {
     const fetchCategories = async () => {
       try {
+        setCategoriesLoading(true);
+        setCategoriesError('');
+
         const { data, error } = await supabase
           .from('categories')
-          .select('*')
+          .select('id, name, description')
           .order('name');
         
         if (error) throw error;
-        setCategories(data || []);
+
+        const list = data || [];
+
+        // If table exists but is empty, attempt to seed defaults once.
+        if (list.length === 0) {
+          const { error: seedError } = await supabase
+            .from('categories')
+            .upsert(DEFAULT_CATEGORIES, { onConflict: 'name' });
+
+          if (seedError) {
+            console.warn('Failed to seed default categories:', seedError);
+          }
+
+          const { data: seededData, error: seededFetchError } = await supabase
+            .from('categories')
+            .select('id, name, description')
+            .order('name');
+
+          if (!seededFetchError && (seededData || []).length > 0) {
+            setCategories(seededData || []);
+          } else {
+            // Fall back to local defaults if DB seeding isn't permitted.
+            setCategories(getFallbackCategories());
+          }
+        } else {
+          setCategories(list);
+        }
       } catch (err) {
         console.error('Failed to fetch categories:', err);
-        setCategories([]);
+        setCategories(getFallbackCategories());
+        setCategoriesError('Unable to load categories from the database right now. Showing default categories.');
+      } finally {
+        setCategoriesLoading(false);
       }
     };
     fetchCategories();
@@ -57,6 +111,10 @@ const InvestorPreferencesModal = ({ onClose, onComplete }) => {
   };
 
   const handleNext = () => {
+    if (step === 1 && !categoriesLoading && categories.length === 0) {
+      setError('No categories are available. Please try again later.');
+      return;
+    }
     if (step === 1 && selectedCategories.length === 0) {
       setError('Please select at least one category');
       return;
@@ -194,15 +252,21 @@ const InvestorPreferencesModal = ({ onClose, onComplete }) => {
       marginBottom: '24px',
     },
     progressDot: {
-      width: '8px',
-      height: '8px',
+      width: '22px',
+      height: '22px',
       borderRadius: '50%',
       backgroundColor: '#d1d5db',
       transition: 'all 0.2s',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '12px',
+      fontWeight: '700',
+      color: '#6b7280',
     },
     progressDotActive: {
       backgroundColor: '#29C7AC',
-      transform: 'scale(1.25)',
+      color: 'white',
     },
     error: {
       fontSize: '13px',
@@ -230,7 +294,9 @@ const InvestorPreferencesModal = ({ onClose, onComplete }) => {
                 ...commonStyles.progressDot,
                 ...(step >= num ? commonStyles.progressDotActive : {})
               }}
-            />
+            >
+              {num}
+            </div>
           ))}
         </div>
 
@@ -240,9 +306,29 @@ const InvestorPreferencesModal = ({ onClose, onComplete }) => {
             <h2 style={commonStyles.title}>Your Investment Interests</h2>
             <p style={commonStyles.subtitle}>Select 1-3 categories you're interested in</p>
 
+            <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
+              Selected {selectedCategories.length}/3
+            </div>
+
             {error && <div style={commonStyles.error}>{error}</div>}
 
             <div style={commonStyles.group}>
+              {categoriesLoading && (
+                <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                  Loading categories...
+                </div>
+              )}
+
+              {!categoriesLoading && categoriesError && (
+                <div style={commonStyles.error}>{categoriesError}</div>
+              )}
+
+              {!categoriesLoading && !categoriesError && categories.length === 0 && (
+                <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                  No categories found.
+                </div>
+              )}
+
               {categories.map(cat => (
                 <div
                   key={cat.id}
@@ -258,7 +344,12 @@ const InvestorPreferencesModal = ({ onClose, onComplete }) => {
                     onChange={() => {}}
                     style={{ cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: '14px', fontWeight: '500' }}>{cat.name}</span>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>{cat.name}</div>
+                    {cat.description && (
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>{cat.description}</div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

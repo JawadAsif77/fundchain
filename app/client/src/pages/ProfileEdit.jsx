@@ -107,7 +107,7 @@ const profileReducer = (state, action) => {
 
       const newFormData = {
         full_name: profileData.full_name || '',
-        username: profileData.username || '',
+        username: (profileData.username || '').toLowerCase(),
         email: profileData.email || user?.email || '',
         role:
           profileData.role ||
@@ -242,7 +242,7 @@ const ProfileEdit = () => {
         filteredValue = sanitizeInput.name(value);
         break;
       case 'username':
-        filteredValue = sanitizeInput.username(value);
+        filteredValue = sanitizeInput.username(value).toLowerCase();
         break;
       case 'phone':
         filteredValue = sanitizeInput.phone(value);
@@ -281,10 +281,11 @@ const ProfileEdit = () => {
         break;
       case 'username':
         if (value) {
-          result = validateUsername(value);
-          if (result.valid && value !== state.originalUsername) {
+          const normalized = String(value).toLowerCase();
+          result = validateUsername(normalized);
+          if (result.valid && normalized !== state.originalUsername) {
             // Check username availability
-            const availabilityResult = await userApi.checkUsernameAvailability(value);
+            const availabilityResult = await userApi.checkUsernameAvailability(normalized);
             if (!availabilityResult.available) {
               result = { valid: false, error: 'Username is already taken' };
             }
@@ -372,7 +373,7 @@ const ProfileEdit = () => {
 
     const updates = {
       full_name: formData.full_name || null,
-      username: formData.username || null,
+      username: formData.username ? formData.username.toLowerCase() : null,
       avatar_url: formData.avatar_url || null,
       bio: formData.bio || null,
       location: formData.location || null,
@@ -447,11 +448,20 @@ const ProfileEdit = () => {
     } catch (submitError) {
       console.error('Error updating profile:', submitError);
 
+      if (submitError?.code === '23505') {
+        dispatch({
+          type: 'SET_VALIDATION_ERROR',
+          payload: { username: 'Username is already taken' }
+        });
+      }
+
       let errorMessage = 'Failed to update profile. ';
 
       if (submitError?.message) {
         if (submitError.message === 'Request timeout') {
           errorMessage += 'The request took too long. Please check your connection and try again.';
+        } else if (submitError?.code === '23505') {
+          errorMessage += 'Username is already taken. Please choose another.';
         } else if (submitError.message.includes('bio')) {
           errorMessage +=
             'The bio field is not available yet. Please run the database migration first.';

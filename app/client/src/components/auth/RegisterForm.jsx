@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useAuth } from '../../store/AuthContext';
 import { 
   validateEmail, 
   validateName, 
   validatePassword, 
-  validatePasswordMatch
+  validatePasswordMatch,
+  validateUsername
 } from '../../utils/validation';
 import { calculatePasswordStrength } from '../../utils/passwordStrength';
+import { userApi } from '../../lib/api';
 import './AuthForms.css';
 
 const RegisterForm = ({ onSwitchToLogin, onClose }) => {
   const [formData, setFormData] = useState({
     fullName: '',
+    username: '',
     email: '',
     password: '',
     confirmPassword: ''
@@ -23,6 +26,7 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
   const [passwordStrength, setPasswordStrength] = useState({ strength: 'weak', score: 0, feedback: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState({ checking: false, available: null });
   
   const { register, error, clearError } = useAuth();
 
@@ -30,13 +34,42 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
   const isFormValid = () => {
     return (
       formData.fullName.trim() !== '' &&
+      formData.username.trim() !== '' &&
       formData.email.trim() !== '' &&
       formData.password.trim() !== '' &&
       formData.confirmPassword.trim() !== '' &&
       passwordStrength.strength !== 'weak' &&
+      usernameStatus.available !== false &&
       Object.values(validationErrors).every(error => !error)
     );
   };
+
+  const checkUsernameAvailability = useCallback(async (rawUsername) => {
+    const normalized = (rawUsername || '').trim().toLowerCase();
+    if (!normalized) {
+      setUsernameStatus({ checking: false, available: null });
+      return false;
+    }
+
+    setUsernameStatus({ checking: true, available: null });
+    try {
+      const availabilityResult = await userApi.checkUsernameAvailability(normalized);
+      const available = !!availabilityResult?.available;
+      setUsernameStatus({ checking: false, available });
+
+      if (!available) {
+        setValidationErrors(prev => ({
+          ...prev,
+          username: 'Username is already taken'
+        }));
+      }
+
+      return available;
+    } catch {
+      setUsernameStatus({ checking: false, available: null });
+      return false;
+    }
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -46,6 +79,10 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
     if (name === 'fullName') {
       // Allow letters, spaces, hyphens, and apostrophes only
       filteredValue = value.replace(/[^a-zA-Z\s'-]/g, '');
+    } else if (name === 'username') {
+      // Allow letters/numbers/dash/underscore only; normalize to lowercase
+      filteredValue = value.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+      setUsernameStatus({ checking: false, available: null });
     } else if (name === 'email') {
       // Allow valid email characters
       filteredValue = value.replace(/[^a-zA-Z0-9@._-]/g, '');
@@ -89,6 +126,9 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
       case 'email':
         result = validateEmail(value);
         break;
+      case 'username':
+        result = validateUsername(value);
+        break;
       case 'password':
         result = validatePassword(value);
         // Also validate confirm password if it exists
@@ -120,6 +160,9 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
     
     const nameResult = validateName(formData.fullName);
     if (!nameResult.valid) errors.fullName = nameResult.error;
+
+    const usernameResult = validateUsername(formData.username);
+    if (!usernameResult.valid) errors.username = usernameResult.error;
     
     const emailResult = validateEmail(formData.email);
     if (!emailResult.valid) errors.email = emailResult.error;
@@ -133,6 +176,7 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
     setValidationErrors(errors);
     setFieldTouched({
       fullName: true,
+      username: true,
       email: true,
       password: true,
       confirmPassword: true
@@ -145,11 +189,12 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
     e.preventDefault();
     
     // Prevent empty submissions
-    if (!formData.fullName.trim() || !formData.email.trim() || 
+    if (!formData.fullName.trim() || !formData.username.trim() || !formData.email.trim() || 
         !formData.password.trim() || !formData.confirmPassword.trim()) {
       setValidationErrors(prev => ({
         ...prev,
         fullName: !formData.fullName.trim() ? 'Full name is required' : prev.fullName,
+        username: !formData.username.trim() ? 'Username is required' : prev.username,
         email: !formData.email.trim() ? 'Email is required' : prev.email,
         password: !formData.password.trim() ? 'Password is required' : prev.password,
         confirmPassword: !formData.confirmPassword.trim() ? 'Please confirm password' : prev.confirmPassword
@@ -160,6 +205,16 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
     if (!validateForm()) {
       return;
     }
+
+    // Final availability check (handles race conditions / missed blur)
+    const usernameIsValid = validateUsername(formData.username).valid;
+    if (usernameIsValid) {
+      const available = await checkUsernameAvailability(formData.username);
+      if (!available) {
+        setFieldTouched(prev => ({ ...prev, username: true }));
+        return;
+      }
+    }
     
     setIsSubmitting(true);
     
@@ -167,7 +222,8 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
       // Register user with role=null - they'll select role after email confirmation
       await register(formData.email, formData.password, {
         fullName: formData.fullName,
-        displayName: formData.fullName
+        displayName: formData.fullName,
+        username: formData.username.trim().toLowerCase()
         // No role specified - will be NULL in database
       });
       
@@ -245,6 +301,44 @@ const RegisterForm = ({ onSwitchToLogin, onClose }) => {
             <span className="field-error">{validationErrors.fullName}</span>
           )}
           <small className="field-hint">Letters, spaces, hyphens, and apostrophes only</small>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="username">Username *</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            value={formData.username}
+            onChange={handleInputChange}
+            onBlur={(e) => {
+              handleBlur(e);
+              const isValid = validateUsername(e.target.value).valid;
+              if (isValid) checkUsernameAvailability(e.target.value);
+            }}
+            className={validationErrors.username ? 'error' : ''}
+            placeholder="Choose a unique username"
+            autoComplete="username"
+            disabled={isSubmitting}
+            maxLength={20}
+          />
+          {validationErrors.username && (
+            <span className="field-error">{validationErrors.username}</span>
+          )}
+          {!validationErrors.username && formData.username.trim() && (
+            <small className="field-hint">
+              {usernameStatus.checking
+                ? 'Checking availability...'
+                : usernameStatus.available === true
+                  ? 'Username is available'
+                  : usernameStatus.available === false
+                    ? 'Username is already taken'
+                    : '3-20 chars, letters/numbers/dash/underscore'}
+            </small>
+          )}
+          {!formData.username.trim() && (
+            <small className="field-hint">3-20 chars, letters/numbers/dash/underscore</small>
+          )}
         </div>
         
         <div className="form-group">

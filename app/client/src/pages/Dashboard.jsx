@@ -202,18 +202,14 @@ const Dashboard = ({ tutorialRefs = {} }) => {
     const checkPreferences = async () => {
       try {
         const seenKey = getInvestorPrefsSeenKey(user.id);
-        const hasSeenPreferencesModal = localStorage.getItem(seenKey) === 'true';
-
-        if (hasSeenPreferencesModal) {
-          setShowPreferencesModal(false);
-          return;
-        }
-
         const prefs = await getUserPreferences(user.id);
-        if (!prefs) {
+        const hasCategories = Array.isArray(prefs?.preferred_categories)
+          ? prefs.preferred_categories.length > 0
+          : !!prefs?.preferred_categories;
+
+        if (!prefs || !hasCategories) {
           setHasUserPreferences(false);
           setShowPreferencesModal(true);
-          localStorage.setItem(seenKey, 'true');
         } else {
           setHasUserPreferences(true);
           setShowPreferencesModal(false);

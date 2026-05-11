@@ -104,12 +104,24 @@ export const AuthProvider = ({ children }) => {
       // If user doesn't exist in database, create them
       if (!existingProfile && sessionUser) {
         debugLog('[Auth] New user, creating profile...');
-        
+
+        const normalizeUsername = (value) => {
+          const normalized = String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]/g, '');
+          if (normalized.length < 3) return null;
+          return normalized.slice(0, 20);
+        };
+
         // Generate base username
-        let baseUsername = sessionUser.user_metadata?.username || 
-                           sessionUser.user_metadata?.preferred_username ||
-                           sessionUser.user_metadata?.name?.toLowerCase().replace(/\s+/g, '') ||
-                           `user_${userId.substring(0, 8)}`;
+        const baseCandidate =
+          sessionUser.user_metadata?.username ||
+          sessionUser.user_metadata?.preferred_username ||
+          sessionUser.user_metadata?.name ||
+          `user_${userId.substring(0, 8)}`;
+
+        let baseUsername = normalizeUsername(baseCandidate) || `user_${userId.substring(0, 8)}`;
         
         const newUser = {
           id: userId,
@@ -126,13 +138,20 @@ export const AuthProvider = ({ children }) => {
         let { data: createdUser, error: createError } = await userApi.createUser(newUser);
         
         // Handle username conflict - generate unique username
-        if (createError?.code === '23505' && createError?.message?.includes('users_username_key')) {
+        const isUsernameConflict =
+          createError?.code === '23505' ||
+          createError?.code === 'USERNAME_CONFLICT' ||
+          createError?.constraint === 'users_username_key';
+
+        if (isUsernameConflict) {
           debugLog('[Auth] Username conflict detected, generating unique username...');
           
           // Try up to 5 times with random suffixes
           for (let attempt = 1; attempt <= 5; attempt++) {
             const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-            newUser.username = `${baseUsername}${randomSuffix}`;
+            const suffix = String(randomSuffix);
+            const trimmedBase = baseUsername.slice(0, Math.max(0, 20 - suffix.length));
+            newUser.username = `${trimmedBase}${suffix}`;
             
             debugLog(`[Auth] Retry ${attempt}/5 with username:`, newUser.username);
             
@@ -144,11 +163,12 @@ export const AuthProvider = ({ children }) => {
               debugLog('[Auth] Successfully created user with unique username:', newUser.username);
               break;
             }
-            
-            if (createError?.code !== '23505') {
-              // Different error, stop retrying
-              break;
-            }
+
+            const retryIsConflict =
+              createError?.code === '23505' ||
+              createError?.code === 'USERNAME_CONFLICT' ||
+              createError?.constraint === 'users_username_key';
+            if (!retryIsConflict) break;
           }
         }
         

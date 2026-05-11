@@ -52,9 +52,14 @@ Deno.serve(async (req: Request) => {
     const body = await req.json()
     const { email, full_name, username, avatar_url } = body
 
-    if (!username) {
+    const normalizedUsername = String(username || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '')
+
+    if (!normalizedUsername || normalizedUsername.length < 3 || normalizedUsername.length > 20) {
       return new Response(
-        JSON.stringify({ error: 'Username is required' }),
+        JSON.stringify({ error: 'Invalid username' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -83,7 +88,7 @@ Deno.serve(async (req: Request) => {
         id: user.id,
         email: email || user.email,
         full_name: full_name || '',
-        username: username,
+        username: normalizedUsername,
         role: null, // IMPORTANT: null until user selects
         avatar_url: avatar_url || null,
         is_verified: 'no'
@@ -95,9 +100,9 @@ Deno.serve(async (req: Request) => {
       console.error('User creation error:', createError)
       
       // Check if it's a username conflict
-      if (createError.code === '23505' && createError.message?.includes('users_username_key')) {
+      if (createError.code === '23505') {
         return new Response(
-          JSON.stringify({ error: 'Username already taken', code: 'USERNAME_CONFLICT' }),
+          JSON.stringify({ error: 'Username already taken', code: '23505', constraint: 'users_username_key', details: createError.message }),
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }

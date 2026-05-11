@@ -117,9 +117,10 @@ export const userApi = {
   },
 
   async checkUsernameAvailability(username) {
-    if (!username) return { available: false };
+    const normalized = (username || '').trim().toLowerCase();
+    if (!normalized) return { available: false };
     const { data, error } = await withTimeoutPublic(
-      supabase.from('users').select('username').eq('username', username).maybeSingle()
+      supabase.from('users').select('username').eq('username', normalized).maybeSingle()
     );
     if (error) return { available: false };
     return { available: !data };
@@ -146,7 +147,15 @@ export const userApi = {
       const result = await response.json();
 
       if (!response.ok) {
-        return { data: null, error: { message: result.error, code: result.code } };
+        return {
+          data: null,
+          error: {
+            message: result.error,
+            code: result.code,
+            constraint: result.constraint,
+            details: result.details
+          }
+        };
       }
 
       return { data: result.data, error: null };
