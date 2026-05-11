@@ -28,6 +28,9 @@ export function TutorialProvider({ children, steps = [] }) {
     if (steps.length > 0 && (!hasSeenTutorial || shouldForceTutorial)) {
       setIsActive(true);
       sessionStorage.setItem('tutorialStepIndex', '0');
+    } else if (steps.length === 0) {
+      // Ensure tutorial cannot remain active on routes that do not provide steps.
+      setIsActive(false);
     }
   }, [hasSeenTutorial, steps.length]);
 

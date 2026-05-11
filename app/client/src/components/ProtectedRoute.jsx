@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import Loader from './Loader';
@@ -21,48 +21,9 @@ const ProtectedRoute = ({
   } = useAuth();
 
   const location = useLocation();
-  const lastRedirectRef = useRef(null);
-  const [authCheckComplete, setAuthCheckComplete] = useState(false);
-  const mountTimeRef = useRef(Date.now());
-
-  const debug = process.env.NODE_ENV === 'development';
-
-  // Prevent rapid redirects to same path
-  const shouldRedirect = (path) => {
-    const now = Date.now();
-    
-    // Don't redirect if we just mounted (within 500ms)
-    if (now - mountTimeRef.current < 500) {
-      if (debug) console.log(`ProtectedRoute: Too soon after mount, waiting...`);
-      return false;
-    }
-    
-    if (lastRedirectRef.current?.path === path && 
-        (now - lastRedirectRef.current.timestamp) < 2000) {
-      if (debug) console.warn(`ProtectedRoute: Preventing rapid redirect to ${path}`);
-      return false;
-    }
-    
-    lastRedirectRef.current = { path, timestamp: now };
-    return true;
-  };
-
-  // Wait for auth to complete with timeout protection
-  useEffect(() => {
-    if (!loading) {
-      // Small delay to ensure state is stable
-      const timer = setTimeout(() => {
-        setAuthCheckComplete(true);
-      }, 100);
-      return () => clearTimeout(timer);
-    } else {
-      // Reset check if loading starts again
-      setAuthCheckComplete(false);
-    }
-  }, [loading]);
 
   // CRITICAL: Show loading while auth is initializing
-  if (loading || !authCheckComplete) {
+  if (loading) {
     return (
       <div className="container" style={{ padding: '2rem', textAlign: 'center' }}>
         <Loader message="Loading..." />
@@ -101,9 +62,7 @@ const ProtectedRoute = ({
 
   // 3. Profile Completion (after role is selected)
   if (needsProfileCompletionValue && currentPath !== '/profile' && currentPath !== '/profile-edit') {
-    if (shouldRedirect('/profile')) {
-      return <Navigate to="/profile" state={{ message: 'Please complete your profile.' }} replace />;
-    }
+    return <Navigate to="/profile" state={{ message: 'Please complete your profile.' }} replace />;
   }
 
   // 4. KYC Check (only for creators) - Only redirect if they're on campaign creation

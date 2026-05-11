@@ -93,7 +93,7 @@ export default function TutorialOverlay() {
 
   // Prevent scrolling when tutorial is active
   useEffect(() => {
-    if (isActive) {
+    if (isActive && currentStep) {
       const previousOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
 
@@ -101,7 +101,7 @@ export default function TutorialOverlay() {
         document.body.style.overflow = previousOverflow;
       };
     }
-  }, [isActive]);
+  }, [isActive, currentStep]);
 
   if (!isActive || !currentStep || !isReady || !targetRect) {
     return null;

@@ -2,10 +2,11 @@
 .role-selection-container {
   display: flex;
   justify-content: center;
-  align-items: center;
-  min-height: 100vh;
+  align-items: flex-start;
+  min-height: 100%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 2rem;
+  overflow-y: auto;
 }
 
 .role-selection-card {
@@ -16,6 +17,7 @@
   width: 100%;
   padding: 3rem;
   animation: slideUp 0.5s ease-out;
+  margin: 0 auto;
 }
 
 @keyframes slideUp {
@@ -186,6 +188,10 @@
 
 /* Responsive Design */
 @media (max-width: 768px) {
+  .role-selection-container {
+    padding: 1rem;
+  }
+
   .role-selection-card {
     padding: 2rem;
   }

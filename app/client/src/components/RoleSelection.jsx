@@ -34,6 +34,22 @@ const RoleSelection = () => {
     };
   }, []);
 
+  // Defensive fix: some overlays can leave body/html overflow locked until refresh.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = 'auto';
+    document.documentElement.style.overflow = 'auto';
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, []);
+
   const handleRoleSelect = (role) => {
     setSelectedRole(role);
     setError('');
@@ -81,23 +97,18 @@ const RoleSelection = () => {
         throw new Error(result.error || 'Failed to update role');
       }
 
-      // Refresh user profile to get updated role from database/auth context
-      const refreshedProfile = await refreshProfile();
-      const effectiveRole = refreshedProfile?.role || result?.data?.role || selectedRole;
-
-      if (!refreshedProfile?.role && result?.data?.role) {
-        setIsSubmitting(false);
-        setWarning('Your role was saved successfully. Syncing your session now and redirecting...');
-
-        redirectTimerRef.current = setTimeout(() => {
-          if (effectiveRole === 'creator') {
-            navigate('/kyc', { replace: true });
-          } else {
-            navigate('/dashboard', { replace: true });
-          }
-        }, 1200);
-        return;
+      // Try to sync profile quickly, but do not block navigation.
+      let refreshedProfile = null;
+      try {
+        refreshedProfile = await Promise.race([
+          refreshProfile(),
+          new Promise(resolve => setTimeout(() => resolve(null), 1500))
+        ]);
+      } catch (_) {
+        // Ignore refresh issues here because role update already succeeded server-side.
       }
+
+      const effectiveRole = refreshedProfile?.role || result?.data?.role || selectedRole;
 
       // Redirect based on role
       if (effectiveRole === 'creator') {
