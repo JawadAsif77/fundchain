@@ -245,7 +245,7 @@ function AppContent() {
                       <Route 
                         path="/role-selection" 
                         element={
-                          <ProtectedRoute>
+                          <ProtectedRoute requireEmailConfirmed>
                             <RoleSelection />
                           </ProtectedRoute>
                         } 
@@ -285,7 +285,7 @@ function AppContent() {
                       <Route 
                         path="/dashboard" 
                         element={
-                          <ProtectedRoute>
+                          <ProtectedRoute requireEmailConfirmed>
                             <Dashboard tutorialRefs={{ discoverProjectsButtonRef }} />
                           </ProtectedRoute>
                         } 
@@ -293,7 +293,7 @@ function AppContent() {
                       <Route 
                         path="/create-project" 
                         element={
-                          <ProtectedRoute requireRole="creator" requireKYC>
+                          <ProtectedRoute requireEmailConfirmed requireRole="creator" requireKYC>
                             <CreateProject />
                           </ProtectedRoute>
                         } 
@@ -301,7 +301,7 @@ function AppContent() {
                       <Route 
                         path="/edit-campaign/:campaignId" 
                         element={
-                          <ProtectedRoute requireRole="creator" requireKYC>
+                          <ProtectedRoute requireEmailConfirmed requireRole="creator" requireKYC>
                             <CreateProject />
                           </ProtectedRoute>
                         } 
@@ -309,7 +309,7 @@ function AppContent() {
                       <Route 
                         path="/wallet" 
                         element={
-                          <ProtectedRoute>
+                          <ProtectedRoute requireEmailConfirmed>
                             <Wallet />
                           </ProtectedRoute>
                         }
@@ -317,7 +317,7 @@ function AppContent() {
                       <Route 
                         path="/portfolio" 
                         element={
-                          <ProtectedRoute>
+                          <ProtectedRoute requireEmailConfirmed>
                             <Portfolio />
                           </ProtectedRoute>
                         }

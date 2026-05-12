@@ -49,6 +49,17 @@ const ProtectedRoute = ({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // 1.5. Email confirmation required
+  if (requireEmailConfirmed && !isEmailConfirmed) {
+    return (
+      <Navigate
+        to="/login"
+        state={{ from: location, message: 'Please verify your email to continue.' }}
+        replace
+      />
+    );
+  }
+
   // 2. PRIORITY: Role Selection - User has no role (Google OAuth)
   // They MUST select a role before doing anything else
   if (needsRoleSelectionValue) {

@@ -55,6 +55,10 @@
   max-width: 120px; /* Add max width to control spread */
 }
 
+.step.clickable {
+  cursor: pointer;
+}
+
 .step:not(:last-child)::after {
   content: '';
   position: absolute;

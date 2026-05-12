@@ -43,6 +43,7 @@ const Login = () => {
         <LoginForm 
           onSwitchToRegister={handleSwitchToRegister}
           onClose={handleAuthSuccess}
+          bannerMessage={location.state?.message || ''}
         />
       ) : (
         <RegisterForm 

@@ -4,7 +4,7 @@ import { validateEmail, validateRequired } from '../../utils/validation';
 import { supabase } from '../../lib/supabase';
 import './AuthForms.css';
 
-const LoginForm = ({ onSwitchToRegister, onClose }) => {
+const LoginForm = ({ onSwitchToRegister, onClose, bannerMessage = '' }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -22,6 +22,13 @@ const LoginForm = ({ onSwitchToRegister, onClose }) => {
   const [isResetting, setIsResetting] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
   const [resetError, setResetError] = useState('');
+
+  // Resend verification states
+  const [showResendVerification, setShowResendVerification] = useState(false);
+  const [resendEmail, setResendEmail] = useState('');
+  const [isResending, setIsResending] = useState(false);
+  const [resendError, setResendError] = useState('');
+  const [resendSuccess, setResendSuccess] = useState(false);
   
   const { login, error, clearError } = useAuth();
 
@@ -196,6 +203,38 @@ const LoginForm = ({ onSwitchToRegister, onClose }) => {
     }
   };
 
+  const handleResendVerification = async (e) => {
+    e.preventDefault();
+
+    const emailToSend = resendEmail || formData.email;
+    const emailValidation = validateEmail(emailToSend);
+    if (!emailValidation.valid) {
+      setResendError(emailValidation.error);
+      return;
+    }
+
+    setIsResending(true);
+    setResendError('');
+    setResendSuccess(false);
+
+    try {
+      const { error: resendErrorResponse } = await supabase.auth.resend({
+        type: 'signup',
+        email: emailToSend,
+        options: {
+          emailRedirectTo: `${window.location.origin}/login`
+        }
+      });
+
+      if (resendErrorResponse) throw resendErrorResponse;
+      setResendSuccess(true);
+    } catch (err) {
+      setResendError(err.message || 'Failed to resend verification email');
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
     setGoogleError('');
@@ -237,6 +276,52 @@ const LoginForm = ({ onSwitchToRegister, onClose }) => {
         {error && (
           <div className="error-message">
             {error}
+          </div>
+        )}
+
+        {bannerMessage && (
+          <div className="info-message">
+            {bannerMessage}
+          </div>
+        )}
+
+        {bannerMessage && (
+          <div className="form-group" style={{ marginBottom: '1rem' }}>
+            <button
+              type="button"
+              className="auth-switch-link"
+              onClick={() => setShowResendVerification(prev => !prev)}
+              disabled={isSubmitting || isGoogleLoading}
+            >
+              Resend verification email
+            </button>
+          </div>
+        )}
+
+        {showResendVerification && (
+          <div className="form-group" style={{ marginBottom: '1rem' }}>
+            <label htmlFor="resend-email">Email Address *</label>
+            <input
+              type="email"
+              id="resend-email"
+              value={resendEmail}
+              onChange={(e) => setResendEmail(e.target.value)}
+              placeholder="Enter your email"
+              disabled={isResending}
+            />
+            {resendError && <span className="field-error">{resendError}</span>}
+            {resendSuccess && (
+              <span className="field-success">Verification email sent. Check your inbox.</span>
+            )}
+            <button
+              type="button"
+              className="auth-submit-btn"
+              onClick={handleResendVerification}
+              disabled={isResending}
+              style={{ marginTop: '0.75rem' }}
+            >
+              {isResending ? 'Sending...' : 'Send Verification Link'}
+            </button>
           </div>
         )}
 

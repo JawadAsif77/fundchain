@@ -149,6 +149,22 @@
   text-align: center;
 }
 
+.info-message {
+  background: #e0f2fe;
+  color: #075985;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.field-success {
+  color: #059669;
+  font-size: 13px;
+  display: block;
+  margin-top: 6px;
+}
+
 .auth-submit-btn {
   width: 100%;
   background: var(--color-primary);

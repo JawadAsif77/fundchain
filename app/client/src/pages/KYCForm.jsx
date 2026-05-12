@@ -673,58 +673,29 @@ const KYCForm = () => {
 
       console.log('KYC data to submit:', kycData);
 
-      // Check if record already exists
-      const { data: existingRecord } = await supabase
-        .from('user_verifications')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      console.log('Existing record:', existingRecord);
-
-      let result;
-      if (existingRecord) {
-        // Update existing KYC
-        console.log('Updating existing record with ID:', existingRecord.id);
-        result = await supabase
-          .from('user_verifications')
-          .update(kycData)
-          .eq('user_id', user.id)
-          .select();
-      } else {
-        // Insert new KYC
-        console.log('Inserting new record...');
-        result = await supabase
-          .from('user_verifications')
-          .insert([kycData])
-          .select();
+      // Use edge function to upsert KYC so updates cannot be blocked by missing/incorrect RLS UPDATE policies.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
       }
 
-      console.log('Submit result:', result);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-kyc`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ kycData })
+        }
+      );
 
-      if (result.error) {
-        console.error('KYC submission error:', result.error);
-        throw new Error(result.error.message || 'Failed to submit KYC');
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.success) {
+        const message = result?.error || result?.message || 'Failed to submit KYC';
+        throw new Error(message);
       }
-
-      // Verify the update worked by fetching the data
-      const { data: verifyData, error: verifyError } = await supabase
-        .from('user_verifications')
-        .select('legal_name, date_of_birth, nationality, gender, occupation')
-        .eq('user_id', user.id)
-        .single();
-      
-      console.log('Verification after update:', verifyData);
-      
-      if (verifyError) {
-        console.error('Error verifying update:', verifyError);
-      }
-
-      // Update user profile is_verified status
-      await supabase
-        .from('users')
-        .update({ is_verified: 'pending' })
-        .eq('id', user.id);
 
       // Set flag to prevent reload of old data
       setHasSubmittedSuccessfully(true);
@@ -763,7 +734,28 @@ const KYCForm = () => {
           key={index}
           className={`step ${currentStep >= index + 1 ? 'active' : ''} ${
             currentStep > index + 1 ? 'completed' : ''
-          }`}
+          } ${isUpdating && !isSubmitting ? 'clickable' : ''}`}
+          onClick={
+            isUpdating && !isSubmitting
+              ? () => {
+                  setCurrentStep(index + 1);
+                  setError('');
+                }
+              : undefined
+          }
+          role={isUpdating && !isSubmitting ? 'button' : undefined}
+          tabIndex={isUpdating && !isSubmitting ? 0 : undefined}
+          onKeyDown={
+            isUpdating && !isSubmitting
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setCurrentStep(index + 1);
+                    setError('');
+                  }
+                }
+              : undefined
+          }
         >
           <div className="step-number">
             {currentStep > index + 1 ? '✓' : index + 1}
