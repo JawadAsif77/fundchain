@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../store/AuthContext';
 import { userApi } from '../lib/api.js';
 import { useWallet } from '@solana/wallet-adapter-react';
@@ -51,19 +52,22 @@ const WalletButton = () => {
       </button>
 
       {/* Modal */}
-      {showModal && (
+      {showModal && typeof document !== 'undefined' && createPortal(
         <div
           onClick={() => setShowModal(false)}
           style={{
             position: 'fixed',
-            inset: 0,
+            left: 0,
+            top: 0,
+            width: '100vw',
+            height: '100dvh',
             backgroundColor: 'rgba(0,0,0,0.75)',
             backdropFilter: 'blur(4px)',
             zIndex: 999999,
-
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            padding: '16px'
           }}
         >
           <div
@@ -73,8 +77,8 @@ const WalletButton = () => {
               borderRadius: '16px',
               padding: '32px',
               maxWidth: '520px',
-              width: '90%',
-              maxHeight: '90vh',
+              width: '100%',
+              maxHeight: 'calc(100dvh - 32px)',
               overflowY: 'auto',
               boxShadow: '0 25px 50px -12px rgba(0,0,0,0.4)',
               position: 'relative'
@@ -195,7 +199,7 @@ const WalletButton = () => {
             )}
           </div>
         </div>
-      )}
+      , document.body)}
     </>
   );
 };
