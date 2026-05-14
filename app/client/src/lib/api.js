@@ -266,17 +266,28 @@ export const campaignApi = {
         }
       }
       
-      // Map form fields to database column names (from main)
-      const { category, deadline, goalAmount, summary, imageUrl, ...campaignData } = form;
-      const payload = { 
-        ...campaignData, 
-        creator_id: finalCreatorId, 
+      // Map form fields to database column names (supports both basic and enhanced create forms)
+      const {
+        category,
+        deadline,
+        end_date,
+        goalAmount,
+        funding_goal,
+        summary,
+        short_description,
+        imageUrl,
+        image_url,
+        ...campaignData
+      } = form;
+      const payload = {
+        ...campaignData,
+        creator_id: finalCreatorId,
         category_id,
-        end_date: deadline,
-        funding_goal: goalAmount,
-        short_description: summary,
-        image_url: imageUrl,
-        status: 'pending_review' 
+        end_date: deadline || end_date || null,
+        funding_goal: goalAmount ?? funding_goal,
+        short_description: summary || short_description || null,
+        image_url: imageUrl || image_url || null,
+        status: 'pending_review'
       };
       
       const { data, error } = await supabase.from('campaigns').insert(payload).select('*').single();

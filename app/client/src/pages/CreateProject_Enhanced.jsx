@@ -15,6 +15,17 @@ const CreateProject = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [existingCampaignId, setExistingCampaignId] = useState(null);
   const [categories, setCategories] = useState([]);
+  const DEFAULT_CATEGORIES = [
+    { name: 'Technology', description: 'Software, AI, and digital products' },
+    { name: 'Healthcare', description: 'Health, medical services, and wellness' },
+    { name: 'Education', description: 'Learning, training, and skills' },
+    { name: 'Finance', description: 'Payments, lending, and financial inclusion' },
+    { name: 'Agriculture', description: 'Farming, supply chain, and food systems' },
+    { name: 'Clean Energy', description: 'Renewables and energy efficiency' },
+    { name: 'Environment', description: 'Climate, sustainability, and conservation' },
+    { name: 'Entertainment', description: 'Media, games, and content' },
+    { name: 'Other', description: 'Other projects and experiments' }
+  ];
   
   const navigate = useNavigate();
   const { campaignId } = useParams();
@@ -47,21 +58,34 @@ const CreateProject = () => {
       
       if (error) {
         console.error('Error loading categories:', error);
-        // Fallback to hardcoded categories if table doesn't exist
-        setCategories([
-          { id: 'technology', name: 'Technology' },
-          { id: 'healthcare', name: 'Healthcare' },
-          { id: 'education', name: 'Education' },
-          { id: 'environment', name: 'Environment' },
-          { id: 'finance', name: 'Finance' },
-          { id: 'entertainment', name: 'Entertainment' },
-          { id: 'other', name: 'Other' }
-        ]);
-      } else {
-        setCategories(data || []);
+        setCategories(DEFAULT_CATEGORIES.map((cat) => ({ id: cat.name, name: cat.name })));
+        return;
       }
+
+      if (!data || data.length === 0) {
+        const { error: seedError } = await supabase
+          .from('categories')
+          .upsert(DEFAULT_CATEGORIES, { onConflict: 'name' });
+
+        if (seedError) {
+          console.warn('Failed to seed categories:', seedError);
+          setCategories(DEFAULT_CATEGORIES.map((cat) => ({ id: cat.name, name: cat.name })));
+          return;
+        }
+
+        const { data: seeded } = await supabase
+          .from('categories')
+          .select('id, name')
+          .order('name');
+
+        setCategories(seeded || DEFAULT_CATEGORIES.map((cat) => ({ id: cat.name, name: cat.name })));
+        return;
+      }
+
+      setCategories(data);
     } catch (err) {
       console.error('Failed to load categories:', err);
+      setCategories(DEFAULT_CATEGORIES.map((cat) => ({ id: cat.name, name: cat.name })));
     }
   };
 
