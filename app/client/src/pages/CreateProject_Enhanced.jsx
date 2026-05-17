@@ -26,6 +26,15 @@ const CreateProject = () => {
     { name: 'Entertainment', description: 'Media, games, and content' },
     { name: 'Other', description: 'Other projects and experiments' }
   ];
+
+  const REGION_COUNTRIES = {
+    'South Asia': ['Pakistan', 'India', 'Bangladesh', 'Sri Lanka', 'Nepal'],
+    'Middle East': ['UAE', 'Saudi Arabia', 'Qatar', 'Kuwait', 'Oman', 'Bahrain'],
+    'Southeast Asia': ['Malaysia', 'Indonesia', 'Singapore', 'Thailand', 'Philippines', 'Vietnam'],
+    'Europe': ['United Kingdom', 'Germany', 'France', 'Netherlands', 'Sweden', 'Spain', 'Italy'],
+    'North America': ['United States', 'Canada', 'Mexico'],
+    'Africa': ['Nigeria', 'Kenya', 'South Africa', 'Egypt', 'Ghana']
+  };
   
   const navigate = useNavigate();
   const { campaignId } = useParams();
@@ -63,22 +72,7 @@ const CreateProject = () => {
       }
 
       if (!data || data.length === 0) {
-        const { error: seedError } = await supabase
-          .from('categories')
-          .upsert(DEFAULT_CATEGORIES, { onConflict: 'name' });
-
-        if (seedError) {
-          console.warn('Failed to seed categories:', seedError);
-          setCategories(DEFAULT_CATEGORIES.map((cat) => ({ id: cat.name, name: cat.name })));
-          return;
-        }
-
-        const { data: seeded } = await supabase
-          .from('categories')
-          .select('id, name')
-          .order('name');
-
-        setCategories(seeded || DEFAULT_CATEGORIES.map((cat) => ({ id: cat.name, name: cat.name })));
+        setCategories(DEFAULT_CATEGORIES.map((cat) => ({ id: cat.name, name: cat.name })));
         return;
       }
 
@@ -104,6 +98,8 @@ const CreateProject = () => {
     summary: '',
     description: '',
     category: '',
+    region: '',
+    country: '',
     goalAmount: '',
     deadline: '',
     
@@ -147,7 +143,10 @@ const CreateProject = () => {
     // Legal
     legal_structure: '',
     registration_number: '',
-    tax_id: ''
+    tax_id: '',
+
+    // Metadata
+    update_count: 0
   });
 
   // Milestones data
@@ -191,12 +190,25 @@ const CreateProject = () => {
       }
 
       // Load campaign data - mapping database fields correctly
+      const parseLocation = (value) => {
+        if (!value) return { region: '', country: '' };
+        const match = String(value).match(/^(.*)\s*\((.*)\)$/);
+        if (match) {
+          return { country: match[1].trim(), region: match[2].trim() };
+        }
+        return { region: '', country: String(value).trim() };
+      };
+
+      const parsedLocation = parseLocation(campaign.location);
+
       const loadedData = {
         title: campaign.title || '',
         slug: campaign.slug || '',
-        summary: campaign.short_description || '',
+        summary: campaign.short_description || campaign.summary || campaign.description || '',
         description: campaign.description || '',
         category: campaign.category_id || campaign.category || '',
+        region: parsedLocation.region,
+        country: parsedLocation.country,
         goalAmount: campaign.funding_goal?.toString() || '',
         deadline: campaign.end_date ? campaign.end_date.split('T')[0] : '',
         
@@ -218,8 +230,12 @@ const CreateProject = () => {
         competitive_advantage: campaign.competitive_advantage || '',
         
         // Financial
-        use_of_funds: (campaign.use_of_funds && Array.isArray(campaign.use_of_funds) && campaign.use_of_funds.length > 0) 
-          ? campaign.use_of_funds 
+        use_of_funds: (campaign.use_of_funds && Array.isArray(campaign.use_of_funds) && campaign.use_of_funds.length > 0)
+          ? campaign.use_of_funds.map((item) => ({
+              category: (item?.category || '').toString().trim(),
+              amount: item?.amount != null ? String(item.amount) : '',
+              description: (item?.description || '').toString()
+            }))
           : [{ category: '', amount: '', description: '' }],
         expected_roi: campaign.expected_roi || '',
         previous_funding_amount: campaign.previous_funding_amount?.toString() || '',
@@ -244,7 +260,10 @@ const CreateProject = () => {
         // Legal
         legal_structure: campaign.legal_structure || '',
         registration_number: campaign.registration_number || '',
-        tax_id: campaign.tax_id || ''
+        tax_id: campaign.tax_id || '',
+
+        // Metadata
+        update_count: campaign.update_count || 0
       };
 
       console.log('[Campaign Edit] Processed data to load:', loadedData);
@@ -461,6 +480,14 @@ const CreateProject = () => {
         if (!projectData.market_analysis || projectData.market_analysis.trim().length < 50) {
           errors.market_analysis = 'Market analysis must be at least 50 characters';
         }
+
+        if (!projectData.region) {
+          errors.region = 'Please select a region';
+        }
+
+        if (!projectData.country) {
+          errors.country = 'Please select a country';
+        }
         break;
 
       case 3: // Financial Information
@@ -572,6 +599,30 @@ const CreateProject = () => {
     setError('');
 
     try {
+      const resolveCategoryId = async (value) => {
+        if (!value) return null;
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+        if (isUuid) return value;
+
+        const localMatch = categories.find(
+          (cat) => cat.name && cat.name.toLowerCase() === String(value).toLowerCase()
+        );
+        if (localMatch?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(localMatch.id)) {
+          return localMatch.id;
+        }
+
+        const { data: existing } = await supabase
+          .from('categories')
+          .select('id')
+          .eq('name', value)
+          .maybeSingle();
+        if (existing?.id) return existing.id;
+
+        throw new Error('Category not found. Please ask admin to seed categories first.');
+      };
+
+      const resolvedCategoryId = await resolveCategoryId(projectData.category);
+
       console.log('[Campaign Submit] Starting submission...');
       console.log('[Campaign Submit] isUpdating:', isUpdating);
       console.log('[Campaign Submit] existingCampaignId:', existingCampaignId);
@@ -589,7 +640,8 @@ const CreateProject = () => {
         end_date: projectData.deadline,
         creator_id: user.id,
         status: 'pending_review',  // Submit for admin review
-        category_id: projectData.category || null,  // Category UUID
+        category_id: resolvedCategoryId,  // Category UUID
+        location: projectData.country ? `${projectData.country}${projectData.region ? ` (${projectData.region})` : ''}` : null,
         
         // Media fields (dual mapping for compatibility)
         image_url: projectData.campaign_image_url || null,
@@ -643,7 +695,8 @@ const CreateProject = () => {
           description: projectData.description,
           funding_goal: parseFloat(projectData.goalAmount),
           end_date: projectData.deadline,
-          category_id: projectData.category || null,
+          category_id: resolvedCategoryId,
+          location: projectData.country ? `${projectData.country}${projectData.region ? ` (${projectData.region})` : ''}` : null,
           
           // Media (dual mapping)
           image_url: projectData.campaign_image_url || null,
@@ -686,7 +739,7 @@ const CreateProject = () => {
           
           // Metadata
           last_updated_at: new Date().toISOString(),
-          update_count: supabase.rpc('increment', { x: 1 })  // Increment update counter
+          update_count: Number(projectData.update_count || 0) + 1  // Increment update counter locally
         };
 
         console.log('[Campaign Update] Prepared updateData:', JSON.stringify(updateData, null, 2));
@@ -716,7 +769,6 @@ const CreateProject = () => {
           title: m.name,
           description: m.description,
           target_amount: (parseFloat(projectData.goalAmount) * (parseFloat(m.payoutPercentage) / 100)),
-          payout_percentage: parseFloat(m.payoutPercentage),
           order_index: index,
           is_completed: false
         }));
@@ -786,7 +838,25 @@ const CreateProject = () => {
         {/* Step Indicator */}
         <div className="step-indicator">
           {['Basic Info', 'Project Details', 'Financial', 'Team', 'Milestones', 'Review'].map((label, index) => (
-            <div key={index} className={`step ${currentStep >= index + 1 ? 'active' : ''} ${currentStep > index + 1 ? 'completed' : ''}`}>
+            <div
+              key={index}
+              className={`step ${currentStep >= index + 1 ? 'active' : ''} ${
+                currentStep > index + 1 ? 'completed' : ''
+              } clickable`}
+              onClick={() => {
+                setCurrentStep(index + 1);
+                setError('');
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setCurrentStep(index + 1);
+                  setError('');
+                }
+              }}
+            >
               <div className="step-number">
                 {currentStep > index + 1 ? '✓' : index + 1}
               </div>
@@ -1039,6 +1109,39 @@ const CreateProject = () => {
             placeholder="Describe the market size, opportunity, and trends (minimum 50 characters)"
           />
           {validationErrors.market_analysis && <span className="error">{validationErrors.market_analysis}</span>}
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label>Region *</label>
+            <select
+              value={projectData.region}
+              onChange={(e) => {
+                handleProjectChange('region', e.target.value);
+                handleProjectChange('country', '');
+              }}
+            >
+              <option value="">Select a region</option>
+              {Object.keys(REGION_COUNTRIES).map((region) => (
+                <option key={region} value={region}>{region}</option>
+              ))}
+            </select>
+            {validationErrors.region && <span className="error">{validationErrors.region}</span>}
+          </div>
+          <div className="form-group">
+            <label>Country *</label>
+            <select
+              value={projectData.country}
+              onChange={(e) => handleProjectChange('country', e.target.value)}
+              disabled={!projectData.region}
+            >
+              <option value="">Select a country</option>
+              {(REGION_COUNTRIES[projectData.region] || []).map((country) => (
+                <option key={country} value={country}>{country}</option>
+              ))}
+            </select>
+            {validationErrors.country && <span className="error">{validationErrors.country}</span>}
+          </div>
         </div>
 
         <div className="form-group">

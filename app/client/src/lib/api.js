@@ -242,9 +242,7 @@ export const campaignApi = {
   async ensureCategoryByName(name) {
     if (!name) return null;
     const { data } = await supabase.from('categories').select('id').eq('name', name).maybeSingle();
-    if (data) return data.id;
-    const { data: newCat } = await supabase.from('categories').insert({ name }).select('id').single();
-    return newCat?.id;
+    return data?.id || null;
   },
   
   async createCampaign(form, creatorId) {
@@ -254,7 +252,15 @@ export const campaignApi = {
         const { data } = await supabase.auth.getUser();
         finalCreatorId = data?.user?.id;
       }
-      const category_id = await this.ensureCategoryByName(form.category);
+      let category_id = null;
+      const rawCategory = form.category_id || form.category || null;
+      if (rawCategory) {
+        const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawCategory);
+        category_id = looksLikeUuid ? rawCategory : await this.ensureCategoryByName(rawCategory);
+        if (!category_id && !looksLikeUuid) {
+          return { success: false, error: 'Category not found. Please ask admin to seed categories.' };
+        }
+      }
 
       // Prevent suspended users from creating campaigns
       const { data: authData } = await supabase.auth.getUser();
@@ -269,6 +275,7 @@ export const campaignApi = {
       // Map form fields to database column names (supports both basic and enhanced create forms)
       const {
         category,
+        category_id: _categoryId,
         deadline,
         end_date,
         goalAmount,
@@ -285,7 +292,7 @@ export const campaignApi = {
         category_id,
         end_date: deadline || end_date || null,
         funding_goal: goalAmount ?? funding_goal,
-        short_description: summary || short_description || null,
+        short_description: short_description || summary || null,
         image_url: imageUrl || image_url || null,
         status: 'pending_review'
       };

@@ -89,6 +89,10 @@
   max-width: 150px;
 }
 
+.step.clickable {
+  cursor: pointer;
+}
+
 .step-number {
   width: 52px;
   height: 52px;
