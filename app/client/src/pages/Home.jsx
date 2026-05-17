@@ -272,20 +272,20 @@ const Home = () => {
           }}>
             {/* Left Column - Content */}
             <div>
-              {/* Badge */}
               <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                backgroundColor: '#29C7AC',
-                color: 'white',
-                padding: '8px 16px',
-                borderRadius: '20px',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                marginBottom: '32px'
+                display: 'flex',
+                justifyContent: 'center',
+                marginBottom: '36px'
               }}>
-                <span style={{ marginRight: '8px' }}>⚡</span>
-                Powered by Solana Blockchain
+                <img
+                  src="/fundchain_logo_lockup.png"
+                  alt="FundChain"
+                  style={{
+                    height: '126px',
+                    width: 'auto',
+                    display: 'block'
+                  }}
+                />
               </div>
 
               {/* Headline */}

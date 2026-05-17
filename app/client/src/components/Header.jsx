@@ -51,7 +51,7 @@ const Header = ({ tutorialRefs = {} }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          height: '72px'
+          height: '104px'
         }}>
           <Link 
             to="/" 
@@ -59,32 +59,18 @@ const Header = ({ tutorialRefs = {} }) => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 'var(--space-2)',
               textDecoration: 'none'
             }}
           >
-            <div style={{
-              width: '40px',
-              height: '40px',
-              background: 'var(--gradient-primary)',
-              borderRadius: 'var(--radius-md)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: 'var(--shadow-card)'
-            }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="2"/>
-                <path d="M8 12l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <span style={{
-              fontSize: 'var(--text-xl)',
-              fontWeight: 'var(--font-bold)',
-              color: 'var(--color-primary)'
-            }} className="gradient-text">
-              FundChain
-            </span>
+            <img
+              src="/fundchain_logo_lockup.png"
+              alt="FundChain"
+              style={{
+                height: '72px',
+                width: 'auto',
+                display: 'block'
+              }}
+            />
           </Link>
 
           {/* Desktop Navigation */}
