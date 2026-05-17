@@ -97,18 +97,28 @@ const RoleSelection = () => {
         throw new Error(result.error || 'Failed to update role');
       }
 
-      // Try to sync profile quickly, but do not block navigation.
-      let refreshedProfile = null;
-      try {
-        refreshedProfile = await Promise.race([
-          refreshProfile(),
-          new Promise(resolve => setTimeout(() => resolve(null), 1500))
-        ]);
-      } catch (_) {
-        // Ignore refresh issues here because role update already succeeded server-side.
-      }
+      // Ensure profile state reflects the saved role before redirecting.
+      const syncProfileRole = async () => {
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const refreshed = await refreshProfile();
+            if (refreshed?.role) return refreshed;
+          } catch (_) {
+            // Retry to avoid stale role state.
+          }
+          await new Promise(resolve => setTimeout(resolve, 400));
+        }
+        return null;
+      };
 
+      const refreshedProfile = await syncProfileRole();
       const effectiveRole = refreshedProfile?.role || result?.data?.role || selectedRole;
+
+      if (!refreshedProfile?.role) {
+        setWarning('Role saved, but profile is still syncing. Please try again in a moment.');
+        setIsSubmitting(false);
+        return;
+      }
 
       // Redirect based on role
       if (effectiveRole === 'creator') {

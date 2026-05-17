@@ -51,6 +51,12 @@ export function TutorialProvider({ children, steps = [] }) {
     setHasSeenTutorial(true);
     localStorage.setItem('hasSeenTutorial', 'true');
     localStorage.setItem('platformTutorialSeen', 'true');
+
+    const activeTutorialUserId = localStorage.getItem('activeTutorialUserId');
+    if (activeTutorialUserId) {
+      localStorage.setItem(`hasSeenTutorial:${activeTutorialUserId}`, 'true');
+    }
+
     localStorage.removeItem('pendingDashboardTutorial');
     sessionStorage.removeItem('tutorialStepIndex');
   }, []);
@@ -88,6 +94,12 @@ export function TutorialProvider({ children, steps = [] }) {
     setHasSeenTutorial(false);
     localStorage.removeItem('hasSeenTutorial');
     localStorage.removeItem('platformTutorialSeen');
+
+    const activeTutorialUserId = localStorage.getItem('activeTutorialUserId');
+    if (activeTutorialUserId) {
+      localStorage.removeItem(`hasSeenTutorial:${activeTutorialUserId}`);
+    }
+
     setCurrentStepIndex(0);
     sessionStorage.removeItem('tutorialStepIndex');
     setIsActive(steps.length > 0);

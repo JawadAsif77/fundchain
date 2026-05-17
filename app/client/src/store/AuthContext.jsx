@@ -33,6 +33,23 @@ const debugLog = (...args) => {
   if (isDev) console.log(...args);
 };
 
+const getUserTutorialSeenKey = (userId) => `hasSeenTutorial:${userId}`;
+
+const syncTutorialStateForUser = (userId) => {
+  if (typeof window === 'undefined' || !userId) return;
+
+  const hasSeenForCurrentUser =
+    localStorage.getItem(getUserTutorialSeenKey(userId)) === 'true';
+
+  // Keep legacy/global key in sync so existing tutorial context logic continues to work.
+  localStorage.setItem('hasSeenTutorial', hasSeenForCurrentUser ? 'true' : 'false');
+  localStorage.setItem('activeTutorialUserId', userId);
+
+  if (!hasSeenForCurrentUser) {
+    localStorage.setItem('pendingDashboardTutorial', 'true');
+  }
+};
+
 // HELPER: Safe cleanup that doesn't break the browser
 const clearAllAuthData = () => {
   if (typeof window === 'undefined') return;
@@ -283,11 +300,8 @@ export const AuthProvider = ({ children }) => {
         // Set user immediately
         setUser(session.user);
 
-        if (event === 'SIGNED_IN') {
-          const hasSeenTutorial = localStorage.getItem('hasSeenTutorial') === 'true';
-          if (!hasSeenTutorial) {
-            localStorage.setItem('pendingDashboardTutorial', 'true');
-          }
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          syncTutorialStateForUser(session.user.id);
         }
         
         // Only load user data on meaningful events, NOT on token refresh
@@ -346,6 +360,9 @@ export const AuthProvider = ({ children }) => {
     setRoleStatus(null);
     setWallet(null);
     setSessionVersion(v => v + 1);
+
+    // Remove volatile tutorial user pointer on logout.
+    localStorage.removeItem('activeTutorialUserId');
     
     // Hard redirect to clear any lingering memory state
     window.location.href = '/';
