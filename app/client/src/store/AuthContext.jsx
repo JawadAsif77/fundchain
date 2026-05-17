@@ -212,8 +212,9 @@ export const AuthProvider = ({ children }) => {
       // Load wallet if user exists
       if (userProfile) {
         getWallet(userId).then(w => {
-          if (w.status === 'success') {
-            setWallet({ balanceFc: w.balanceFc, lockedFc: w.lockedFc });
+          // Accept both service function success and our fallback success
+          if (w && w.success) {
+            setWallet({ balanceFc: w.balanceFc || w.balanceFc === 0 ? w.balanceFc : w.balance || 0, lockedFc: w.lockedFc || 0 });
           }
         }).catch(e => { if (isDev) console.warn('Wallet load warning:', e); });
       }

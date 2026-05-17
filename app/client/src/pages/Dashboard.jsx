@@ -421,6 +421,9 @@ const Dashboard = ({ tutorialRefs = {} }) => {
         c.end_date ||
         new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       imageUrl: c.campaign_image_url || c.image_url || null,  // Check both fields
+      // Provide both property names so CampaignCard and other components can use either
+      image_url: c.campaign_image_url || c.image_url || null,
+      campaign_image_url: c.campaign_image_url || c.image_url || null,
       creatorId: c.creator_id,
       fundingProgress: c.funding_progress || 0,
       riskScore: c.risk_level
@@ -440,7 +443,7 @@ const Dashboard = ({ tutorialRefs = {} }) => {
       setWithdrawSuccessMsg('');
       const result = await withdrawCreatorFundsToSol(amount);
       setWithdrawSuccessMsg(
-        `Withdrawal request submitted: ${result.amountFc} FC → ${result.amountSol} SOL (Status: ${result.status})`
+        `Withdrawal completed: ${result.amountFc} FC → ${result.amountSol} SOL (Tx: ${result.txSignature})`
       );
       setWithdrawAmountFc('');
       await refreshWallet();

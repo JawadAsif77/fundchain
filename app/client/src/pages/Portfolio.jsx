@@ -151,9 +151,9 @@ const Portfolio = () => {
                 onClick={() => navigate(`/campaign/${investment.campaign_id}`)}
               >
                 {/* Campaign Image */}
-                {investment.campaigns?.image_url && (
+                {(investment.campaigns?.campaign_image_url || investment.campaigns?.image_url) && (
                   <img
-                    src={investment.campaigns.image_url}
+                    src={investment.campaigns.campaign_image_url || investment.campaigns.image_url}
                     alt={investment.campaigns.title}
                     style={{
                       width: '100px',

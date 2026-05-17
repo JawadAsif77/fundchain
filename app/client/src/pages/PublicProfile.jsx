@@ -20,7 +20,12 @@ const PublicProfile = () => {
   const loadProfile = async () => {
     try {
       setLoading(true);
-      const userData = await profileStatsApi.getUserProfile(username);
+      // Normalize username casing to lowercase when it's not a UUID to avoid case-sensitive mismatch
+      let lookup = username;
+      if (lookup && typeof lookup === 'string' && !lookup.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        lookup = lookup.toLowerCase();
+      }
+      const userData = await profileStatsApi.getUserProfile(lookup);
       
       if (!userData) {
         setLoading(false);
@@ -53,12 +58,12 @@ const PublicProfile = () => {
 
   if (loading) return <Loader />;
 
-  if (!profile) {
+    if (!profile) {
     return (
       <div className="public-profile-container">
         <div className="public-profile-not-found">
           <h2>User Not Found</h2>
-          <p>The user @{username} doesn't exist or has been removed.</p>
+            <p>The user @{username} doesn't exist or has been removed.</p>
           <button onClick={() => navigate('/explore')} className="btn-primary">
             Browse Campaigns
           </button>

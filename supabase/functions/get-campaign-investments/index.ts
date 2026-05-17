@@ -9,7 +9,6 @@ const corsHeaders = {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -19,10 +18,15 @@ Deno.serve(async (req) => {
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'Missing authorization header' }),
-        { 
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const { campaignId } = await req.json().catch(() => ({}))
+    if (!campaignId) {
+      return new Response(
+        JSON.stringify({ error: 'Missing campaignId' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
@@ -37,59 +41,50 @@ Deno.serve(async (req) => {
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: 'Invalid authentication' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const userId = user.id
 
-    // Query campaign_investments with join to campaigns
-    const { data: investments, error: investmentsError } = await supabase
+    const { data, error } = await supabase
       .from('campaign_investments')
       .select(`
-        campaign_id,
+        investor_id,
         amount_fc,
         created_at,
-        campaigns (
-          title,
-          image_url,
-          campaign_image_url,
-          slug
+        users (
+          username,
+          full_name,
+          avatar_url
         )
       `)
-      .eq('investor_id', userId)
-      .order('created_at', { ascending: false })
+      .eq('campaign_id', campaignId)
+      .order('amount_fc', { ascending: false })
 
-    if (investmentsError) {
-      throw new Error(`Failed to fetch investments: ${investmentsError.message}`)
+    if (error) {
+      throw new Error(`Failed to fetch investors: ${error.message}`)
     }
 
-    // Return investments
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         status: 'success',
-        investments: investments || []
+        investors: (data || []).map((row) => ({
+          investor_id: row.investor_id,
+          total_invested: row.amount_fc,
+          first_investment_at: row.created_at,
+          last_investment_at: row.created_at,
+          users: row.users || null
+        }))
       }),
-      { 
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-
   } catch (err) {
-    console.error('Error in get-user-investments:', err)
-    
+    console.error('Error in get-campaign-investments:', err)
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })

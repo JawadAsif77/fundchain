@@ -433,6 +433,23 @@ export const milestoneApi = {
     if (error) throw error;
     return { success: true, data };
   }
+  ,
+  async adminStartVoting(milestoneId) {
+    if (!milestoneId) throw new Error('milestoneId required');
+    const { data, error } = await supabase
+      .from('milestones')
+      .update({ target_date: new Date().toISOString() })
+      .eq('id', milestoneId)
+      .select()
+      .single();
+    if (error) throw error;
+    return { success: true, data };
+  },
+  async adminGetMilestone(milestoneId) {
+    const { data, error } = await supabase.from('milestones').select('*').eq('id', milestoneId).maybeSingle();
+    if (error) throw error;
+    return data;
+  }
 };
 
 export const generateSlug = (title) => {
@@ -581,6 +598,7 @@ export const createProjectWithMilestones = async (projectData, milestones) => {
         title: m.name,
         description: m.description,
         target_amount: (projectData.goalAmount * (m.payoutPercentage / 100)),
+        target_date: m.targetDate || null,
         order_index: index,
         is_completed: false
       })

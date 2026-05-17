@@ -59,10 +59,28 @@ export async function getUserInvestments(userId) {
  */
 export async function getCampaignInvestments(campaignId) {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${functionsBase}get-campaign-investments`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ campaignId })
-  });
-  return await response.json();
+  try {
+    const { data, error } = await supabase.rpc('get_campaign_investors', {
+      p_campaign_id: campaignId
+    });
+
+    if (!error && Array.isArray(data)) {
+      return { status: 'success', investors: data };
+    }
+
+    const response = await fetch(`${functionsBase}get-campaign-investments`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ campaignId })
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      return { status: 'error', error: `Function error ${response.status}: ${text}` };
+    }
+
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', error: err.message || String(err) };
+  }
 }

@@ -25,9 +25,52 @@ export async function getWallet(userId) {
         Authorization: `Bearer ${session.access_token}`
       }
     });
-    
+
     if (error) return handleResponse(null, error);
-    return { success: true, ...data };
+
+    // Base wallet from edge function response (investor/default behavior)
+    let balanceFc = Number(data?.balanceFc || 0);
+    let lockedFc = Number(data?.lockedFc || 0);
+
+    // For creators, locked funds should reflect campaign escrow balances.
+    // This avoids showing 0 when `wallets.locked_fc` is not maintained.
+    try {
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (userRow?.role === 'creator') {
+        const { data: campaigns, error: campaignsError } = await supabase
+          .from('campaigns')
+          .select('id')
+          .eq('creator_id', userId);
+
+        if (!campaignsError) {
+          const campaignIds = (campaigns || []).map((c) => c.id);
+          if (campaignIds.length > 0) {
+            const { data: campaignWallets, error: walletsError } = await supabase
+              .from('campaign_wallets')
+              .select('escrow_balance_fc')
+              .in('campaign_id', campaignIds);
+
+            if (!walletsError) {
+              lockedFc = (campaignWallets || []).reduce(
+                (sum, w) => sum + Number(w.escrow_balance_fc || 0),
+                0
+              );
+            }
+          } else {
+            lockedFc = 0;
+          }
+        }
+      }
+    } catch {
+      // Non-fatal; keep base values from edge function.
+    }
+
+    return { success: true, status: data?.status || 'success', balanceFc, lockedFc };
   } catch (err) {
     return { success: false, error: err.message, balance: 0 };
   }

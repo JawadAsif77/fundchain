@@ -151,7 +151,7 @@ const CreateProject = () => {
 
   // Milestones data
   const [milestones, setMilestones] = useState([
-    { name: '', description: '', payoutPercentage: '' }
+    { name: '', description: '', payoutPercentage: '', targetDate: '' }
   ]);
 
   const loadExistingCampaign = async (id) => {
@@ -286,7 +286,8 @@ const CreateProject = () => {
           payoutPercentage: m.payout_percentage?.toString() || 
                            (m.target_amount && campaign.funding_goal 
                              ? ((m.target_amount / campaign.funding_goal) * 100).toFixed(2)
-                             : '')
+                             : ''),
+          targetDate: m.target_date ? String(m.target_date) : ''
         }));
         
         console.log('[Campaign Edit] Processed milestones:', processedMilestones);
@@ -546,6 +547,11 @@ const CreateProject = () => {
         if (!milestoneValidation.isValid) {
           errors.milestones = milestoneValidation.error;
         }
+        milestones.forEach((m, index) => {
+          if (!m.targetDate) {
+            errors[`milestone_date_${index}`] = 'Target date is required';
+          }
+        });
         break;
     }
 
@@ -576,7 +582,7 @@ const CreateProject = () => {
   };
 
   const addMilestone = () => {
-    setMilestones([...milestones, { name: '', description: '', payoutPercentage: '' }]);
+    setMilestones([...milestones, { name: '', description: '', payoutPercentage: '', targetDate: '' }]);
   };
 
   const removeMilestone = (index) => {
@@ -769,6 +775,7 @@ const CreateProject = () => {
           title: m.name,
           description: m.description,
           target_amount: (parseFloat(projectData.goalAmount) * (parseFloat(m.payoutPercentage) / 100)),
+          target_date: m.targetDate || null,
           order_index: index,
           is_completed: false
         }));
@@ -1447,6 +1454,15 @@ const CreateProject = () => {
                 min="0"
                 max="100"
                 placeholder="% of total funds"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Target Vote Date *</label>
+              <input
+                type="date"
+                value={milestone.targetDate}
+                onChange={(e) => handleMilestoneChange(index, 'targetDate', e.target.value)}
               />
             </div>
           </div>

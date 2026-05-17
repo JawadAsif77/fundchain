@@ -1,0 +1,5 @@
+# Supabase local configuration
+# Function-specific overrides
+
+[functions.withdraw-fc-to-sol]
+verify_jwt = false

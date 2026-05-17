@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useParams, Link } from 'react-router-dom';
 import MilestoneList from '../components/MilestoneList';
 import CampaignQA from '../components/CampaignQA';
 import MilestoneUpdateForm from '../components/MilestoneUpdateForm';
@@ -13,6 +13,7 @@ import ReportModal from '../components/reports/ReportModal';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { useEscrowActions } from '../hooks/useEscrowActions';
+import { getCampaignInvestments } from '../services/investmentService';
 
 const Campaign = () => {
   const { slug } = useParams();
@@ -24,6 +25,8 @@ const Campaign = () => {
   const [campaignMilestones, setCampaignMilestones] = useState([]);
   const [campaignWallet, setCampaignWallet] = useState(null);
   const [userInvestments, setUserInvestments] = useState([]);
+  const [campaignInvestors, setCampaignInvestors] = useState([]);
+  const [campaignInvestorsError, setCampaignInvestorsError] = useState(null);
   const [showInvestModal, setShowInvestModal] = useState(false);
   const [investAmount, setInvestAmount] = useState('');
   const [investmentLoading, setInvestmentLoading] = useState(false);
@@ -73,7 +76,8 @@ const Campaign = () => {
           is_flagged: data.is_flagged || false,
           flag_reason: data.flag_reason || null,
           // Enhanced fields
-          campaign_image_url: data.campaign_image_url,
+          // support legacy `image_url` column if `campaign_image_url` isn't present
+          campaign_image_url: data.campaign_image_url || data.image_url || null,
           video_pitch_url: data.video_pitch_url,
           pitch_deck_url: data.pitch_deck_url,
           whitepaper_url: data.whitepaper_url,
@@ -107,7 +111,9 @@ const Campaign = () => {
             name: row.title,
             description: row.description || '',
             payoutPct: row.target_amount && mapped.goalAmount ? Math.round((Number(row.target_amount) / mapped.goalAmount) * 100) : 0,
-            status: row.is_completed ? 'completed' : 'pending'
+            status: row.is_completed ? 'completed' : 'pending',
+            targetDate: row.target_date || null,
+            target_amount: row.target_amount || null
           }));
           setCampaignMilestones(mm);
         }
@@ -132,6 +138,24 @@ const Campaign = () => {
             .order('investment_date', { ascending: false });
           if (!cancelled && investments) {
             setUserInvestments(investments);
+          }
+
+          try {
+            const investorResult = await getCampaignInvestments(data.id);
+            console.debug('[Campaign] getCampaignInvestments result:', investorResult);
+            if (!cancelled) {
+              if (investorResult?.status === 'success') {
+                setCampaignInvestors(investorResult.investors || []);
+                setCampaignInvestorsError(null);
+              } else {
+                setCampaignInvestors([]);
+                setCampaignInvestorsError(investorResult?.error || 'Failed to load investors');
+                console.warn('[Campaign] Investors load failed:', investorResult?.error || investorResult);
+              }
+            }
+          } catch (err) {
+            console.warn('[Campaign] Investors load failed:', err);
+            if (!cancelled) setCampaignInvestorsError(err.message || String(err));
           }
 
           // Log campaign view event for analytics/recommendations
@@ -422,6 +446,16 @@ const Campaign = () => {
                     onClick={() => setActiveTab('qa')}
                   >
                     Q&A
+                  </button>
+                  <button
+                    className={`px-md py-sm border-b-2 font-medium text-sm transition-colors ${
+                      activeTab === 'investors' 
+                        ? 'border-primary text-primary' 
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                    onClick={() => setActiveTab('investors')}
+                  >
+                    Investors {campaignInvestors.length > 0 ? `(${campaignInvestors.length})` : ''}
                   </button>
                 </nav>
               </div>
@@ -945,6 +979,9 @@ const Campaign = () => {
                     milestones={campaignMilestones} 
                     campaignId={campaign.id}
                     showVoting={true}
+                    campaignGoal={campaign.goalAmount}
+                    isCreator={isCreator}
+                    isAdmin={isAdmin}
                   />
                 )}
 
@@ -974,6 +1011,78 @@ const Campaign = () => {
                     campaignId={campaign.id} 
                     creatorId={campaign.creatorId} 
                   />
+                )}
+
+                {(activeTab === 'overview' || activeTab === 'investors') && (
+                  <div className="card" style={{ marginTop: '16px' }}>
+                    <h3 className="card-title">Investors</h3>
+                    <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '12px' }}>
+                      {campaignInvestors.length > 0
+                        ? `${campaignInvestors.length} investor${campaignInvestors.length === 1 ? '' : 's'} invested in this campaign`
+                        : 'Investors will appear here after the service function is deployed and the campaign has investment records.'}
+                    </div>
+                    {campaignInvestors.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+                        {campaignInvestors.map((inv) => {
+                          const rawTarget = inv.username || inv.users?.username || inv.investor_id || inv.id;
+                          const isUuid = typeof rawTarget === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTarget);
+                          const profileTarget = rawTarget ? (isUuid ? `/profile/${rawTarget}` : `/profile/${String(rawTarget).toLowerCase()}`) : '#';
+
+                          console.warn('[Campaign] investor object:', inv);
+                          console.warn('[Campaign] profileTarget:', profileTarget);
+
+                          return (
+                          <Link
+                            key={inv.investor_id || inv.id}
+                            to={profileTarget}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
+                              textDecoration: 'none'
+                            }}
+                          >
+                            {(inv.avatar_url || inv.users?.avatar_url) ? (
+                              <img
+                                src={inv.avatar_url || inv.users.avatar_url}
+                                alt={
+                                  inv.full_name || inv.users?.full_name || inv.username || inv.users?.username || 'Investor'
+                                }
+                                style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
+                              />
+                            ) : (
+                              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#e5e7eb' }} />
+                            )}
+                            <div>
+                              <div style={{ fontWeight: 600, color: '#111827' }}>
+                                {inv.full_name || inv.users?.full_name || inv.username || inv.users?.username || 'Investor'}
+                              </div>
+                              {(inv.users?.email || inv.email || inv.username || inv.users?.username) && (
+                                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                                  {inv.users?.email || inv.email || `@${inv.username || inv.users?.username}`}
+                                </div>
+                              )}
+                              <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                                Invested {Number(inv.total_invested || inv.totalInvested || inv.amount_fc || 0).toLocaleString()} FC
+                              </div>
+                            </div>
+                          </Link>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ color: '#6b7280' }}>
+                        No investors found for this campaign yet.
+                      </div>
+                    )}
+                  </div>
+                )}
+                {campaignInvestorsError && (
+                  <div className="card" style={{ marginTop: '16px', background: '#fff7ed', border: '1px solid #fcd34d' }}>
+                    <div style={{ padding: '12px', color: '#92400e' }}>
+                      <strong>Unable to load investors:</strong> {campaignInvestorsError}. This may be due to a deployed function or CORS issue.
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
