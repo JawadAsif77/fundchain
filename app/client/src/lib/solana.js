@@ -6,11 +6,12 @@ import {
   LAMPORTS_PER_SOL
 } from "@solana/web3.js";
 import { getOrCreateAssociatedTokenAccount, transfer } from "@solana/spl-token";
+import { PUBLIC_CONFIG } from '../config/publicConfig';
 
-const NETWORK = import.meta.env.VITE_SOLANA_NETWORK || "devnet";
+const NETWORK = PUBLIC_CONFIG.SOLANA_NETWORK || "devnet";
 
 export const connection = new Connection(
-  `https://api.${NETWORK}.solana.com`,
+  PUBLIC_CONFIG.SOLANA_RPC_URL || `https://api.${NETWORK}.solana.com`,
   "confirmed"
 );
 
@@ -44,7 +45,7 @@ export async function sendSolTransaction(fromProvider, toAddress, amountSol) {
 }
 
 export async function sendSolToTreasury(wallet, amountSol) {
-  const treasury = new PublicKey(import.meta.env.VITE_TREASURY_WALLET);
+  const treasury = new PublicKey(PUBLIC_CONFIG.TREASURY_WALLET_PUBLIC_KEY);
 
   const tx = new Transaction().add(
     SystemProgram.transfer({
@@ -60,7 +61,7 @@ export async function sendSolToTreasury(wallet, amountSol) {
 }
 
 export async function sendFcToUser(userWallet, amountFc, treasurySigner) {
-  const mint = new PublicKey(import.meta.env.VITE_FC_TOKEN_MINT);
+  const mint = new PublicKey(PUBLIC_CONFIG.FC_TOKEN_MINT_PUBLIC_KEY);
 
   const fromTokenAcc = await getOrCreateAssociatedTokenAccount(
     connection,

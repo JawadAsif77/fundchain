@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
+import { safeLogger } from '../utils/safeLogger';
 import { Country, State, City } from 'country-state-city';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
@@ -162,8 +163,6 @@ const KYCForm = () => {
             .eq('user_id', user.id)
             .maybeSingle();
 
-          console.log('KYC Form - Existing data loaded:', data);
-
           if (!error && data) {
             if (data.verification_status === 'approved') {
               setStatusMessage('Your verification is approved. Redirecting to dashboard...');
@@ -172,7 +171,6 @@ const KYCForm = () => {
               return;
             }
             if (data.verification_status === 'pending') {
-              console.log('Loading existing data for update...');
               // Load existing data for updates
               loadExistingKYCData(data);
               setIsUpdating(true);
@@ -181,7 +179,6 @@ const KYCForm = () => {
             }
           }
         } catch (err) {
-          console.error('Error checking KYC status:', err);
           // Ignore and allow form to render
         }
       };
@@ -190,8 +187,6 @@ const KYCForm = () => {
   }, [user, navigate, isRedirecting, hasSubmittedSuccessfully]);
 
   const loadExistingKYCData = (data) => {
-    console.log('loadExistingKYCData called with:', data);
-    
     const formDataToSet = {
       legal_name: data.legal_name || '',
       date_of_birth: data.date_of_birth || '',
@@ -226,7 +221,6 @@ const KYCForm = () => {
       verification_type: data.verification_type || 'individual'
     };
     
-    console.log('Setting form data to:', formDataToSet);
     setFormData(formDataToSet);
 
     // Set phone verification status
@@ -236,11 +230,9 @@ const KYCForm = () => {
 
     // Load country/state/city after countries are loaded
     setTimeout(() => {
-      console.log('Attempting to load country/state/city...');
       if (data.country_code) {
         const allCountries = Country.getAllCountries();
         const country = allCountries.find(c => c.isoCode === data.country_code);
-        console.log('Found country:', country);
         if (country) {
           const countryOption = {
             value: country.isoCode,
@@ -255,7 +247,6 @@ const KYCForm = () => {
               const stateCode = data.province_state || data.legal_address?.state;
               const allStates = State.getStatesOfCountry(country.isoCode);
               const state = allStates.find(s => s.isoCode === stateCode || s.name === stateCode);
-              console.log('Found state:', state);
               if (state) {
                 const stateOption = {
                   value: state.isoCode,
@@ -269,7 +260,6 @@ const KYCForm = () => {
                   setTimeout(() => {
                     const cityName = data.legal_address.city;
                     const cityOption = { value: cityName, label: cityName };
-                    console.log('Setting city:', cityOption);
                     setSelectedCity(cityOption);
                   }, 100);
                 }
@@ -372,7 +362,7 @@ const KYCForm = () => {
         setOtpError(result.error || 'Failed to send OTP');
       }
     } catch (err) {
-      console.error('Error sending OTP:', err);
+      safeLogger.warn('Failed to send OTP');
       setOtpError('Failed to send OTP. Please try again.');
     } finally {
       setSendingOtp(false);
@@ -411,7 +401,7 @@ const KYCForm = () => {
         setOtpError(result.message || 'Invalid OTP');
       }
     } catch (err) {
-      console.error('Error verifying OTP:', err);
+      safeLogger.warn('Failed to verify OTP');
       setOtpError('Failed to verify OTP. Please try again.');
     }
   };
@@ -439,7 +429,7 @@ const KYCForm = () => {
         [`${field}_url`]: publicUrl
       }));
     } catch (err) {
-      console.error('Error uploading file:', err);
+      safeLogger.warn('KYC document upload failed');
       setError(`Failed to upload ${field}. Please try again.`);
     }
   };
@@ -626,8 +616,6 @@ const KYCForm = () => {
     setError('');
 
     try {
-      console.log('Submitting KYC with form data:', formData);
-      
       // Build KYC data object - include ALL fields, not just conditionally
       const kycData = {
         user_id: user.id,
@@ -671,8 +659,6 @@ const KYCForm = () => {
         phone_verified_at: phoneVerificationStep === 'verified' ? new Date().toISOString() : null
       };
 
-      console.log('KYC data to submit:', kycData);
-
       // Use edge function to upsert KYC so updates cannot be blocked by missing/incorrect RLS UPDATE policies.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
@@ -713,7 +699,7 @@ const KYCForm = () => {
       }, 2000);
 
     } catch (err) {
-      console.error('Error submitting KYC:', err);
+      safeLogger.warn('KYC submission failed');
       setError(err.message || 'Failed to submit KYC. Please try again.');
     } finally {
       setIsSubmitting(false);

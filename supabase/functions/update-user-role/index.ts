@@ -68,26 +68,20 @@ Deno.serve(async (req: Request) => {
       .single()
 
     if (updateError) {
-      console.error('Role update error:', updateError)
       return new Response(
-        JSON.stringify({ error: 'Failed to update role', details: updateError.message }),
+        JSON.stringify({ error: 'Failed to update role' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        data: updatedUser
-      }),
+      JSON.stringify({ success: true, data: { id: updatedUser.id, role: updatedUser.role } }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
-  } catch (err) {
-    console.error('update-user-role error:', err)
-    const message = err instanceof Error ? err.message : 'Unknown error occurred'
+  } catch (_err) {
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: message }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

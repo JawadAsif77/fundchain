@@ -3,14 +3,17 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import Loader from './Loader';
 
-const ProtectedRoute = ({ 
-  children, 
+const ProtectedRoute = ({
+  children,
   requireEmailConfirmed = false,
-  requireRole = false,
-  requireKYC = false 
+  // Pass a role string (e.g. "admin") to enforce role-based access at the route level.
+  // NOTE: this is UI-level protection only. Real enforcement is in RLS + Edge Functions.
+  requireRole = null,
+  requireKYC = false
 }) => {
   const {
     user,
+    profile,
     loading,
     isAuthenticated,
     isEmailConfirmed,
@@ -22,7 +25,7 @@ const ProtectedRoute = ({
 
   const location = useLocation();
 
-  // CRITICAL: Show loading while auth is initializing
+  // Show loading while auth is initializing
   if (loading) {
     return (
       <div className="container" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -33,18 +36,17 @@ const ProtectedRoute = ({
 
   const currentPath = location.pathname;
 
-  // Get memoized values to prevent function call loops
-  const needsProfileCompletionValue = typeof needsProfileCompletion === 'function' 
-    ? needsProfileCompletion() 
+  const needsProfileCompletionValue = typeof needsProfileCompletion === 'function'
+    ? needsProfileCompletion()
     : needsProfileCompletion;
-  const needsRoleSelectionValue = typeof needsRoleSelection === 'function' 
-    ? needsRoleSelection() 
+  const needsRoleSelectionValue = typeof needsRoleSelection === 'function'
+    ? needsRoleSelection()
     : needsRoleSelection;
-  const needsKYCValue = typeof needsKYC === 'function' 
-    ? needsKYC() 
+  const needsKYCValue = typeof needsKYC === 'function'
+    ? needsKYC()
     : needsKYC;
 
-  // 1. Not authenticated - redirect to login
+  // 1. Not authenticated — redirect to login
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
@@ -60,29 +62,31 @@ const ProtectedRoute = ({
     );
   }
 
-  // 2. PRIORITY: Role Selection - User has no role (Google OAuth)
-  // They MUST select a role before doing anything else
-  if (needsRoleSelectionValue) {
-    // If already on role selection page, let them stay
-    if (currentPath === '/role-selection') {
-      return children;
+  // 2. Role-based access control (UI layer — real enforcement is server-side)
+  if (requireRole) {
+    const userRole = profile?.role || roleStatus?.role;
+    if (userRole !== requireRole) {
+      // Non-admin users are silently redirected, not shown an error page
+      return <Navigate to="/" replace />;
     }
-    // Otherwise, redirect to role selection
+  }
+
+  // 3. Role Selection — user has no role yet
+  if (needsRoleSelectionValue) {
+    if (currentPath === '/role-selection') return children;
     return <Navigate to="/role-selection" replace />;
   }
 
-  // 3. Profile Completion (after role is selected)
+  // 4. Profile Completion
   if (needsProfileCompletionValue && currentPath !== '/profile' && currentPath !== '/profile-edit') {
     return <Navigate to="/profile" state={{ message: 'Please complete your profile.' }} replace />;
   }
 
-  // 4. KYC Check (only for creators) - Only redirect if they're on campaign creation
-  // Dashboard is always accessible with warnings
+  // 5. KYC Check (creators only, on campaign-related pages)
   if (needsKYCValue && (currentPath === '/create-project' || currentPath.startsWith('/campaign/'))) {
     return <Navigate to="/kyc" state={{ message: 'Please complete KYC verification to create campaigns.' }} replace />;
   }
 
-  // All checks passed - allow access
   return children;
 };
 

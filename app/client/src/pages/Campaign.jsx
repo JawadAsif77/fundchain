@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { useEscrowActions } from '../hooks/useEscrowActions';
 import { getCampaignInvestments } from '../services/investmentService';
+import { safeLogger } from '../utils/safeLogger';
 
 const Campaign = () => {
   const { slug } = useParams();
@@ -140,24 +141,6 @@ const Campaign = () => {
             setUserInvestments(investments);
           }
 
-          try {
-            const investorResult = await getCampaignInvestments(data.id);
-            console.debug('[Campaign] getCampaignInvestments result:', investorResult);
-            if (!cancelled) {
-              if (investorResult?.status === 'success') {
-                setCampaignInvestors(investorResult.investors || []);
-                setCampaignInvestorsError(null);
-              } else {
-                setCampaignInvestors([]);
-                setCampaignInvestorsError(investorResult?.error || 'Failed to load investors');
-                console.warn('[Campaign] Investors load failed:', investorResult?.error || investorResult);
-              }
-            }
-          } catch (err) {
-            console.warn('[Campaign] Investors load failed:', err);
-            if (!cancelled) setCampaignInvestorsError(err.message || String(err));
-          }
-
           // Log campaign view event for analytics/recommendations
           const { error: eventError } = await supabase
             .from('recommendation_events')
@@ -169,9 +152,27 @@ const Campaign = () => {
             });
           
           if (eventError) {
-            console.error('Failed to log view event:', eventError);
+            safeLogger.warn('Failed to log view event');
             // Don't fail the page load if logging fails
           }
+        }
+
+        // Fetch campaign investors (used for the investor count and investors tab)
+        try {
+          const investorResult = await getCampaignInvestments(data.id);
+          if (!cancelled) {
+            if (investorResult?.status === 'success') {
+              setCampaignInvestors(investorResult.investors || []);
+              setCampaignInvestorsError(null);
+            } else {
+              setCampaignInvestors([]);
+              setCampaignInvestorsError(investorResult?.error || 'Failed to load investors');
+              safeLogger.warn('Investors load failed');
+            }
+          }
+        } catch (err) {
+          safeLogger.warn('Investors load failed');
+          if (!cancelled) setCampaignInvestorsError(err.message || String(err));
         }
       } catch (e) {
         if (!cancelled) {
@@ -258,9 +259,19 @@ const Campaign = () => {
           .eq('campaign_id', campaign.id)
           .maybeSingle();
         if (cwData) setCampaignWallet(cwData);
+        
+        // Refresh campaign investors (update investor count/tab)
+        try {
+          const investorResult = await getCampaignInvestments(campaign.id);
+          if (investorResult?.status === 'success') {
+            setCampaignInvestors(investorResult.investors || []);
+            setCampaignInvestorsError(null);
+          }
+        } catch (_) {
+          safeLogger.warn('Failed to refresh investors after invest');
+        }
       }
     } catch (err) {
-      console.error('Investment error:', err);
       alert(err.message || 'Investment failed');
     } finally {
       setInvestmentLoading(false);
@@ -489,7 +500,9 @@ const Campaign = () => {
                           <div className="text-sm text-gray-600">Target Funding</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-2xl font-bold" style={{ color: '#29C7AC' }}>-</div>
+                          <div className="text-2xl font-bold" style={{ color: '#29C7AC' }}>
+                            {campaignInvestors?.length != null ? campaignInvestors.length : '-'}
+                          </div>
                           <div className="text-sm text-gray-600">Investor Count</div>
                         </div>
                         {campaignWallet && (
@@ -1028,8 +1041,6 @@ const Campaign = () => {
                           const isUuid = typeof rawTarget === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTarget);
                           const profileTarget = rawTarget ? (isUuid ? `/profile/${rawTarget}` : `/profile/${String(rawTarget).toLowerCase()}`) : '#';
 
-                          console.warn('[Campaign] investor object:', inv);
-                          console.warn('[Campaign] profileTarget:', profileTarget);
 
                           return (
                           <Link

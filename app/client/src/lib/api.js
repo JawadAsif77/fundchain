@@ -9,6 +9,7 @@ import { milestones } from '../mock/milestones.js';
 import { users } from '../mock/users.js';
 import { investments } from '../mock/investments.js';
 import { analyzeCampaignRisk } from '../services/riskAnalysis'
+import { safeLogger } from '../utils/safeLogger';
 
 // =============================================================================
 // SESSION HELPERS (from main branch)
@@ -303,14 +304,14 @@ export const campaignApi = {
       // Trigger AI risk analysis (from AI branch)
       try {
         await analyzeCampaignRisk(data.id);
-        console.log('✅ AI risk analysis triggered');
+        safeLogger.debug('Risk analysis triggered');
       } catch (err) {
-        console.error('⚠️ Risk analysis failed:', err.message);
+        safeLogger.warn('Risk analysis failed');
       }
       
       return { success: true, data };
     } catch (error) { 
-      console.error('💥 Create campaign error:', error);
+      safeLogger.warn('Create campaign failed');
       return { success: false, error: error.message };
     }
   },
@@ -370,57 +371,32 @@ export const investmentApi = {
 
 // =============================================================================
 // WALLET API
+// Read-only from frontend. All balance changes go through Edge Functions.
 // =============================================================================
 export const walletApi = {
+  // Get wallet balance via the get-wallet Edge Function (JWT-verified)
   async getBalance() {
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) return { success: false, balance: 0 };
-    const { data, error } = await withTimeout(
-      supabase.from('users').select('preferences').eq('id', auth.user.id).single()
-    );
-    if (error) return { success: true, balance: 0 };
-    return { success: true, balance: Number(data?.preferences?.wallet_balance || 0) };
-  },
-  
-  async topUp(amount) {
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) return { success: false };
-    
-    const { data } = await supabase.from('users').select('preferences').eq('id', auth.user.id).single();
-    const current = Number(data?.preferences?.wallet_balance || 0);
-    const newBal = current + Number(amount);
-    
-    await supabase.from('users').update({ 
-      preferences: { ...data?.preferences, wallet_balance: newBal } 
-    }).eq('id', auth.user.id);
-    
-    return { success: true, balance: newBal };
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return { success: false, balance: 0 };
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    try {
+      const resp = await fetch(`${supabaseUrl}/functions/v1/get-wallet`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const result = await resp.json();
+      if (!resp.ok || result.status === 'not_found') return { success: true, balance: 0, lockedFc: 0 };
+      return { success: true, balance: result.balanceFc ?? 0, lockedFc: result.lockedFc ?? 0 };
+    } catch {
+      return { success: false, balance: 0 };
+    }
   },
 
-  async invest(campaignId, amount) {
-    const { data: auth } = await supabase.auth.getUser();
-    const uid = auth.user.id;
-    // Prevent suspended users from investing
-    const { data: userRow, error: userErr } = await supabase.from('users').select('is_suspended').eq('id', uid).maybeSingle();
-    if (userErr) return { success: false, error: 'Unable to verify account status' };
-    if (userRow?.is_suspended) return { success: false, error: 'Account suspended. You cannot invest.' };
-    
-    const { data: u } = await supabase.from('users').select('preferences').eq('id', uid).single();
-    const bal = Number(u?.preferences?.wallet_balance || 0);
-    if (bal < amount) return { success: false, error: 'Insufficient funds' };
-    
-    const { data: inv, error } = await supabase.from('investments').insert({
-      investor_id: uid, campaign_id: campaignId, amount, status: 'confirmed'
-    }).select('*').single();
-    
-    if (error) return { success: false, error: error.message };
-    
-    await supabase.from('users').update({
-      preferences: { ...u.preferences, wallet_balance: bal - amount }
-    }).eq('id', uid);
-    
-    return { success: true, investment: inv };
-  }
+  // topUp is intentionally removed — FC tokens are credited only by buy-fc-tokens Edge Function
+  // which verifies the Solana/USD transaction before crediting.
+
+  // invest is intentionally removed — use investmentService.investInCampaign() which calls
+  // the invest-in-campaign Edge Function that validates balance server-side.
 };
 
 // =============================================================================
@@ -665,7 +641,7 @@ export const milestoneUpdateApi = {
         const url = await this.uploadMedia(campaignId, milestoneId, file);
         mediaUrls.push(url);
       } catch (err) {
-        console.error('Failed to upload file:', file.name, err);
+        safeLogger.warn('Failed to upload file');
       }
     }
 
@@ -914,7 +890,7 @@ export const adminApi = {
   // Risk override functions (from AI branch)
   async setManualRiskLevel(campaignId, riskLevel) {
     try {
-      console.log('🛡️ Admin: Setting manual risk level:', { campaignId, riskLevel });
+      safeLogger.debug('Admin: setting manual risk level');
       
       if (!['low', 'medium', 'high'].includes(riskLevel)) {
         throw new Error('Invalid risk level. Must be low, medium, or high');
@@ -932,17 +908,17 @@ export const adminApi = {
       
       if (error) throw error;
       
-      console.log('✅ Manual risk level set successfully:', data);
+      safeLogger.debug('Manual risk level set');
       return { success: true, data };
     } catch (error) {
-      console.error('💥 Set manual risk level error:', error);
+      safeLogger.warn('Set manual risk level failed');
       return { success: false, error: error.message };
     }
   },
 
   async clearManualRiskLevel(campaignId) {
     try {
-      console.log('🛡️ Admin: Clearing manual risk override for campaign:', campaignId);
+      safeLogger.debug('Admin: clearing manual risk override');
       
       const { data, error } = await supabase
         .from('campaigns')
@@ -956,10 +932,10 @@ export const adminApi = {
       
       if (error) throw error;
       
-      console.log('✅ Manual risk override cleared:', data);
+      safeLogger.debug('Manual risk override cleared');
       return { success: true, data };
     } catch (error) {
-      console.error('💥 Clear manual risk level error:', error);
+      safeLogger.warn('Clear manual risk override failed');
       return { success: false, error: error.message };
     }
   },
@@ -1173,7 +1149,7 @@ export const profileStatsApi = {
    * Get creator statistics
    */
   async getCreatorStats(userId) {
-    console.log('📊 Fetching creator stats for:', userId);
+    safeLogger.debug('Fetching creator stats');
     
     // Get campaigns count and total raised
     const { data: campaigns, error: campaignsError } = await supabase
@@ -1182,10 +1158,9 @@ export const profileStatsApi = {
       .eq('creator_id', userId);
     
     if (campaignsError) {
-      console.error('❌ Error fetching campaigns:', campaignsError);
+      safeLogger.warn('Error fetching campaigns');
     }
     
-    console.log('📊 Campaigns found:', campaigns?.length || 0, campaigns);
     
     const totalCampaigns = campaigns?.length || 0;
     const activeCampaigns = campaigns?.filter(c => c.status === 'active').length || 0;
@@ -1200,10 +1175,9 @@ export const profileStatsApi = {
       .eq('campaigns.creator_id', userId);
     
     if (investmentsError) {
-      console.error('❌ Error fetching investments:', investmentsError);
+      safeLogger.warn('Error fetching investments');
     }
     
-    console.log('💰 Investments found:', investments?.length || 0);
     
     const uniqueInvestors = [...new Set(investments?.map(i => i.investor_id) || [])].length;
     
@@ -1216,7 +1190,7 @@ export const profileStatsApi = {
       avgFundingRate: totalGoal > 0 ? ((totalRaised / totalGoal) * 100).toFixed(1) : 0
     };
     
-    console.log('✅ Creator stats calculated:', stats);
+    safeLogger.debug('Creator stats calculated');
     return stats;
   },
 
@@ -1253,7 +1227,7 @@ export const profileStatsApi = {
    * Get creator's campaigns (for public profile)
    */
   async getCreatorCampaigns(userId) {
-    console.log('📊 Fetching campaigns for creator:', userId);
+    safeLogger.debug('Fetching campaigns for creator');
     
     const { data, error } = await supabase
       .from('campaigns')
@@ -1262,13 +1236,11 @@ export const profileStatsApi = {
       .order('created_at', { ascending: false });
     
     if (error) {
-      console.error('❌ Error fetching creator campaigns:', error);
-      console.error('❌ Error details:', error.message, error.code, error.details);
+      safeLogger.warn('Error fetching creator campaigns');
       return [];
     }
     
-    console.log('📊 API: Fetched campaigns for creator:', userId, 'Count:', data?.length || 0);
-    console.log('📊 First campaign:', data?.[0]);
+    safeLogger.debug('Fetched campaigns for creator');
     return data || [];
   },
 
@@ -1276,7 +1248,7 @@ export const profileStatsApi = {
    * Get investor's backed campaigns
    */
   async getInvestorCampaigns(userId) {
-    console.log('💰 Fetching backed campaigns for investor:', userId);
+    safeLogger.debug('Fetching backed campaigns for investor');
     
     const { data, error } = await supabase
       .from('investments')
@@ -1302,13 +1274,12 @@ export const profileStatsApi = {
       .order('created_at', { ascending: false });
     
     if (error) {
-      console.error('❌ Error fetching investor campaigns:', error);
-      console.error('❌ Error details:', error.message, error.code, error.details);
+      safeLogger.warn('Error fetching investor campaigns');
       return [];
     }
     
-    console.log('💰 API: Fetched backed campaigns:', data?.length || 0);
-    
+    safeLogger.debug('Fetched backed campaigns');
+
     return data?.map(inv => ({
       ...inv.campaigns,
       invested_amount: inv.amount,
@@ -1360,48 +1331,30 @@ export const profileStatsApi = {
    * Search users by username or name
    */
   async searchUsers(query, limit = 10) {
-    console.log('🔍 Searching for:', query);
-    
     try {
-      // Fetch users - may need to adjust RLS policies if this returns too few
       const { data, error } = await supabase
         .from('users')
         .select('id, username, full_name, avatar_url, role, bio, trust_score, is_verified')
-        .not('username', 'is', null) // Filter out null usernames
-        .limit(200); // Increase limit to get more users
-      
+        .not('username', 'is', null)
+        .limit(200);
+
       if (error) {
-        console.error('❌ Error fetching users:', error);
+        safeLogger.warn('User search failed');
         return [];
       }
-      
-      console.log('📊 Total users fetched:', data?.length || 0);
-      
-      if (!data || data.length === 0) {
-        console.log('⚠️ No users returned - check RLS policies on users table');
-        return [];
-      }
-      
-      // Client-side filtering (case-insensitive)
+
+      if (!data || data.length === 0) return [];
+
       const searchLower = query.toLowerCase().trim();
       const filtered = data.filter(user => {
         const username = (user.username || '').toLowerCase();
         const fullName = (user.full_name || '').toLowerCase();
-        const match = username.includes(searchLower) || fullName.includes(searchLower);
-        if (match) {
-          console.log('✅ Match found:', user.username, user.full_name);
-        }
-        return match;
+        return username.includes(searchLower) || fullName.includes(searchLower);
       });
-      
-      console.log('🔍 Search results for', query, ':', filtered.length, 'users');
-      if (filtered.length > 0) {
-        console.log('📋 First result:', filtered[0]);
-      }
-      
+
       return filtered.slice(0, limit);
     } catch (err) {
-      console.error('❌ Unexpected error in searchUsers:', err);
+      safeLogger.warn('Unexpected error in searchUsers');
       return [];
     }
   }

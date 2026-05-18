@@ -6,20 +6,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// ============================================================================
-// Helper function to calculate wallet age in days
-// ============================================================================
 function calculateWalletAgeDays(createdAt: string): number {
   const now = new Date()
   const walletCreated = new Date(createdAt)
   const diffTime = Math.abs(now.getTime() - walletCreated.getTime())
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-  return diffDays
+  return Math.floor(diffTime / (1000 * 60 * 60 * 24))
 }
 
-// ============================================================================
-// Helper function to determine risk level from final score
-// ============================================================================
 function getRiskLevel(finalRiskScore: number): string {
   if (finalRiskScore > 0.66) return 'HIGH'
   if (finalRiskScore > 0.33) return 'MEDIUM'
@@ -34,49 +27,76 @@ function clampScore(score: number): number {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     const aiServiceUrl = Deno.env.get('AI_SERVICE_URL') ?? 'https://fundchain-ai-service.onrender.com'
+    // Secret shared between this function and the AI service
+    const aiServiceSecret = Deno.env.get('AI_SERVICE_SECRET') ?? ''
 
-    if (!aiServiceUrl) {
-      throw new Error('AI_SERVICE_URL environment variable is required')
-    }
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase environment variables')
+    if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
+      return new Response(
+        JSON.stringify({ error: 'Server misconfigured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
+    // --- Auth: only admin can trigger risk analysis ---
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    })
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await authClient.auth.getUser(token)
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Service client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // ============================================================================
-    // 1. Parse request body
-    // ============================================================================
+    // Verify the caller is an admin
+    const { data: callerProfile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (callerProfile?.role !== 'admin') {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: only admins can trigger risk analysis' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Parse request body
     const body = await req.json()
     const { campaign_id, analysis_mode } = body
     const analysisMode = analysis_mode === 'onchain_only' ? 'onchain_only' : 'full'
 
-    if (!campaign_id) {
+    if (!campaign_id || typeof campaign_id !== 'string') {
       return new Response(
         JSON.stringify({ error: 'campaign_id is required' }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log(`Analyzing campaign: ${campaign_id}`)
-
-    // ============================================================================
-    // 2. Fetch campaign data
-    // ============================================================================
+    // Fetch campaign data
     const { data: campaign, error: campaignError } = await supabase
       .from('campaigns')
       .select('id, creator_id, created_at, description, ml_scam_score, plagiarism_score, wallet_risk_score, final_risk_score')
@@ -84,24 +104,13 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (campaignError || !campaign) {
-      console.error('Campaign fetch error:', campaignError)
       return new Response(
-        JSON.stringify({ 
-          error: 'Campaign not found',
-          details: campaignError?.message 
-        }),
-        { 
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ error: 'Campaign not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log(`Campaign found: ${campaign.id}`)
-
-    // ============================================================================
-    // 3. Fetch creator user data for wallet age
-    // ============================================================================
+    // Fetch creator user data
     const { data: creator, error: creatorError } = await supabase
       .from('users')
       .select('created_at, wallet_address')
@@ -109,22 +118,13 @@ Deno.serve(async (req) => {
       .single()
 
     if (creatorError || !creator) {
-      console.error('Creator fetch error:', creatorError)
       return new Response(
-        JSON.stringify({ 
-          error: 'Creator not found',
-          details: creatorError?.message 
-        }),
-        { 
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ error: 'Creator not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // ============================================================================
-    // 3.5 Invoke on-chain wallet analysis
-    // ============================================================================
+    // Invoke on-chain wallet analysis
     let onChainAnalysis = {
       riskScore: 50,
       explanation: 'On-chain analysis could not be performed.',
@@ -136,26 +136,15 @@ Deno.serve(async (req) => {
         const walletAnalysisResponse = await supabase.functions.invoke('analyze-wallet-footprint', {
           body: { walletAddress: creator.wallet_address },
         })
-
-        if (walletAnalysisResponse.error) {
-          console.error('On-chain analysis invocation error:', walletAnalysisResponse.error)
-          onChainAnalysis.explanation = 'Error invoking on-chain analysis function.'
-        } else {
+        if (!walletAnalysisResponse.error) {
           onChainAnalysis = walletAnalysisResponse.data
-          console.log('On-chain analysis successful:', onChainAnalysis)
         }
-      } catch (e) {
-        console.error('Critical error during on-chain analysis invocation:', e)
-        onChainAnalysis.explanation = 'A critical error occurred during on-chain analysis.'
+      } catch (_e) {
+        // Non-critical — continue with default
       }
-    } else {
-      console.warn(`Creator ${campaign.creator_id} has no wallet address for on-chain analysis.`)
-      onChainAnalysis.explanation = 'No wallet address provided for on-chain analysis.'
     }
 
-    // ============================================================================
-    // 4. Fetch creator wallet data
-    // ============================================================================
+    // Fetch creator wallet data
     const { data: wallet, error: walletError } = await supabase
       .from('wallets')
       .select('balance_fc, locked_fc, updated_at')
@@ -163,124 +152,71 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (walletError || !wallet) {
-      console.error('Wallet fetch error:', walletError)
       return new Response(
-        JSON.stringify({ 
-          error: 'Creator wallet not found',
-          details: walletError?.message 
-        }),
-        { 
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ error: 'Creator wallet not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // ============================================================================
-    // 5. Compute wallet age in days using creator account age
-    // ============================================================================
     const walletAgeDays = calculateWalletAgeDays(creator.created_at)
-    console.log(`Wallet age: ${walletAgeDays} days`)
 
-    // ============================================================================
-    // 6. Count creator's past investments
-    // ============================================================================
-    const { count: pastInvestments, error: investmentCountError } = await supabase
+    // Count creator's past investments
+    const { count: pastInvestments } = await supabase
       .from('investments')
       .select('*', { count: 'exact', head: true })
       .eq('investor_id', campaign.creator_id)
       .eq('status', 'confirmed')
 
-    if (investmentCountError) {
-      console.error('Investment count error:', investmentCountError)
-    }
-
-    console.log(`Past investments: ${pastInvestments || 0}`)
-
     let aiResult
     let descriptionsChecked = 0
 
     if (analysisMode === 'full') {
-      // ============================================================================
-      // 7. Fetch last 20 campaign descriptions for plagiarism check
-      // ============================================================================
-      const { data: existingCampaigns, error: existingError } = await supabase
+      // Fetch last 20 campaign descriptions for plagiarism check
+      const { data: existingCampaigns } = await supabase
         .from('campaigns')
         .select('description')
         .neq('id', campaign_id)
         .order('created_at', { ascending: false })
         .limit(20)
 
-      if (existingError) {
-        console.error('Error fetching existing campaigns:', existingError)
-      }
-
       const existingDescriptions = existingCampaigns?.map(c => c.description).filter(Boolean) || []
       descriptionsChecked = existingDescriptions.length
-      console.log(`Found ${existingDescriptions.length} existing descriptions for plagiarism check`)
 
-      // ============================================================================
-      // 8. Build AI service request body
-      // ============================================================================
       const aiRequestBody = {
         description: campaign.description || '',
         existing_descriptions: existingDescriptions,
         wallet_age_days: walletAgeDays,
-        past_investments: pastInvestments || 0
+        past_investments: pastInvestments || 0,
       }
 
-      console.log('Sending request to AI service...')
+      // Call AI service with shared secret header
+      const aiHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (aiServiceSecret) {
+        aiHeaders['x-ai-service-secret'] = aiServiceSecret
+      }
 
-      // ============================================================================
-      // 9. Send POST request to AI microservice
-      // ============================================================================
       const aiResponse = await fetch(`${aiServiceUrl}/analyze-project`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(aiRequestBody)
+        headers: aiHeaders,
+        body: JSON.stringify(aiRequestBody),
       })
 
       if (!aiResponse.ok) {
-        const errorText = await aiResponse.text()
-        console.error('AI service error:', errorText)
         return new Response(
-          JSON.stringify({
-            error: 'AI service request failed',
-            status: aiResponse.status,
-            details: errorText
-          }),
-          {
-            status: 502,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
+          JSON.stringify({ error: 'AI service request failed' }),
+          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
-      // ============================================================================
-      // 10. Parse AI service response
-      // ============================================================================
       try {
         aiResult = await aiResponse.json()
-      } catch (parseError) {
-        const parseErrorMessage = parseError instanceof Error ? parseError.message : String(parseError)
-        console.error('Failed to parse AI response:', parseError)
+      } catch (_parseError) {
         return new Response(
-          JSON.stringify({
-            error: 'Failed to parse AI service response',
-            details: parseErrorMessage
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
+          JSON.stringify({ error: 'Failed to parse AI service response' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
-      console.log('AI analysis complete:', aiResult)
-
-      // Validate AI response structure
       if (
         typeof aiResult.ml_scam_score !== 'number' ||
         typeof aiResult.plagiarism_score !== 'number' ||
@@ -288,14 +224,8 @@ Deno.serve(async (req) => {
         typeof aiResult.final_risk_score !== 'number'
       ) {
         return new Response(
-          JSON.stringify({
-            error: 'Invalid AI service response format',
-            received: aiResult
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
+          JSON.stringify({ error: 'Invalid AI service response format' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
     } else {
@@ -313,26 +243,17 @@ Deno.serve(async (req) => {
         : clampScore(typeof campaign.final_risk_score === 'number' ? campaign.final_risk_score : 0.5)
 
       aiResult = {
-        ml_scam_score: typeof campaign.ml_scam_score === 'number' ? campaign.ml_scam_score : 0,
-        plagiarism_score: typeof campaign.plagiarism_score === 'number' ? campaign.plagiarism_score : 0,
-        wallet_risk_score: typeof campaign.wallet_risk_score === 'number' ? campaign.wallet_risk_score : 0,
+        ml_scam_score: campaign.ml_scam_score ?? 0,
+        plagiarism_score: campaign.plagiarism_score ?? 0,
+        wallet_risk_score: campaign.wallet_risk_score ?? 0,
         final_risk_score: aiCompositeScore,
       }
-
-      console.log('On-chain only mode: reusing existing AI components and refreshing on-chain score')
     }
 
-    // ============================================================================
-    // 11. Compute risk level
-    // ============================================================================
     const blendedRiskScore =
       (aiResult.final_risk_score * 0.5) + ((onChainAnalysis.riskScore / 100) * 0.5)
     const riskLevel = getRiskLevel(blendedRiskScore)
-    console.log(`Risk level determined: ${riskLevel}`)
 
-    // ============================================================================
-    // 12. Update campaigns table with risk scores
-    // ============================================================================
     const { error: updateError } = await supabase
       .from('campaigns')
       .update({
@@ -347,28 +268,25 @@ Deno.serve(async (req) => {
       .eq('id', campaign_id)
 
     if (updateError) {
-      console.error('Campaign update error:', updateError)
       return new Response(
-        JSON.stringify({ 
-          error: 'Failed to update campaign with risk scores',
-          details: updateError.message
-        }),
-        { 
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ error: 'Failed to update campaign with risk scores' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log(`Campaign ${campaign_id} updated successfully`)
+    // Audit log
+    await supabase.from('audit_logs').insert({
+      actor_user_id: user.id,
+      action: 'RISK_ANALYSIS_TRIGGERED',
+      target_type: 'campaign',
+      target_id: campaign_id,
+      metadata: { analysis_mode: analysisMode, risk_level: riskLevel, final_risk_score: blendedRiskScore },
+    })
 
-    // ============================================================================
-    // 13. Return success response with all scores
-    // ============================================================================
     return new Response(
       JSON.stringify({
         success: true,
-        campaign_id: campaign_id,
+        campaign_id,
         analysis: {
           analysis_mode: analysisMode,
           ml_scam_score: aiResult.ml_scam_score,
@@ -382,29 +300,15 @@ Deno.serve(async (req) => {
           wallet_age_days: walletAgeDays,
           past_investments: pastInvestments || 0,
           descriptions_checked: descriptionsChecked,
-          analyzed_at: new Date().toISOString()
-        }
+          analyzed_at: new Date().toISOString(),
+        },
       }),
-      { 
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    const errorStack = error instanceof Error ? error.stack : undefined
-    console.error('Unexpected error:', error)
+  } catch (_error) {
     return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error',
-        details: errorMessage,
-        stack: errorStack
-      }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })

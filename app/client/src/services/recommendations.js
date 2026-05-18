@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js';
+import { safeLogger } from '../utils/safeLogger';
 
 /**
  * Get personalized campaign recommendations for the authenticated user
@@ -14,37 +15,29 @@ import { supabase } from '../lib/supabase.js';
  */
 export async function getRecommendedProjects(filters = {}, limit = 10) {
   try {
-    console.log('🎯 Fetching recommendations with filters:', filters, 'limit:', limit);
+    safeLogger.debug('Recommendations request started');
 
     // Get existing session - NO need to refresh, Supabase handles token refresh automatically
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError) {
-      console.error('❌ Session error:', sessionError);
       throw new Error('You must be logged in to get recommendations');
     }
     
     if (!session || !session.access_token) {
-      console.warn('⚠️ No valid session found');
       throw new Error('You must be logged in to get recommendations');
     }
 
-    console.log('✅ Session obtained, calling Edge Function...');
     return await fetchRecommendations(session, filters, limit);
 
   } catch (error) {
-    console.error('💥 Error fetching recommendations:', error);
     throw error;
   }
 }
 
 async function fetchRecommendations(session, filters, limit) {
-  console.log('🔑 Token preview:', session.access_token.substring(0, 20) + '...');
-  console.log('👤 User ID:', session.user?.id);
-
   // Make a raw fetch call to see the actual error response
   const functionUrl = `${supabase.supabaseUrl}/functions/v1/recommend_projects`;
-  console.log('🌐 Calling:', functionUrl);
 
   const response = await fetch(functionUrl, {
     method: 'POST',
@@ -56,22 +49,15 @@ async function fetchRecommendations(session, filters, limit) {
     body: JSON.stringify({ filters, limit })
   });
 
-  console.log('📡 Response status:', response.status);
-  
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('❌ Error response:', errorText);
-    throw new Error(`Edge Function returned ${response.status}: ${errorText}`);
+    throw new Error('Failed to fetch recommendations');
   }
 
   const data = await response.json();
 
   if (!data || !data.success) {
-    console.error('❌ Invalid response from recommendations service:', data);
-    throw new Error(data?.error || 'Invalid response from recommendations service');
+    throw new Error('Invalid response from recommendations service');
   }
-
-  console.log(`✅ Received ${data.recommendations?.length || 0} recommendations`);
   
   return data.recommendations || [];
 }

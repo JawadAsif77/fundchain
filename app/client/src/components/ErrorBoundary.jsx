@@ -1,4 +1,5 @@
 import React from 'react';
+import { safeLogger } from '../utils/safeLogger';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -17,16 +18,14 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    // Enhanced error logging with more context
-    console.error('🚨 ErrorBoundary caught an error:', error);
-    console.error('Error Info:', errorInfo);
-    console.error('Component Stack:', errorInfo.componentStack);
+    // Minimal, sanitized logging
+    safeLogger.error('ErrorBoundary caught an error');
     
     // Check for specific loading-related errors
     if (error.message?.includes('Maximum update depth') || 
         error.message?.includes('infinite loop') ||
         error.message?.includes('Cannot update a component while rendering')) {
-      console.error('🔄 Detected potential infinite rendering loop');
+      safeLogger.warn('Potential infinite rendering loop detected');
     }
 
     this.setState({
@@ -50,9 +49,9 @@ class ErrorBoundary extends React.Component {
     try {
       localStorage.clear();
       sessionStorage.clear();
-      console.log('✅ Cleared all storage data');
+      safeLogger.debug('Cleared storage data');
     } catch (error) {
-      console.warn('Failed to clear storage:', error);
+      safeLogger.warn('Failed to clear storage');
     }
     
     // Force page reload

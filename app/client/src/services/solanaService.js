@@ -49,7 +49,7 @@ export async function sendSolAndMintTokens({ connection, wallet, amountSol, amou
   }
 
   if (!ADMIN_WALLET_PUBLIC_KEY || ADMIN_WALLET_PUBLIC_KEY === 'YOUR_ADMIN_WALLET_PUBLIC_KEY_HERE') {
-    throw new Error('Admin wallet not configured. Please set VITE_TREASURY_WALLET in .env');
+    throw new Error('Admin wallet not configured. Please update public config values.');
   }
 
   try {
@@ -87,8 +87,6 @@ export async function sendSolAndMintTokens({ connection, wallet, amountSol, amou
       throw new Error('Transaction failed on blockchain');
     }
 
-    console.log('SOL transfer successful:', signature);
-
     // Step 4: Mint FC tokens to user
     let mintSignature = null;
     try {
@@ -98,9 +96,7 @@ export async function sendSolAndMintTokens({ connection, wallet, amountSol, amou
         userId,
         solTxSignature: signature
       });
-      console.log('FC tokens minted:', mintSignature);
     } catch (mintError) {
-      console.error('Failed to mint FC tokens:', mintError);
       // Transaction succeeded but minting failed - this should be handled by backend
       throw new Error(`SOL transfer succeeded but FC minting failed: ${mintError.message}`);
     }
@@ -110,7 +106,6 @@ export async function sendSolAndMintTokens({ connection, wallet, amountSol, amou
       mintSignature,
     };
   } catch (error) {
-    console.error('sendSolAndMintTokens error:', error);
     throw error;
   }
 }

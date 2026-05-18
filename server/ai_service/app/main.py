@@ -2,16 +2,36 @@
 FundChain AI Service - Scam Detection & Risk Analysis API
 This FastAPI service provides ML-powered project analysis for detecting scams,
 plagiarism, and assessing wallet risk scores.
+
+Security: all /analyze-* endpoints require the x-ai-service-secret header
+matching the AI_SERVICE_SECRET environment variable.  Requests without a
+valid secret receive HTTP 403 and the model output is never returned.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 import joblib
 import os
 import re
+import secrets
 from difflib import SequenceMatcher
+
+# ============================================================================
+# 0. Secret verification helper
+# ============================================================================
+_AI_SERVICE_SECRET = os.environ.get("AI_SERVICE_SECRET", "")
+
+def verify_service_secret(x_ai_service_secret: Optional[str]) -> None:
+    """Raise HTTP 403 if the shared secret header is missing or wrong."""
+    if not _AI_SERVICE_SECRET:
+        # Secret not configured on server — block all calls to prevent accidental exposure
+        raise HTTPException(status_code=500, detail="AI service secret is not configured.")
+    if not x_ai_service_secret or not secrets.compare_digest(
+        x_ai_service_secret, _AI_SERVICE_SECRET
+    ):
+        raise HTTPException(status_code=403, detail="Forbidden: invalid service secret.")
 
 # ============================================================================
 # 1. Load the trained ML model
@@ -36,13 +56,19 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Add CORS middleware for frontend integration
+# CORS: only Supabase Edge Functions call this service, not the browser directly.
+# Restrict to the Supabase project origin; update if your project URL changes.
+_ALLOWED_ORIGINS = os.environ.get(
+    "ALLOWED_ORIGINS",
+    "https://*.supabase.co,https://*.supabase.net"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend domain
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["POST"],
+    allow_headers=["content-type", "x-ai-service-secret"],
 )
 
 # ============================================================================
@@ -213,21 +239,16 @@ async def root():
 # 6. Main analysis endpoint
 # ============================================================================
 @app.post("/analyze-project", response_model=ProjectAnalysisResponse)
-async def analyze_project(request: ProjectAnalysisRequest):
+async def analyze_project(
+    request: ProjectAnalysisRequest,
+    x_ai_service_secret: Optional[str] = Header(default=None),
+):
     """
     Analyze a project for scam probability, plagiarism, and wallet risk.
-    
-    This endpoint combines multiple analysis methods:
-    1. ML-based scam detection using trained model
-    2. Plagiarism detection via text similarity
-    3. Wallet risk assessment based on age and history
-    
-    Final risk score is weighted combination:
-        - 60% ML scam score
-        - 25% plagiarism score
-        - 15% wallet risk score
+    Requires x-ai-service-secret header matching AI_SERVICE_SECRET env var.
     """
-    
+    verify_service_secret(x_ai_service_secret)
+
     # Check if model is loaded
     if model is None:
         raise HTTPException(
@@ -282,23 +303,23 @@ async def analyze_project(request: ProjectAnalysisRequest):
 # Additional utility endpoint for batch analysis
 # ============================================================================
 @app.post("/analyze-batch")
-async def analyze_batch(requests: List[ProjectAnalysisRequest]):
-    """
-    Analyze multiple projects in a single request.
-    Returns a list of analysis results.
-    """
+async def analyze_batch(
+    requests: List[ProjectAnalysisRequest],
+    x_ai_service_secret: Optional[str] = Header(default=None),
+):
+    """Analyze multiple projects. Requires x-ai-service-secret header."""
+    verify_service_secret(x_ai_service_secret)
+
     results = []
-    
     for req in requests:
         try:
-            result = await analyze_project(req)
+            result = await analyze_project(req, x_ai_service_secret=x_ai_service_secret)
             results.append(result)
-        except Exception as e:
-            results.append({
-                "error": str(e),
-                "description": req.description[:50] + "..."
-            })
-    
+        except HTTPException as e:
+            if e.status_code == 403:
+                raise  # Re-raise auth errors
+            results.append({"error": "Analysis failed"})
+
     return {"results": results, "total": len(results)}
 
 # ============================================================================

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useAuth } from '../store/AuthContext';
 import { swapSolForFc } from '../services/swapService';
+import { PUBLIC_CONFIG } from '../config/publicConfig';
 
 export default function SwapSolToFc() {
   const { publicKey, sendTransaction } = useWallet();
@@ -44,14 +45,13 @@ export default function SwapSolToFc() {
       await refreshWallet(userId);
       
     } catch (err) {
-      console.error('Swap failed:', err);
       setError(err.message || 'Failed to swap SOL for FC tokens');
     } finally {
       setLoading(false);
     }
   };
 
-  const fcPerSol = Number(import.meta.env.VITE_FC_PER_SOL) || 100;
+  const fcPerSol = Number(PUBLIC_CONFIG.FC_PER_SOL) || 100;
   const estimatedFc = parseFloat(amount) * fcPerSol || 0;
 
   return (

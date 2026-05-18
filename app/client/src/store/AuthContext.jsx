@@ -10,6 +10,7 @@ import React, {
 import { auth, db, supabase } from '../lib/supabase.js';
 import { getUserRoleStatus, userApi, clearRequestCache } from '../lib/api.js';
 import { getWallet } from '../services/walletService.js';
+import { safeLogger } from '../utils/safeLogger';
 
 const AuthContext = createContext(null);
 
@@ -30,7 +31,7 @@ const defaultRoleStatus = {
 
 const isDev = process.env.NODE_ENV === 'development';
 const debugLog = (...args) => {
-  if (isDev) console.log(...args);
+  safeLogger.debug(...args);
 };
 
 const getUserTutorialSeenKey = (userId) => `hasSeenTutorial:${userId}`;
@@ -53,7 +54,7 @@ const syncTutorialStateForUser = (userId) => {
 // HELPER: Safe cleanup that doesn't break the browser
 const clearAllAuthData = () => {
   if (typeof window === 'undefined') return;
-  debugLog('🧹 Clearing auth data...');
+  debugLog('Clearing auth data');
 
   try {
     // 1. Clear Supabase and App specific LocalStorage keys
@@ -74,7 +75,7 @@ const clearAllAuthData = () => {
       }
     });
   } catch (e) {
-    if (isDev) console.warn('[Auth] clearAllAuthData error:', e);
+    safeLogger.warn('Auth cleanup failed');
   }
 };
 
@@ -190,7 +191,7 @@ export const AuthProvider = ({ children }) => {
         }
         
         if (createError) {
-          console.error('[Auth] Failed to create user after retries:', createError);
+          safeLogger.warn('User creation failed after retries');
           failedUserCreationsRef.current.add(userId);
           
           // Still set loading to false and return - user can't proceed without profile
@@ -233,13 +234,13 @@ export const AuthProvider = ({ children }) => {
           if (w && w.success) {
             setWallet({ balanceFc: w.balanceFc || w.balanceFc === 0 ? w.balanceFc : w.balance || 0, lockedFc: w.lockedFc || 0 });
           }
-        }).catch(e => { if (isDev) console.warn('Wallet load warning:', e); });
+        }).catch(() => { safeLogger.warn('Wallet load warning'); });
       }
 
       return userProfile;
 
     } catch (e) {
-      console.error('[Auth] loadUserData error:', e);
+      safeLogger.error('User data load failed');
       return null;
     } finally {
       fetchingUserDataRef.current = null;
@@ -268,7 +269,7 @@ export const AuthProvider = ({ children }) => {
           await loadUserData(session.user.id, session.user);
         }
       } catch (e) {
-        console.error('[Auth] Init error:', e);
+        safeLogger.error('Auth initialization failed');
         if (e.message?.includes('JWT')) clearAllAuthData();
       } finally {
         if (mounted) {
@@ -349,7 +350,7 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback(async () => {
     try {
       await supabase.auth.signOut();
-    } catch (e) { if (isDev) console.warn('SignOut warning', e); }
+    } catch (e) { safeLogger.warn('Sign out warning'); }
     
     clearAllAuthData();
     clearRequestCache();

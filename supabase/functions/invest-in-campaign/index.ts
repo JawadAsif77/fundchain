@@ -135,7 +135,6 @@ Deno.serve(async (req: Request) => {
       .eq('user_id', userId)
 
     if (walletUpdateError) {
-      console.error('Wallet update failed:', walletUpdateError)
       return new Response(
         JSON.stringify({ success: false, error: 'Failed to update wallet' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -162,7 +161,6 @@ Deno.serve(async (req: Request) => {
       .single()
 
     if (campaignWalletError) {
-      console.error('Campaign wallet upsert failed:', campaignWalletError)
       return new Response(
         JSON.stringify({ success: false, error: 'Failed to update campaign wallet' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -198,14 +196,8 @@ Deno.serve(async (req: Request) => {
       .single()
 
     if (investmentError || !investment) {
-      console.error('Investment upsert failed:', investmentError)
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Failed to create investment',
-          details: investmentError?.message || 'No investment data returned',
-          code: investmentError?.code
-        }),
+        JSON.stringify({ success: false, error: 'Failed to create investment' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -235,71 +227,56 @@ Deno.serve(async (req: Request) => {
       )
 
     if (campaignInvestmentError) {
-      console.error('Campaign investment upsert failed:', campaignInvestmentError)
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Failed to update campaign investment', 
-          details: campaignInvestmentError.message,
-          code: campaignInvestmentError.code 
-        }),
+        JSON.stringify({ success: false, error: 'Failed to update campaign investment' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // 8) Update campaigns (current_funding, total_raised, investor_count)
+    // 8) Calculate campaign funding totals (applied further below after audit log)
     const newCurrentFunding = (campaign.current_funding || 0) + amountNum
     const newTotalRaised = (campaign.total_raised || 0) + amountNum
     const newInvestorCount = (campaign.investor_count || 0) + (isFirstInvestment ? 1 : 0)
 
-    const { error: campaignUpdateError } = await supabase
-      .from('campaigns')
-      .update({
-        current_funding: newCurrentFunding,
-        total_raised: newTotalRaised,
-        investor_count: newInvestorCount
-      })
-      .eq('id', campaignId)
-
-    if (campaignUpdateError) {
-      console.error('Campaign update failed:', campaignUpdateError)
-    }
-
     // 9) Insert into transactions
-    const { error: transactionError } = await supabase
-      .from('transactions')
-      .insert({
-        user_id: userId,
-        campaign_id: campaignId,
-        investment_id: investment.id,
-        amount: amountNum,
-        type: 'invest_fc',
-        description: `User invested ${amountNum} FC into campaign`
-      })
-
-    if (transactionError) {
-      console.error('Transaction insert failed:', transactionError)
-    }
+    await supabase.from('transactions').insert({
+      user_id: userId,
+      campaign_id: campaignId,
+      investment_id: investment.id,
+      amount: amountNum,
+      type: 'invest_fc',
+      description: `Invested ${amountNum} FC into campaign`,
+    })
 
     // 10) Insert into token_transactions
-    const { error: tokenTxError } = await supabase
-      .from('token_transactions')
-      .insert({
-        user_id: userId,
-        campaign_id: campaignId,
-        milestone_id: null,
-        amount_fc: amountNum,
-        type: 'invest_fc',
-        metadata: {
-          source: 'edge_function',
-          function: 'invest-in-campaign',
-          investment_id: investment.id
-        }
-      })
+    await supabase.from('token_transactions').insert({
+      user_id: userId,
+      campaign_id: campaignId,
+      milestone_id: null,
+      amount_fc: amountNum,
+      type: 'invest_fc',
+      metadata: {
+        source: 'edge_function',
+        function: 'invest-in-campaign',
+        investment_id: investment.id,
+      },
+    })
 
-    if (tokenTxError) {
-      console.error('Token transaction insert failed:', tokenTxError)
-    }
+    // 11) Audit log
+    await supabase.from('audit_logs').insert({
+      actor_user_id: userId,
+      action: 'INVESTMENT_CREATED',
+      target_type: 'campaign',
+      target_id: campaignId,
+      metadata: { amount_fc: amountNum, investment_id: investment.id },
+    })
+
+    // Update campaign funding totals (non-critical; ignore error)
+    await supabase.from('campaigns').update({
+      current_funding: newCurrentFunding,
+      total_raised: newTotalRaised,
+      investor_count: newInvestorCount,
+    }).eq('id', campaignId)
 
     // Success response
     return new Response(
@@ -324,11 +301,9 @@ Deno.serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
-  } catch (err) {
-    console.error('invest-in-campaign error:', err)
-    const message = err instanceof Error ? err.message : 'Unknown error occurred'
+  } catch (_err) {
     return new Response(
-      JSON.stringify({ success: false, error: 'Internal server error', details: message }),
+      JSON.stringify({ success: false, error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

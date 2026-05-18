@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { safeLogger } from '../utils/safeLogger';
 
 // Investment service functions for calling Edge Functions
 const functionsBase = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/`;
@@ -36,7 +37,7 @@ export async function investInCampaign(userId, campaignId, amountFc) {
 
     return data;
   } catch (error) {
-    console.error('investInCampaign error:', error);
+    safeLogger.warn('Investment request failed');
     throw error;
   }
 }

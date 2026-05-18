@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import RiskBadge from '../components/RiskBadge'
 import { supabase } from '../lib/supabase';
+import { safeLogger } from '../utils/safeLogger';
 import { useAuth } from '../store/AuthContext';
 
 const CampaignCard = ({ campaign }) => {
@@ -16,11 +17,6 @@ const CampaignCard = ({ campaign }) => {
   const displayedRiskScore =
   campaign.manual_risk_level ? null : campaign.final_risk_score;
 
-  // Add debugging for campaign data
-  console.log('🎯 CampaignCard: Received campaign data:', campaign);
-  console.log('🎯 CampaignCard: goalAmount:', campaign.goalAmount, 'type:', typeof campaign.goalAmount);
-  console.log('🎯 CampaignCard: raisedAmount:', campaign.raisedAmount, 'type:', typeof campaign.raisedAmount);
-
   const handleClick = () => {
     // Fire & forget: Log click event (don't block navigation)
     if (userId && campaign.id) {
@@ -34,11 +30,11 @@ const CampaignCard = ({ campaign }) => {
         })
         .then(({ error }) => {
           if (error) {
-            console.error('Failed to log click event:', error);
+            safeLogger.warn('Failed to log click event');
           }
         })
-        .catch((err) => {
-          console.error('Click event logging error:', err);
+        .catch(() => {
+          safeLogger.warn('Click event logging error');
         });
     }
 
@@ -48,7 +44,6 @@ const CampaignCard = ({ campaign }) => {
 
   const formatCurrency = (amount) => {
     const numAmount = Number(amount) || 0;
-    console.log('🎯 CampaignCard: formatCurrency input:', amount, 'converted:', numAmount);
     return `${new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
@@ -59,15 +54,11 @@ const CampaignCard = ({ campaign }) => {
     const goal = Number(campaign.goalAmount) || 0;
     const raised = Number(campaign.raisedAmount) || 0;
     
-    console.log('🎯 CampaignCard: calculateProgress - goal:', goal, 'raised:', raised);
-    
     if (goal === 0) {
-      console.warn('🎯 CampaignCard: Goal amount is 0, cannot calculate progress');
       return 0;
     }
     
     const progress = Math.min((raised / goal) * 100, 100);
-    console.log('🎯 CampaignCard: calculateProgress result:', progress);
     return progress;
   };
 
@@ -75,7 +66,6 @@ const CampaignCard = ({ campaign }) => {
 
   const formatDeadline = (deadlineISO) => {
     if (!deadlineISO) {
-      console.warn('🎯 CampaignCard: No deadline provided');
       return 'No deadline';
     }
     
@@ -84,21 +74,17 @@ const CampaignCard = ({ campaign }) => {
       const now = new Date();
       
       if (isNaN(deadline.getTime())) {
-        console.warn('🎯 CampaignCard: Invalid deadline date:', deadlineISO);
         return 'Invalid date';
       }
       
       const diffTime = deadline - now;
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      console.log('🎯 CampaignCard: formatDeadline - deadline:', deadline, 'diffDays:', diffDays);
-      
       if (diffDays < 0) return 'Expired';
       if (diffDays === 0) return 'Today';
       if (diffDays === 1) return '1 day left';
       return `${diffDays} days left`;
     } catch (error) {
-      console.error('🎯 CampaignCard: Error formatting deadline:', error);
       return 'Invalid date';
     }
   };

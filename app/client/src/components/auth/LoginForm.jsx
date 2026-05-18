@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../store/AuthContext';
 import { validateEmail, validateRequired } from '../../utils/validation';
 import { supabase } from '../../lib/supabase';
+import { safeLogger } from '../../utils/safeLogger';
 import './AuthForms.css';
 
 const LoginForm = ({ onSwitchToRegister, onClose, bannerMessage = '' }) => {
@@ -135,7 +136,7 @@ const LoginForm = ({ onSwitchToRegister, onClose, bannerMessage = '' }) => {
       // Login successful - AuthContext will handle the state update
       onClose?.();
     } catch (error) {
-      console.error('Login failed:', error);
+      safeLogger.warn('Login failed');
       // Error will be displayed via the error from AuthContext
     } finally {
       setIsSubmitting(false);
@@ -170,8 +171,6 @@ const LoginForm = ({ onSwitchToRegister, onClose, bannerMessage = '' }) => {
     setResetError('');
     
     try {
-      console.log('[Reset Password] Sending reset email to:', resetEmail);
-      
       // Add timeout to prevent hanging
       const resetPromise = supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
@@ -184,11 +183,8 @@ const LoginForm = ({ onSwitchToRegister, onClose, bannerMessage = '' }) => {
       const { error } = await Promise.race([resetPromise, timeoutPromise]);
       
       if (error) {
-        console.error('[Reset Password] Error:', error);
         throw error;
       }
-      
-      console.log('[Reset Password] Email sent successfully');
       setResetSuccess(true);
       
       // Auto-close modal after 3 seconds
@@ -196,7 +192,7 @@ const LoginForm = ({ onSwitchToRegister, onClose, bannerMessage = '' }) => {
         handleCloseForgotPassword();
       }, 3000);
     } catch (error) {
-      console.error('Password reset failed:', error);
+      safeLogger.warn('Password reset failed');
       setResetError(error.message || 'Failed to send reset email');
     } finally {
       setIsResetting(false);
@@ -240,7 +236,6 @@ const LoginForm = ({ onSwitchToRegister, onClose, bannerMessage = '' }) => {
     setGoogleError('');
     
     try {
-      console.log('[OAuth] Initiating Google sign-in...');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -254,14 +249,11 @@ const LoginForm = ({ onSwitchToRegister, onClose, bannerMessage = '' }) => {
       });
       
       if (error) {
-        console.error('[OAuth] Google sign-in error:', error);
         throw error;
       }
-      
-      console.log('[OAuth] Redirect initiated successfully');
       // OAuth will redirect automatically, no need to call onClose here
     } catch (error) {
-      console.error('Google login failed:', error);
+      safeLogger.warn('Google login failed');
       setGoogleError(error.message || 'Failed to sign in with Google');
       setIsGoogleLoading(false);
     }

@@ -8,6 +8,7 @@ import EscrowFlow from '../components/EscrowFlow';
 import TransactionHistory from '../components/TransactionHistory';
 import AdminRiskOverride from '../components/AdminRiskOverride';
 import RiskBadge from '../components/RiskBadge';
+import { safeLogger } from '../utils/safeLogger';
 
 const AdminPanel = () => {
   const { user, profile, logout, loading: authLoading } = useAuth();
@@ -119,7 +120,7 @@ const AdminPanel = () => {
   // Check if user is admin
   useEffect(() => {
     if (!authLoading && (!user || profile?.role !== 'admin')) {
-      console.log('Unauthorized access to admin panel');
+      safeLogger.warn('Unauthorized access to admin panel');
       navigate('/', { replace: true });
     }
   }, [user, profile, authLoading, navigate]);
@@ -156,7 +157,7 @@ const AdminPanel = () => {
           const result = await response.json();
 
           if (!response.ok) {
-            console.error('Error loading content reports:', result);
+            safeLogger.warn('Failed to load content reports');
             setError(result.error || 'Failed to load reports');
             return [];
           }
@@ -224,7 +225,7 @@ const AdminPanel = () => {
       setAllQuestions(questions);
       setAllAnswers(answers);
     } catch (err) {
-      console.error('Error loading content reports:', err);
+      safeLogger.warn('Failed to load content reports');
     } finally {
       setModerationLoading(false);
     }
@@ -252,7 +253,7 @@ const AdminPanel = () => {
       }));
       setRiskCampaigns(mapped);
     } catch (err) {
-      console.error('Error loading campaigns for risk management:', err);
+      safeLogger.warn('Failed to load campaigns for risk management');
     } finally {
       setRiskLoading(false);
     }
@@ -446,7 +447,7 @@ const AdminPanel = () => {
       if (error) throw error;
       setPlatformWallet(data);
     } catch (err) {
-      console.error('Error loading platform wallet:', err);
+      safeLogger.warn('Failed to load platform wallet');
     }
   };
 
@@ -473,7 +474,7 @@ const AdminPanel = () => {
         setCampaignWallets(walletsMap);
       }
     } catch (err) {
-      console.error('Error loading campaigns:', err);
+      safeLogger.warn('Failed to load campaigns');
       setCampaignError(err.message);
     }
   };
@@ -497,7 +498,7 @@ const AdminPanel = () => {
         const voteStats = await milestoneVotingApi.getVoteStats(milestone.id);
         stats[milestone.id] = voteStats;
       } catch (err) {
-        console.error('Error loading vote stats for milestone:', milestone.id, err);
+        safeLogger.warn('Failed to load vote stats for milestone');
       }
     }
     setMilestoneVoteStats(stats);
@@ -562,15 +563,10 @@ const AdminPanel = () => {
       setLoading(true);
       setError(''); // Clear previous errors
       
-      console.log('Loading pending verifications...');
-      
       // First check if there are ANY verifications at all
       const { data: allVerifications, error: allError } = await supabase
         .from('user_verifications')
         .select('*');
-      
-      console.log('Total verifications in database:', allVerifications?.length || 0);
-      console.log('All verifications:', allVerifications);
       
       // Get all pending verifications, ordered by most recently updated first
       const { data: verificationsData, error: verificationsError } = await supabase
@@ -580,18 +576,14 @@ const AdminPanel = () => {
         .order('updated_at', { ascending: false });
 
       if (verificationsError) {
-        console.error('Error loading verifications:', verificationsError);
+        safeLogger.warn('Failed to load verifications');
         setError(`Failed to load verifications: ${verificationsError.message}`);
         return;
       }
 
-      console.log('Pending verifications loaded:', verificationsData);
-      console.log('Number of pending verifications:', verificationsData?.length || 0);
-
       // If we have verifications, get the user details separately
       if (verificationsData && verificationsData.length > 0) {
         const userIds = verificationsData.map(v => v.user_id);
-        console.log('Loading user details for IDs:', userIds);
         
         const { data: usersData, error: usersError } = await supabase
           .from('users')
@@ -599,12 +591,9 @@ const AdminPanel = () => {
           .in('id', userIds);
 
         if (usersError) {
-          console.error('Error loading users:', usersError);
+          safeLogger.warn('Failed to load verification users');
           // Continue with verification data only - don't fail completely
-          console.log('Continuing without user details due to error');
         }
-
-        console.log('Users loaded:', usersData);
 
         // Combine the data
         const combinedData = verificationsData.map(verification => ({
@@ -613,13 +602,11 @@ const AdminPanel = () => {
         }));
 
         setVerifications(combinedData);
-        console.log('Combined data set:', combinedData);
       } else {
-        console.log('No pending verifications found');
         setVerifications([]);
       }
     } catch (err) {
-      console.error('Unexpected error:', err);
+      safeLogger.error('Unexpected error while loading verifications');
       setError(`An unexpected error occurred: ${err.message}`);
     } finally {
       setLoading(false);
@@ -637,7 +624,7 @@ const AdminPanel = () => {
         .eq('status', 'pending_review')
         .order('created_at', { ascending: false });
       if (campaignsError) {
-        console.error('Error loading campaigns:', campaignsError);
+        safeLogger.warn('Failed to load pending campaigns');
         setCampaignError(`Database error: ${campaignsError.message}`);
         setPendingCampaigns([]);
         return;
@@ -664,7 +651,7 @@ const AdminPanel = () => {
         setPendingCampaigns([]);
       }
     } catch (err) {
-      console.error('Unexpected error (campaigns):', err);
+      safeLogger.warn('Unexpected error while loading campaigns');
       setCampaignError(`An unexpected error occurred: ${err.message}`);
       setPendingCampaigns([]);
     } finally {
@@ -682,7 +669,7 @@ const AdminPanel = () => {
       }
       await loadPendingCampaigns();
     } catch (err) {
-      console.error('Approve campaign error:', err);
+      safeLogger.warn('Failed to approve campaign');
       setCampaignError('An unexpected error occurred');
     } finally {
       setActionLoading(false);
@@ -700,7 +687,7 @@ const AdminPanel = () => {
       }
       await loadPendingCampaigns();
     } catch (err) {
-      console.error('Reject campaign error:', err);
+      safeLogger.warn('Failed to reject campaign');
       setCampaignError('An unexpected error occurred');
     } finally {
       setActionLoading(false);
@@ -744,7 +731,7 @@ const AdminPanel = () => {
       await loadPendingVerifications();
       
     } catch (err) {
-      console.error('Error analyzing KYC:', err);
+      safeLogger.warn('Failed to analyze KYC');
       alert('Failed to analyze KYC: ' + err.message);
     } finally {
       setActionLoading(false);
@@ -762,7 +749,7 @@ const AdminPanel = () => {
       });
 
       if (error) {
-        console.error('Approval error:', error);
+        safeLogger.warn('Verification approval failed');
         setError('Failed to approve verification');
         return;
       }
@@ -772,7 +759,7 @@ const AdminPanel = () => {
       setSelectedVerification(null);
       
     } catch (err) {
-      console.error('Error:', err);
+      safeLogger.warn('Unexpected error');
       setError('An unexpected error occurred');
     } finally {
       setActionLoading(false);
@@ -791,7 +778,7 @@ const AdminPanel = () => {
       });
 
       if (error) {
-        console.error('Rejection error:', error);
+        safeLogger.warn('Verification rejection failed');
         setError('Failed to reject verification');
         return;
       }
@@ -801,7 +788,7 @@ const AdminPanel = () => {
       setSelectedVerification(null);
       
     } catch (err) {
-      console.error('Error:', err);
+      safeLogger.warn('Unexpected error');
       setError('An unexpected error occurred');
     } finally {
       setActionLoading(false);

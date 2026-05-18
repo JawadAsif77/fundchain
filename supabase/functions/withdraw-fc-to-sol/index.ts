@@ -270,13 +270,11 @@ Deno.serve(async (req: Request) => {
     let treasuryKeypair
     try {
       treasuryKeypair = getTreasuryKeypair(KeypairImpl, bs58)
-    } catch (err) {
-      console.error('Treasury keypair error:', err)
+    } catch (_err) {
       return jsonResponse(
         {
           success: false,
-          error: 'Treasury wallet is not configured correctly',
-          details: String(err),
+          error: 'Treasury wallet is not configured. Please contact support.',
         },
         500
       )
@@ -303,10 +301,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(
         {
           success: false,
-          error: 'Treasury has insufficient SOL to complete the withdrawal',
-          treasuryBalanceSol: treasuryBalance / LAMPORTS_PER_SOL,
-          requestedSol: amountSol,
-          treasuryWallet: treasuryPubkey.toBase58(),
+          error: 'Insufficient treasury balance to complete the withdrawal. Please try again later.',
         },
         400
       )
@@ -346,90 +341,58 @@ Deno.serve(async (req: Request) => {
       .eq('user_id', creator.id)
 
     if (updateWalletError) {
-      console.error('Critical wallet update error after SOL sent:', updateWalletError)
-
+      // SOL was already sent — admin must reconcile manually
       return jsonResponse(
         {
           success: false,
-          error:
-            'SOL was sent, but failed to update FC wallet balance. Manual admin review required.',
+          error: 'SOL was sent but wallet balance update failed. Please contact support with your transaction reference.',
           txSignature,
-          amountFc,
-          amountSol,
-          destinationWallet: creator.wallet_address,
-          details: updateWalletError,
         },
         500
       )
     }
 
     const metadata = {
-      destination_wallet: creator.wallet_address,
-      initiated_by: creator.id,
       exchange_rate_fc_per_sol: fcPerSol,
       settlement: 'onchain',
       source: 'edge_function',
       function: 'withdraw-fc-to-sol',
       tx_signature: txSignature,
-      rpc_url: rpcUrl,
       last_valid_block_height: lastValidBlockHeight,
-      treasury_wallet: treasuryPubkey.toBase58(),
     }
 
-    const warnings: string[] = []
+    // Record in fund_transactions, token_transactions, transactions (non-critical)
+    await supabase.from('fund_transactions').insert({
+      user_id: creator.id,
+      amount_fc: amountFc,
+      amount_sol: amountSol,
+      solana_tx_signature: txSignature,
+      status: 'completed',
+      metadata,
+    })
 
-    const { error: fundTxError } = await supabase
-      .from('fund_transactions')
-      .insert({
-        user_id: creator.id,
-        amount_fc: amountFc,
-        amount_sol: amountSol,
-        solana_tx_signature: txSignature,
-        status: 'completed',
-        metadata,
-      })
+    await supabase.from('token_transactions').insert({
+      user_id: creator.id,
+      amount_fc: amountFc,
+      type: 'withdraw_fc',
+      metadata: { ...metadata, amount_sol: amountSol, status: 'completed' },
+    })
 
-    if (fundTxError) {
-      console.error('fund_transactions insert error:', fundTxError)
-      warnings.push('Failed to create fund transaction record')
-    }
-
-    const { error: tokenTxError } = await supabase
-      .from('token_transactions')
-      .insert({
-        user_id: creator.id,
-        amount_fc: amountFc,
-        type: 'withdraw_fc',
-        metadata: {
-          ...metadata,
-          amount_sol: amountSol,
-          solana_tx_signature: txSignature,
-          status: 'completed',
-        },
-      })
-
-    if (tokenTxError) {
-      console.error('token_transactions insert error:', tokenTxError)
-      warnings.push('Failed to create token transaction record')
-    }
-
-    const txPayload = {
+    await supabase.from('transactions').insert({
       user_id: creator.id,
       amount: amountFc,
       type: 'withdraw_fc',
-      description: `Creator withdrew ${amountFc} FC to Solana wallet (${amountSol} SOL equivalent). Tx: ${txSignature}`,
-    }
+      description: `Withdrew ${amountFc} FC to Solana wallet (${amountSol} SOL). Tx: ${txSignature}`,
+    })
 
-    console.debug('transactions insert payload:', JSON.stringify(txPayload))
-
-    const { error: txError } = await supabase
-      .from('transactions')
-      .insert(txPayload)
-
-    if (txError) {
-      console.error('transactions insert error:', txError)
-      warnings.push('Failed to create transaction history record')
-    }
+    // Audit log
+    await supabase.from('audit_logs').insert({
+      actor_user_id: creator.id,
+      action: 'WITHDRAWAL_COMPLETED',
+      target_type: 'wallet',
+      target_id: creator.id,
+      metadata: { amount_fc: amountFc, amount_sol: amountSol, tx_signature: txSignature },
+    })
 
     return jsonResponse(
       {
@@ -437,11 +400,8 @@ Deno.serve(async (req: Request) => {
         amountFc,
         amountSol,
         exchangeRate: fcPerSol,
-        destinationWallet: creator.wallet_address,
-        treasuryWallet: treasuryPubkey.toBase58(),
         status: 'completed',
         txSignature,
-        warnings,
         wallet: {
           balance_fc: newBalanceFc,
           locked_fc: Number(creatorWallet.locked_fc || 0),
@@ -449,15 +409,9 @@ Deno.serve(async (req: Request) => {
       },
       200
     )
-  } catch (err) {
-    console.error('withdraw-fc-to-sol error:', err)
-
+  } catch (_err) {
     return jsonResponse(
-      {
-        success: false,
-        error: 'Internal server error',
-        details: String(err),
-      },
+      { success: false, error: 'Internal server error' },
       500
     )
   }

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js';
+import { safeLogger } from '../utils/safeLogger';
 
 /**
  * Send a message to the AI chatbot
@@ -10,7 +11,7 @@ import { supabase } from '../lib/supabase.js';
  */
 export async function sendChatMessage(messages, campaignId = null) {
   try {
-    console.log('💬 Sending chat messages:', { messageCount: messages.length, campaignId });
+    safeLogger.debug('Chat request sent');
 
     // Get current session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -49,11 +50,7 @@ export async function sendChatMessage(messages, campaignId = null) {
 
     const data = await response.json();
     
-    console.log('✅ Chat response received:', {
-      intent: data.intent,
-      answerLength: data.answer?.length || 0,
-      hasExplanation: !!data.explanation,
-    });
+    safeLogger.debug('Chat response received');
 
     return {
       answer: data.answer || '',
@@ -63,7 +60,6 @@ export async function sendChatMessage(messages, campaignId = null) {
     };
 
   } catch (error) {
-    console.error('❌ Chat service error:', error);
     throw error;
   }
 }
@@ -101,7 +97,6 @@ export async function fetchChatHistory(limit = 20) {
     return history;
 
   } catch (error) {
-    console.error('❌ Error fetching chat history:', error);
     return [];
   }
 }
@@ -114,9 +109,9 @@ export async function fetchChatHistory(limit = 20) {
 export function clearLocalChatHistory(userId) {
   try {
     localStorage.removeItem(`fundchain-chat-history-${userId}`);
-    console.log('✅ Local chat history cleared');
+    safeLogger.debug('Local chat history cleared');
   } catch (error) {
-    console.error('❌ Error clearing local history:', error);
+    safeLogger.warn('Failed to clear local chat history');
   }
 }
 
@@ -133,7 +128,7 @@ export function saveLocalChatHistory(userId, messages) {
       JSON.stringify(messages)
     );
   } catch (error) {
-    console.error('❌ Error saving local history:', error);
+    safeLogger.warn('Failed to save local chat history');
   }
 }
 
@@ -148,7 +143,6 @@ export function loadLocalChatHistory(userId) {
     const stored = localStorage.getItem(`fundchain-chat-history-${userId}`);
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
-    console.error('❌ Error loading local history:', error);
     return [];
   }
 }
