@@ -91,33 +91,15 @@ const CampaignCard = ({ campaign }) => {
 
   return (
     <div 
-      className="card card--interactive" 
+      className="card card--interactive campaign-card" 
       onClick={handleClick}
-      style={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column'
-      }}
     >
       {/* Campaign Image */}
-      <div style={{
-        width: '100%',
-        height: '200px',
-        backgroundColor: 'var(--color-bg-elev)',
-        borderRadius: 'var(--radius-lg)',
-        marginBottom: 'var(--space-3)',
-        overflow: 'hidden',
-        position: 'relative'
-      }}>
+      <div className="campaign-image">
         {campaign.image_url ? (
           <img 
             src={campaign.image_url} 
             alt={campaign.title}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover'
-            }}
             onError={(e) => {
               // Fallback to placeholder if image fails to load
               e.target.style.display = 'none';
@@ -125,28 +107,14 @@ const CampaignCard = ({ campaign }) => {
             }}
           />
         ) : (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            color: 'var(--color-muted)',
-            fontSize: 'var(--text-sm)'
-          }}>
+          <div className="campaign-image__placeholder">
             No Image
           </div>
         )}
       </div>
 
       {/* Campaign Meta */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--space-2)',
-        marginBottom: 'var(--space-2)',
-        flexWrap: 'wrap'
-      }}>
-        
+      <div className="campaign-meta">
         <span className="badge badge--primary">{campaign.category}</span>
         {campaign.status && (
           <span className={getStatusBadgeClass(campaign.status)}>
@@ -156,75 +124,40 @@ const CampaignCard = ({ campaign }) => {
       </div>
 
       {/* Campaign Content */}
-      <div style={{ flex: 1, marginBottom: 'var(--space-3)' }}>
-        <h3 style={{
-          fontSize: 'var(--text-lg)',
-          fontWeight: 'var(--font-semibold)',
-          color: 'var(--color-text)',
-          marginBottom: 'var(--space-2)',
-          lineHeight: 'var(--leading-snug)'
-        }}>
+      <div className="campaign-content">
+        <h3 className="campaign-title">
           {campaign.title}
         </h3>
 
         <RiskBadge
-        level={displayedRiskLevel}
-        score={displayedRiskScore}
+          level={displayedRiskLevel}
+          score={displayedRiskScore}
         />
 
-        <p style={{
-          color: 'var(--color-muted)',
-          fontSize: 'var(--text-sm)',
-          lineHeight: 'var(--leading-relaxed)',
-          marginBottom: 'var(--space-3)'
-        }}>
+        <p className="campaign-summary">
           {campaign.summary}
         </p>
       </div>
 
       {/* Campaign Stats */}
-      <div style={{ marginBottom: 'var(--space-3)' }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: 'var(--space-1)',
-          fontSize: 'var(--text-sm)'
-        }}>
-          <span style={{ color: 'var(--color-muted)' }}>Goal</span>
-          <span style={{ 
-            fontWeight: 'var(--font-semibold)', 
-            color: 'var(--color-text)' 
-          }}>
+      <div className="campaign-stats">
+        <div className="stat-item">
+          <span className="stat-label">Goal</span>
+          <span className="stat-value">
             {formatCurrency(campaign.goalAmount)}
           </span>
         </div>
         
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: 'var(--space-1)',
-          fontSize: 'var(--text-sm)'
-        }}>
-          <span style={{ color: 'var(--color-muted)' }}>Raised</span>
-          <span style={{ 
-            fontWeight: 'var(--font-semibold)', 
-            color: 'var(--color-text)' 
-          }}>
+        <div className="stat-item">
+          <span className="stat-label">Raised</span>
+          <span className="stat-value">
             {formatCurrency(campaign.raisedAmount)}
           </span>
         </div>
         
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: 'var(--space-2)',
-          fontSize: 'var(--text-sm)'
-        }}>
-          <span style={{ color: 'var(--color-muted)' }}>Deadline</span>
-          <span style={{ 
-            fontWeight: 'var(--font-semibold)', 
-            color: 'var(--color-text)' 
-          }}>
+        <div className="stat-item">
+          <span className="stat-label">Deadline</span>
+          <span className="stat-value">
             {formatDeadline(campaign.deadlineISO)}
           </span>
         </div>
@@ -235,13 +168,7 @@ const CampaignCard = ({ campaign }) => {
         <span style={{ width: `${calculateProgress()}%` }}></span>
       </div>
       
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        fontSize: 'var(--text-sm)',
-        color: 'var(--color-muted)',
-        marginTop: 'var(--space-1)'
-      }}>
+      <div className="progress-info">
         <span>{Math.round(calculateProgress())}% funded</span>
         <span>{campaign.region}</span>
       </div>
